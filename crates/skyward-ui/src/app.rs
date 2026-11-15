@@ -118,6 +118,11 @@ pub enum Screen {
     /// The pages kept as bookmarks, apart from the browser: one row each,
     /// tapped to read it again, with a bin at the end of the row.
     BrowserBookmarks,
+    /// The full browser the owner may keep on the phone: its download,
+    /// the download under way, or the one on the phone and its removal.
+    /// A page of its own, so its states are reached from Settings rather
+    /// than from the foot of the update page.
+    Plugin,
     /// Skyward's own licence.
     License,
     /// The interface typeface and the terms it is used under.
@@ -4034,14 +4039,24 @@ impl App {
     /// The phone asks for the screen lock before its pages are used: the
     /// page that answers it goes over the one showing, so a phone whose lock
     /// is never answered falls back to it as before. A system with no
-    /// credential of its own never comes here, and neither does one whose
-    /// password the recovery kept and just tried.
+    /// credential of its own never comes here.
     pub fn ask_for_the_screen_lock(&mut self) {
         if self.screen() == Screen::Decrypt {
             return;
         }
         self.open(Screen::Decrypt);
         self.refresh();
+    }
+
+    /// The screen lock is being answered for the user whose own files wait,
+    /// by the password kept from the last time data was opened: the keypad
+    /// shows as busy while that is checked, rather than waiting for a finger
+    /// that the phone has already answered for itself.
+    pub fn unlocking(&mut self) {
+        if let Data::Locked { checking, .. } = &mut self.state.data {
+            *checking = true;
+            self.refresh();
+        }
     }
 
     /// The data partition did not open, and why.
@@ -13397,9 +13412,23 @@ mod tests {
         assert_eq!(app.state.browser.book[0].url, "https://two.example/", "the other is the one left");
     }
 
+    #[test]
+    fn the_full_browser_has_a_page_of_its_own_and_says_which_state_it_is_in() {
+        let (f, i) = (fonts(), info());
+        let mut app = App::new(Screen::Settings, W, H, PPD);
+        app.act(Action::Open(Screen::Plugin), 0);
+        assert_eq!(app.screen(), Screen::Plugin, "the full browser has a page of its own, off Settings");
+        let fr = app.frame(&f, &i);
+        assert!(fr.hits.iter().any(|h| h.action == Action::GetPlugin), "with the way to download it on the page");
+        app.state.plugin.there = true;
+        app.state.plugin.size = Some(436 * 1024 * 1024);
+        let fr = app.frame(&f, &i);
+        assert!(fr.hits.iter().any(|h| h.action == Action::DropPlugin), "and the way to take it away once it is on the phone");
+        assert!(!fr.hits.iter().any(|h| h.action == Action::GetPlugin), "the download it already has is not offered again");
+    }
+
     // The cover of a foldable: 1208 × 1392 beside a 1224 × 2912 screen, at
-    // the density both are laid out to.
-    const COVER_W: u32 = 1208;
+    // the density both are laid out to.    const COVER_W: u32 = 1208;
     const COVER_H: u32 = 1392;
     const COVER_PPD: f32 = 2.875;
 

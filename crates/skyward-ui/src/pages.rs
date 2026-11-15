@@ -102,6 +102,7 @@ pub fn render(screen: Screen, cx: &Ctx) -> Frame {
         Screen::Fetch => fetch(cx),
         Screen::Browser => browser(cx),
         Screen::BrowserBookmarks => browser_bookmarks(cx),
+        Screen::Plugin => plugin(cx),
         Screen::Modules => modules(cx),
         Screen::Images => images(cx),
         Screen::License => license(cx),
@@ -510,6 +511,11 @@ pub fn settings(cx: &Ctx) -> Frame {
         });
         opens.push(Action::Open(Screen::SkywardUpdate));
     }
+    // The full browser's three states have a page of their own, reached
+    // from here as well as from the update page: a phone that never wants
+    // the update should still find the browser it asks about.
+    rows.push(Row::new(l.pick(PLUGIN_TITLE)).icon(BLUE, Icon::Globe).trail(Trail::Value(plugin_value(cx))));
+    opens.push(Action::Open(Screen::Plugin));
     let about = widgets::list(&mut c, t, f, y, &rows);
     out.extend(hits(&about.rows, &opens));
     Frame::new(t, fit(c, t, about.bottom), out, l.pick(SETTINGS), top)
@@ -3175,7 +3181,11 @@ pub fn skyward_update(cx: &Ctx) -> Frame {
         out.extend(hits(&kept.rows, &[action]));
         y = kept.bottom;
     }
-    let y = skyward_plugin(&mut c, cx, y + t.m.card_gap, &mut out);
+    // The full browser's states are on their own page; this row says which
+    // of them stands and opens it.
+    let plugin = widgets::list(&mut c, t, f, y + t.m.card_gap, &[Row::new(l.pick(PLUGIN_TITLE)).trail(Trail::Value(plugin_value(cx)))]);
+    out.extend(hits(&plugin.rows, &[Action::Open(Screen::Plugin)]));
+    let y = plugin.bottom;
     let points = [
         l.pick([
             "新版本从 GitHub 下载，校验 SHA-256 后写入 recovery 分区，不会改动系统和用户数据。",
@@ -3319,6 +3329,8 @@ const PLUGIN_NOTE: Text = [
     "Pages are opened by a real Chromium, so a page its scripts build reads as the page it looks like. About 436 MB, downloaded only when wanted; nothing else needs it.",
 ];
 const PLUGIN_INSTALLED: Text = ["已安装", "已安裝", "Installed"];
+const PLUGIN_UNDER_WAY: Text = ["下载中", "下載中", "Downloading"];
+const PLUGIN_ABSENT: Text = ["未安装", "未安裝", "Not installed"];
 const PLUGIN_IN_USE: Text = ["页面由 Chromium 打开", "頁面由 Chromium 開啟", "Pages are opened by Chromium"];
 const PLUGIN_DROP: Text = ["删除插件", "刪除外掛", "Delete the plugin"];
 const PLUGIN_DROP_NOTE: Text = [
@@ -3326,6 +3338,32 @@ const PLUGIN_DROP_NOTE: Text = [
     "刪除後回到純文字閱讀：HTML 裡有的文字讀得到，腳本產生的頁面讀不到。",
     "Without it the browser reads text again: what the HTML holds, not what scripts build.",
 ];
+
+/// Which of the full browser's three states stands, as the row that opens
+/// its page says beside the name: a download under way, the one on the
+/// phone, or none.
+fn plugin_value(cx: &Ctx) -> &'static str {
+    let (s, l) = (cx.state, cx.state.lang);
+    if s.plugin.job.as_ref().is_some_and(|j| j.outcome.is_none()) {
+        l.pick(PLUGIN_UNDER_WAY)
+    } else if s.plugin.there {
+        l.pick(PLUGIN_INSTALLED)
+    } else {
+        l.pick(PLUGIN_ABSENT)
+    }
+}
+
+/// The full browser on a page of its own, so its three states are found
+/// from Settings rather than at the foot of the update page: the way to
+/// download it, the download under way with the way to stop it, or the one
+/// on the phone with the way to take it away.
+pub fn plugin(cx: &Ctx) -> Frame {
+    let (t, l) = (cx.t, cx.state.lang);
+    let mut c = long_page(cx);
+    let mut out = Vec::new();
+    let y = skyward_plugin(&mut c, cx, t.m.content_top, &mut out);
+    Frame::new(t, fit(c, t, y), out, l.pick(PLUGIN_TITLE), t.m.content_top)
+}
 
 /// The full browser the owner may keep on the phone. It is offered here
 /// rather than built in, because it is big and because nothing else needs

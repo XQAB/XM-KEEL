@@ -2885,6 +2885,12 @@ pub fn run(cfg: &DeviceConfig, font: &Path, mono: &Path, request: bcb::Request, 
                             match credential::load() {
                                 Ok(secret) => {
                                     skyward_sys::kmsg("trying the password kept from the last time data was opened")?;
+                                    // The kept password answers the lock screen
+                                    // rather than skips it: the page shows the
+                                    // lock while it is checked, so a phone that
+                                    // has a screen lock shows it on every start.
+                                    app.ask_for_the_screen_lock();
+                                    app.unlocking();
                                     entered = Some((user, secret.clone()));
                                     let job = decrypt::Job::Unlock { closed: closed.clone(), user, credential: secret };
                                     decryptor = Some(Decryptor::start(job)?);
