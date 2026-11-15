@@ -6864,7 +6864,7 @@ impl App {
                     self.open(Screen::BrowserBookmarks);
                     return self.arrive_at(Screen::BrowserBookmarks);
                 }
-                Vec::new()
+                return Vec::new();
             }
             Action::BrowserForgetOne(at) => {
                 if at < self.state.browser.book.len() {
