@@ -4624,7 +4624,7 @@ impl App {
                 // What was read is kept once, the newest last: reading the
                 // same page again moves nothing, and the oldest goes when
                 // the history is full.
-                if self.state.browser.history.last().map_or(true, |last| last.url != sheet.url) {
+                if self.state.browser.history.last().is_none_or(|last| last.url != sheet.url) {
                     self.state.browser.history.push(sheet);
                     let over = self.state.browser.history.len().saturating_sub(HISTORY_KEPT);
                     self.state.browser.history.drain(..over);
