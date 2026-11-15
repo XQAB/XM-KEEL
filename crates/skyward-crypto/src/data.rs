@@ -628,7 +628,8 @@ mod tests {
         assert_eq!(rest, vec![Closed { user: 999, lock: 3, made_up: false, why: None }], "the user whose own files the answer opened is gone from the closed ones");
     }
 
-
+    #[test]
+    fn the_phones_own_words_for_the_cipher_become_the_kernels() {
         let e = entry("metadata_encryption=aes-256-xts:wrappedkey_v0,keydirectory=/metadata/vold/metadata_encryption");
         assert_eq!(Encryption::of(&e).unwrap(), Encryption { cipher: "aes-xts-plain64".into(), wrapped: true });
         let plain = entry("metadata_encryption=adiantum");
