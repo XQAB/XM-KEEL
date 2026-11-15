@@ -1918,33 +1918,34 @@ fn keyboard_hits(c: &mut Canvas, t: &Theme, f: &Fonts, s: &State, enter: &str, o
 pub fn search(cx: &Ctx) -> Frame {
     let (t, f, s, l) = (cx.t, cx.f, cx.state, cx.state.lang);
     let m = &t.m;
-    let mut c = page(cx);
+    let mut c = long_page(cx);
     let mut out = Vec::new();
     let (at, cancel) = widgets::search_layout(t);
     let field = widgets::search_field(&mut c, t, f, at.x, at.w, at.y + at.h / 2.0, &s.search, l.pick(SEARCH_HINT));
     widgets::cancel_button(&mut c, t, cancel);
     out.push(Hit { rect: cancel, action: Action::CloseSearch });
     let top = field.field.y + field.field.h + m.dp(12.0);
-    let kb_top = m.h as f32 - widgets::keyboard_height(t);
+    let mut bottom = top;
     if s.search.trim().is_empty() {
         let how = l.pick([
             "输入功能或分区名称，支持拼音全拼和首字母，例如输入 bf 可找到「备份」。",
             "輸入功能或分割區名稱，支援英文和漢語拼音的全拼與首字母，例如輸入 bf 可找到「備份」。",
             "Type the name of a feature or partition, such as backup to find Backup.",
         ]);
-        widgets::footnote(&mut c, t, f, top, how);
+        bottom = widgets::footnote(&mut c, t, f, top, how);
     } else {
         let found = search::find_on(&s.search, l, |screen| s.offers(screen));
         if found.is_empty() {
             let typed = s.search.trim();
             let none = tr!(l, "未找到\"{typed}\"", "找不到「{typed}」", "Nothing found for “{typed}”");
-            widgets::list(&mut c, t, f, top, &[Row::new(&none).trail(Trail::None)]);
+            bottom = widgets::list(&mut c, t, f, top, &[Row::new(&none).trail(Trail::None)]).bottom;
         } else {
             let rows: Vec<Row> = found.iter().map(|e| Row::new(l.pick(e.title)).subtitle(l.pick(e.place))).collect();
             let list = widgets::list(&mut c, t, f, top, &rows);
-            // The keyboard covers what does not fit above it.
-            let shown = list.rows.iter().zip(&found).filter(|(r, _)| r.y + r.h <= kb_top);
-            out.extend(shown.map(|(&rect, e)| Hit { rect, action: Action::Open(e.screen) }));
+            // Everything found is on a page that scrolls, so one the keyboard
+            // covers can be scrolled up to rather than being left unreachable.
+            out.extend(list.rows.iter().zip(&found).map(|(&rect, e)| Hit { rect, action: Action::Open(e.screen) }));
+            bottom = list.bottom;
         }
     }
     let find = l.pick(["搜索", "搜尋", "Search"]);
@@ -1952,7 +1953,7 @@ pub fn search(cx: &Ctx) -> Frame {
     if let Some(rect) = field.clear {
         out.push(Hit { rect, action: Action::ClearSearch });
     }
-    Frame { back: false, header: false, caret: Some(field.caret), ..Frame::new(t, c, out, find, 0.0) }
+    Frame { back: false, header: false, caret: Some(field.caret), ..Frame::new(t, fit(c, t, bottom), out, find, 0.0) }
 }
 
 /// Backing up: what to take, where it goes, and how.
@@ -3654,7 +3655,7 @@ fn sort_label(l: Lang, key: SortKey) -> &'static str {
 fn files_find(cx: &Ctx) -> Frame {
     let (t, f, s, l) = (cx.t, cx.f, cx.state, cx.state.lang);
     let m = &t.m;
-    let mut c = page(cx);
+    let mut c = long_page(cx);
     let mut out = Vec::new();
     let (at, cancel) = widgets::search_layout(t);
     let hint = l.pick(["搜索文件", "搜尋檔案", "Search files"]);
@@ -3662,7 +3663,7 @@ fn files_find(cx: &Ctx) -> Frame {
     widgets::cancel_button(&mut c, t, cancel);
     out.push(Hit { rect: cancel, action: Action::FilesFindClose });
     let top = field.field.y + field.field.h + m.dp(12.0);
-    let kb_top = m.h as f32 - widgets::keyboard_height(t);
+    let mut bottom = top;
     let entries: &[FileRow] = s.files.entries.as_ref().map_or(&[], |e| e.as_slice());
     if s.files.query().trim().is_empty() {
         let how = l.pick([
@@ -3670,23 +3671,24 @@ fn files_find(cx: &Ctx) -> Frame {
             "輸入名稱的一部分即可尋找，不分大小寫。",
             "Type part of a name to find it, in any case.",
         ]);
-        widgets::footnote(&mut c, t, f, top, how);
+        bottom = widgets::footnote(&mut c, t, f, top, how);
     } else if entries.is_empty() {
         let typed = s.files.query().trim();
         let none = tr!(l, "未找到\"{typed}\"", "找不到「{typed}」", "Nothing found for “{typed}”");
-        widgets::list(&mut c, t, f, top, &[Row::new(&none).trail(Trail::None)]);
+        bottom = widgets::list(&mut c, t, f, top, &[Row::new(&none).trail(Trail::None)]).bottom;
     } else {
         let rows: Vec<_> = entries.iter().map(|e| Row::new(e.name.as_str())).collect();
         let list = widgets::list(&mut c, t, f, top, &rows);
-        // The keyboard covers what does not fit above it.
-        let shown = list.rows.iter().enumerate().filter(|(_, r)| r.y + r.h <= kb_top);
-        out.extend(shown.map(|(i, &rect)| Hit { rect, action: Action::OpenEntry(i) }));
+        // Found files are listed down a page that scrolls: one the keyboard
+        // covers can be scrolled up to, so every one of them is reachable.
+        out.extend(list.rows.iter().enumerate().map(|(i, &rect)| Hit { rect, action: Action::OpenEntry(i) }));
+        bottom = list.bottom;
     }
     keyboard_hits(&mut c, t, f, s, l.pick(FILES_FIND), &mut out);
     if let Some(rect) = field.clear {
         out.push(Hit { rect, action: Action::ClearSearch });
     }
-    Frame { back: false, header: false, caret: Some(field.caret), ..Frame::new(t, c, out, l.pick(FILES_FIND), 0.0) }
+    Frame { back: false, header: false, caret: Some(field.caret), ..Frame::new(t, fit(c, t, bottom), out, l.pick(FILES_FIND), 0.0) }
 }
 
 const CANCEL: Text = ["取消", "取消", "Cancel"];
@@ -3966,6 +3968,56 @@ pub fn browser(cx: &Ctx) -> Frame {
     Frame { dock, caret: Some(caret), ..Frame::new(t, canvas, out, l.pick(BROWSER), top) }
 }
 
+/// The browser's four controls as one bar of keys at `y`: back, forward,
+/// reading the address again, and keeping the page. Each is a rounded key
+/// with its glyph and the word for it under that, so a thumb finds them
+/// without reading a list, and the page they work stays whole above them.
+fn browser_bar(c: &mut Canvas, t: &Theme, f: &Fonts, l: Lang, y: f32, kept: bool) -> (f32, Vec<Hit>) {
+    let m = &t.m;
+    let actions = [Action::BrowserBack, Action::BrowserAhead, Action::Browse, Action::BrowserBookmark];
+    let labels = [l.pick(BROWSER_BACK), l.pick(BROWSER_AHEAD), l.pick(BROWSER_AGAIN), l.pick(BROWSER_KEEP)];
+    let (left, right) = (m.margin, m.w as f32 - m.margin);
+    let gap = m.dp(8.0);
+    let w = (right - left - gap * 3.0) / 4.0;
+    let h = m.dp(68.0);
+    let mut out = Vec::with_capacity(4);
+    for (k, action) in actions.iter().enumerate() {
+        let x = left + k as f32 * (w + gap);
+        // A page already kept says so in the accent colour.
+        let ink = if k == 3 && kept { t.pal.accent } else { t.pal.text };
+        c.fill_round_rect(x, y, w, h, m.dp(16.0), t.pal.card);
+        let (cx0, cy0) = (x + w / 2.0, y + m.dp(25.0));
+        match k {
+            // Back and forward, as the chevrons of a browser.
+            0 => {
+                c.line(cx0 + m.dp(5.0), cy0 - m.dp(7.5), cx0 - m.dp(5.0), cy0, m.dp(2.4), ink);
+                c.line(cx0 - m.dp(5.0), cy0, cx0 + m.dp(5.0), cy0 + m.dp(7.5), m.dp(2.4), ink);
+            }
+            1 => {
+                c.line(cx0 - m.dp(5.0), cy0 - m.dp(7.5), cx0 + m.dp(5.0), cy0, m.dp(2.4), ink);
+                c.line(cx0 + m.dp(5.0), cy0, cx0 - m.dp(5.0), cy0 + m.dp(7.5), m.dp(2.4), ink);
+            }
+            // Reading the address again: an arrow that goes round.
+            2 => {
+                c.stroke_arc(cx0, cy0, m.dp(7.0), -0.6, 4.6, m.dp(2.0), ink);
+                c.line(cx0 + m.dp(2.0), cy0 - m.dp(9.5), cx0 + m.dp(6.6), cy0 - m.dp(5.4), m.dp(2.0), ink);
+                c.line(cx0 + m.dp(6.6), cy0 - m.dp(5.4), cx0 + m.dp(2.6), cy0 - m.dp(3.0), m.dp(2.0), ink);
+            }
+            // Keeping the page: a bookmark, its foot notched.
+            _ => {
+                c.line(cx0 - m.dp(5.0), cy0 - m.dp(7.5), cx0 - m.dp(5.0), cy0 + m.dp(7.5), m.dp(2.0), ink);
+                c.line(cx0 + m.dp(5.0), cy0 - m.dp(7.5), cx0 + m.dp(5.0), cy0 + m.dp(7.5), m.dp(2.0), ink);
+                c.line(cx0 - m.dp(5.0), cy0 + m.dp(7.5), cx0, cy0 + m.dp(2.5), m.dp(2.0), ink);
+                c.line(cx0, cy0 + m.dp(2.5), cx0 + m.dp(5.0), cy0 + m.dp(7.5), m.dp(2.0), ink);
+            }
+        }
+        c.text_center(&f.body, labels[k], cx0, y + m.dp(53.0), m.dp(11.0), t.pal.subtitle);
+        let rect = Rect::new(x, y, w, h);
+        out.push(Hit { rect, action: *action });
+    }
+    (y + h, out)
+}
+
 /// One drawing of the browser page: what it holds from `top` down, and
 /// where its cursor stands. Drawn twice when the page is longer than the
 /// canvas it was first laid out on.
@@ -3981,19 +4033,13 @@ fn browser_page(cx: &Ctx, c: &mut Canvas, out: &mut Vec<Hit>, top: f32) -> (f32,
     if let Some(said) = &b.said {
         y = widgets::footnote(c, t, f, y + t.m.dp(4.0), said);
     }
-    // Going back, going forward, reading the address again, and keeping
-    // what is shown: the four a page is worked with. What going back and
-    // forward come to is said on the row, where there is one.
-    let behind = b.back.last().map_or(l.pick(BROWSER_NO_WHERE), Sheet::named);
-    let ahead = b.ahead.last().map_or(l.pick(BROWSER_NO_WHERE), Sheet::named);
-    let keys = widgets::list(c, t, f, y + t.m.dp(10.0), &[
-        Row::new(l.pick(BROWSER_BACK)).trail(Trail::Text(behind)),
-        Row::new(l.pick(BROWSER_AHEAD)).trail(Trail::Text(ahead)),
-        Row::new(l.pick(BROWSER_AGAIN)).trail(Trail::None),
-        Row::new(l.pick(BROWSER_KEEP)).trail(Trail::Switch(b.kept())),
-    ]);
-    out.extend(hits(&keys.rows, &[Action::BrowserBack, Action::BrowserAhead, Action::Browse, Action::BrowserBookmark]));
-    let mut y = keys.bottom;
+    // Going back, going forward, reading the address again, and keeping what
+    // is shown: the four a page is worked with, as a bar of keys under the
+    // address, where a browser keeps them, rather than four rows that pushed
+    // the page itself down the screen.
+    let (bar, keys) = browser_bar(c, t, f, l, y + t.m.dp(10.0), b.kept());
+    out.extend(keys);
+    let mut y = bar;
     match &b.page {
         Some(page) => {
             // The page names itself in its own type, and says where it is,
@@ -4101,7 +4147,6 @@ const BROWSER_BACK: Text = ["后退", "上一頁", "Back"];
 const BROWSER_AHEAD: Text = ["前进", "下一頁", "Forward"];
 const BROWSER_AGAIN: Text = ["重新读取", "重新讀取", "Read again"];
 const BROWSER_KEEP: Text = ["存为书签", "存為書籤", "Keep as a bookmark"];
-const BROWSER_NO_WHERE: Text = ["没有", "沒有", "none"];
 const BROWSER_LINK_PAGE: Text = ["网页", "網頁", "page"];
 const BROWSER_LINK_FILE: Text = ["文件", "檔案", "file"];
 const BROWSER_FORM: Text = ["［表单］", "［表單］", "［form］"];
