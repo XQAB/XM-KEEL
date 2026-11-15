@@ -2264,28 +2264,57 @@ pub struct Fact<'a> {
     pub link: bool,
 }
 
-/// The About summary card: rows a little shorter than settings rows.
+/// The About summary card: rows a little shorter than settings rows. A value
+/// too long to sit beside its title takes a line of its own under it, rather
+/// than being cut off: the cover screen is narrow and version strings are
+/// long, and a version cut short is a version the page failed to show.
 pub fn facts(c: &mut Canvas, t: &Theme, f: &Fonts, top: f32, rows: &[Fact], tone: &Tone) -> Block {
     let m = &t.m;
     let row_h = m.dp(51.0);
     let (card_x, right) = (m.margin, m.w as f32 - m.margin);
-    let h = row_h * rows.len() as f32;
+    let tx = card_x + m.inner;
+    let full = right - m.inner - tx;
+    // Which rows need the line under them, and what it carries.
+    let under: Vec<Option<Vec<&str>>> = rows
+        .iter()
+        .map(|r| {
+            let value_right = if r.link { right - m.chevron_inset - m.chevron_w - m.value_gap } else { right - m.inner };
+            let tw = c.text_width(&f.heading, r.title, m.row_title_px);
+            let room = value_right - (tx + tw + m.dp(16.0));
+            let long = r.value.contains('\n') || c.text_width(&f.value, &r.value, m.sub_px) > room;
+            long.then(|| r.value.split('\n').collect())
+        })
+        .collect();
+    let line_h = m.dp(18.0);
+    let heights: Vec<f32> = under.iter().map(|u| row_h + u.as_ref().map_or(0.0, |l| line_h * l.len() as f32)).collect();
+    let h: f32 = heights.iter().sum();
     c.fill_round_rect(card_x, top, right - card_x, h, m.card_radius, tone.card);
     let mut rects = Vec::new();
+    let mut y = top;
     for (i, r) in rows.iter().enumerate() {
-        rects.push(Rect::new(card_x, top + row_h * i as f32, right - card_x, row_h));
-        let cy = top + row_h * (i as f32 + 0.5);
-        let tx = card_x + m.inner;
-        let tw = c.text_vc(&f.heading, r.title, tx, cy, m.row_title_px, tone.text, None);
+        rects.push(Rect::new(card_x, y, right - card_x, heights[i]));
+        let cy = y + row_h * 0.5;
         let value_right = if r.link {
             chevron(c, t, right - m.chevron_inset, cy, tone.chevron);
             right - m.chevron_inset - m.chevron_w - m.value_gap
         } else {
             right - m.inner
         };
-        let room = value_right - (tx + tw + m.dp(16.0));
-        let w = c.text_width(&f.value, &r.value, m.sub_px).min(room);
-        c.text_vc(&f.value, &r.value, value_right - w, cy, m.sub_px, tone.value, Some(room));
+        let tw = c.text_vc(&f.heading, r.title, tx, cy, m.row_title_px, tone.text, None);
+        match &under[i] {
+            None => {
+                let room = value_right - (tx + tw + m.dp(16.0));
+                let w = c.text_width(&f.value, &r.value, m.sub_px).min(room);
+                c.text_vc(&f.value, &r.value, value_right - w, cy, m.sub_px, tone.value, Some(room));
+            }
+            Some(lines) => {
+                for (k, line) in lines.iter().enumerate() {
+                    let at = y + row_h + line_h * (k as f32 + 0.5);
+                    c.text_vc(&f.value, *line, tx, at, m.sub_px, tone.value, Some(full));
+                }
+            }
+        }
+        y += heights[i];
     }
     Block { bottom: top + h, rows: rects }
 }

@@ -2822,7 +2822,11 @@ enum Drag {
     /// A press held long enough to have done its work; nothing it does
     /// counts until it lifts.
     Held,
-    Scroll { last: f32 },
+    /// A finger dragging the page, `last` being where it was. `tap` is what
+    /// it came down on and `down_y` where, kept so that a drag too short to
+    /// have moved the page still counts as a tap: a finger is never quite
+    /// still, and a tap lost to a few pixels of shake reads as a dead screen.
+    Scroll { last: f32, tap: Option<Action>, down_y: f32 },
     /// Swiping in from a screen edge, the finger now `x` across; the cue
     /// keeps to height `cy`, set by where the swipe began. Past the
     /// threshold, lifting goes back.
@@ -2970,6 +2974,11 @@ const BACKLIGHT_STEP_MS: u64 = 8;
 /// second tap of a wake habit, or the hand reaching for a phone whose
 /// screen an install just lit, should not act. Android's double-tap window.
 const WAKE_GUARD_MS: u64 = 400;
+/// How far, in dp, a finger may wander and still count as a tap on what it
+/// came down on: the page starts following the finger after the touch slop
+/// of [`App::touch`], but a finger shakes a few pixels on every press, and
+/// a tap lost to that shake reads as a screen that ignored it.
+const TAP_SLOP_DP: f32 = 16.0;
 /// A volume key held this long moves the light again, then once every
 /// [`REPEAT_MS`], as the system repeats a key held.
 const REPEAT_DELAY_MS: u64 = 400;
@@ -7407,7 +7416,7 @@ impl App {
                 // Anywhere else it stops such a page and holds it; the
                 // control under the finger is not pressed.
                 if self.catch(now) {
-                    self.drag = Drag::Scroll { last: y };
+                    self.drag = Drag::Scroll { last: y, tap: None, down_y: y };
                     return fx;
                 }
                 // The `<` stays put while the page scrolls; under the bar
@@ -7486,7 +7495,7 @@ impl App {
                                 if !self.catch(now) {
                                     self.drag_by(y0 - y);
                                 }
-                                Drag::Scroll { last: y }
+                                Drag::Scroll { last: y, tap: action, down_y: y0 }
                             }
                         }
                         _ => Drag::Press { x: x0, y: y0, action, edge: at_edge, at },
@@ -7495,10 +7504,10 @@ impl App {
                         self.let_row_go(now);
                     }
                 }
-                Drag::Scroll { last } => {
+                Drag::Scroll { last, tap, down_y } => {
                     self.tracker.add(now, y);
                     self.drag_by(last - y);
-                    self.drag = Drag::Scroll { last: y };
+                    self.drag = Drag::Scroll { last: y, tap, down_y };
                 }
                 Drag::Edge { start, from_left, armed, cy, .. } => {
                     let travel = if from_left { x - start } else { start - x };
@@ -7555,6 +7564,13 @@ impl App {
                     self.bounce = Some(Spring::new(now, motion::rubber(self.pull, self.h as f32), 0.0, 0.4));
                     self.pull = 0.0;
                     self.dirty = true;
+                }
+                // A drag that went no further than a finger shakes counts as
+                // the tap it began as: what it came down on is pressed, and
+                // the page goes back where it was.
+                Drag::Scroll { tap: Some(a), down_y, last, .. } if (last - down_y).abs() <= m.dp(TAP_SLOP_DP) => {
+                    self.drag_by(last - down_y);
+                    fx.extend(self.act(a, now));
                 }
                 Drag::Scroll { .. } => {
                     // A finger lifted while still moving sends the page
@@ -8653,6 +8669,21 @@ mod tests {
         fx
     }
 
+
+    #[test]
+    fn a_tap_that_shakes_a_little_still_presses_what_it_landed_on() {
+        let (f, i) = (fonts(), info());
+        let mut app = App::new(Screen::Home, W, H, PPD);
+        let (x, y) = spot(&mut app, &f, &i, Action::Open(Screen::Settings));
+        // A finger is never quite still: past the touch slop the page starts
+        // following it, but a lift within a tap's slop still presses what it
+        // came down on, as the page goes back where it was.
+        let shake = app.theme().m.dp(12.0);
+        app.touch(Touch::Down(x, y), &f, 1000);
+        app.touch(Touch::Move(x + 2.0, y + shake), &f, 1040);
+        app.touch(Touch::Up, &f, 1080);
+        assert_eq!(app.screen(), Screen::Settings, "a tap lost to a finger's shake reads as a screen that ignored it");
+    }
 
     #[test]
     fn rows_open_pages_and_back_returns() {

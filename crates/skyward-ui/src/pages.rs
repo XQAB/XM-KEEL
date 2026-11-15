@@ -532,7 +532,9 @@ fn skyward_value(cx: &Ctx) -> Option<&'static str> {
 /// settings.
 pub fn screen_off(cx: &Ctx) -> Frame {
     let (t, f, s, l) = (cx.t, cx.f, cx.state, cx.state.lang);
-    let mut c = page(cx);
+    // A scrolling page: the cover screen is shorter than the phone's own, and
+    // the note under the times has to be reachable there.
+    let mut c = long_page(cx);
     let top = t.m.content_top;
     let labels = SCREEN_OFF.map(|ms| fmt::screen_off(l, ms));
     let rows: Vec<Row> = labels.iter().enumerate().map(|(k, label)| Row::new(label).trail(Trail::Check(s.screen_off == k))).collect();
@@ -544,15 +546,17 @@ pub fn screen_off(cx: &Ctx) -> Frame {
         "After the time chosen with nothing touched, the screen dims and turns off. Press the power key to light it again.",
     ]);
     let y = widgets::footnote(&mut c, t, f, times.bottom, note);
-    if SCREEN_OFF[s.screen_off].is_none() {
+    let bottom = if SCREEN_OFF[s.screen_off].is_none() {
         let note = l.pick([
             "屏幕将保持常亮，长时间显示同一画面可能留下残影。",
             "螢幕將保持恆亮，長時間顯示同一畫面可能留下殘影。",
             "The screen stays on. Showing the same image for long may leave it burnt in.",
         ]);
-        widgets::footnote(&mut c, t, f, y, note);
-    }
-    Frame::new(t, c, hits(&times.rows, &picks), l.pick(SCREEN_TIMEOUT), top)
+        widgets::footnote(&mut c, t, f, y, note)
+    } else {
+        y
+    };
+    Frame::new(t, fit(c, t, bottom), hits(&times.rows, &picks), l.pick(SCREEN_TIMEOUT), top)
 }
 
 /// Mount manager: the slot's partitions, each with a switch to mount it
@@ -954,7 +958,11 @@ const UNREADABLE: Text = ["无法读取", "無法讀取", "Unreadable"];
 /// Reboot target picker with a swipe-to-confirm control.
 pub fn reboot(cx: &Ctx) -> Frame {
     let (t, f, s, l) = (cx.t, cx.f, cx.state, cx.state.lang);
-    let mut c = page(cx);
+    // A page taller than the screen it shows on: the cover screen is shorter
+    // than the phone's own, and this page carries six targets, the slot and
+    // the slide to confirm. A canvas of one screen's height cannot scroll,
+    // so the slide at the bottom was out of reach there.
+    let mut c = long_page(cx);
     let mut out = Vec::new();
     let top = t.m.content_top;
     let mut y = widgets::section_first(&mut c, t, f, top, l.pick(["重启到", "重新啟動到", "Reboot to"]));
@@ -991,7 +999,7 @@ pub fn reboot(cx: &Ctx) -> Frame {
     let (label, danger) = confirm_label(Confirm::Reboot, cx.state);
     let track = widgets::confirm(&mut c, t, f, y + t.m.dp(28.0), label, danger, s.confirm);
     out.push(Hit { rect: track, action: Action::Confirm(Confirm::Reboot) });
-    Frame::new(t, c, out, l.pick(REBOOT), top)
+    Frame::new(t, fit(c, t, track.y + track.h), out, l.pick(REBOOT), top)
 }
 
 /// Installing, opened from the home page: the system on the phone now, and
@@ -4149,13 +4157,15 @@ pub fn modules(cx: &Ctx) -> Frame {
     let (t, f, s, l) = (cx.t, cx.f, cx.state, cx.state.lang);
     let mut c = long_page(cx);
     let top = t.m.content_top;
+    // What this page is for comes before what it lists.
+    let intro = widgets::paragraph(&mut c, t, f, top, l.pick(MODULE_INTRO));
     let Some(mods) = s.modules.as_ref() else {
-        let said = widgets::paragraph(&mut c, t, f, top, l.pick(READING_MODULES));
-        return Frame::new(t, c, Vec::new(), l.pick(MODULES), said);
+        widgets::paragraph(&mut c, t, f, intro, l.pick(READING_MODULES));
+        return Frame::new(t, c, Vec::new(), l.pick(MODULES), top);
     };
     if mods.is_empty() {
-        let said = widgets::paragraph(&mut c, t, f, top, l.pick(NO_MODULES));
-        return Frame::new(t, c, Vec::new(), l.pick(MODULES), said);
+        widgets::paragraph(&mut c, t, f, intro, l.pick(NO_MODULES));
+        return Frame::new(t, c, Vec::new(), l.pick(MODULES), top);
     }
     let armed = s.armed_drop.as_ref();
     // What a module says of itself under its name: its version, and what it
@@ -4186,7 +4196,7 @@ pub fn modules(cx: &Ctx) -> Frame {
         .zip(&states)
         .map(|((m, sub), state)| Row::new(&m.name).subtitle(sub).trail(Trail::Value(state)))
         .collect();
-    let list = widgets::list(&mut c, t, f, top, &rows);
+    let list = widgets::list(&mut c, t, f, intro, &rows);
     let actions: Vec<Action> = (0..mods.len()).map(Action::ToggleModule).collect();
     let mut out = hits(&list.rows, &actions);
     // Drops, under a heading of their own: a touch arms one, and the same
@@ -4204,7 +4214,7 @@ pub fn modules(cx: &Ctx) -> Frame {
     let actions: Vec<Action> = (0..mods.len()).map(Action::DropModule).collect();
     out.extend(hits(&list.rows, &actions));
     widgets::footnote(&mut c, t, f, list.bottom + t.m.dp(14.0), l.pick(MODULE_NOTE));
-    Frame::new(t, c, out, l.pick(MODULES), top)
+    Frame::new(t, c, out, l.pick(MODULES), intro)
 }
 
 const IMAGE_PART_HEAD: Text = ["分区", "分割區", "Partitions"];
@@ -4403,7 +4413,15 @@ pub fn images(cx: &Ctx) -> Frame {
 }
 
 const READING_MODULES: Text = ["正在读取模块…", "正在讀取模組…", "Reading the modules…"];
-const NO_MODULES: Text = ["没有找到模块。", "沒有找到模組。", "No modules were found."];
+const NO_MODULES: Text = ["data 分区里没有 KernelSU 模块。", "data 分割區裡沒有 KernelSU 模組。", "The data partition holds no KernelSU modules."];
+/// What this page is for, said before the list: the page never explained
+/// itself, and a list of names under a heading says nothing about what a
+/// module is or why a recovery lists them.
+const MODULE_INTRO: Text = [
+    "KernelSU 的模块放在手机 data 分区里，系统开机时由内核按顺序加载，能改系统行为，也能让系统起不来。这里列出 recovery 读到的模块：点一下停用或重新启用，不必开机；刚装上的模块把系统拖住时，在这里停用它，系统就能起来了。安装新模块请在系统里用 KernelSU 的管理器，这个页面不装。",
+    "KernelSU 的模組放在手機 data 分割區裡，系統開機時由核心依序載入，能改系統行為，也能讓系統起不來。這裡列出 recovery 讀到的模組：點一下停用或重新啟用，不必開機；剛裝上的模組把系統拖住時，在這裡停用它，系統就能起來了。安裝新模組請在系統裡用 KernelSU 的管理器，這個頁面不裝。",
+    "KernelSU modules live in the phone's data partition, and the kernel loads them in order as the system starts: they change how the system behaves, and they can keep it from starting at all. This page lists the modules the recovery found. Tap one to switch it off or on again without starting the system; when a module installed last keeps the system from starting, switch it off here and start it again. Installing a new module is done with KernelSU's own manager inside the system, not here.",
+];
 const MODULE_ON: Text = ["启用", "啟用", "on"];
 const MODULE_OFF: Text = ["已停用", "已停用", "off"];
 const MODULE_DROP: Text = ["待删除", "待刪除", "dropping"];
@@ -4572,12 +4590,13 @@ pub fn editor(cx: &Ctx) -> Frame {
 /// The languages the pages speak, each named in itself, to speak another.
 pub fn language(cx: &Ctx) -> Frame {
     let (t, f, l) = (cx.t, cx.f, cx.state.lang);
-    let mut c = page(cx);
+    // A scrolling page: the languages run past one cover screen's height.
+    let mut c = long_page(cx);
     let top = t.m.content_top;
     let rows: Vec<Row> = Lang::ALL.iter().map(|&k| Row::new(k.name()).trail(Trail::Check(k == l))).collect();
     let list = widgets::list(&mut c, t, f, top, &rows);
     let out = hits(&list.rows, &Lang::ALL.map(Action::Language));
-    Frame::new(t, c, out, l.pick(LANGUAGE), top)
+    Frame::new(t, fit(c, t, list.bottom), out, l.pick(LANGUAGE), top)
 }
 
 /// The time zone the status bar's clock and the times on the pages keep.
@@ -4722,22 +4741,24 @@ const BOOT_SLOT: Text = ["启动槽位", "啟動槽位", "Boot slot"];
 /// While an update is in flight the slot stays as the update set it.
 pub fn slot(cx: &Ctx) -> Frame {
     let (t, f, s, i, l) = (cx.t, cx.f, cx.state, cx.info, cx.state.lang);
-    let mut c = page(cx);
+    // Room to scroll: on the cover screen this page is taller than the screen,
+    // and the slide to confirm sits at its bottom.
+    let mut c = long_page(cx);
     let mut out = Vec::new();
     let top = t.m.content_top;
     let title = l.pick(BOOT_SLOT);
     let Some(current) = i.slot else {
-        widgets::list(&mut c, t, f, top, &[Row::new(l.pick(["本机没有 A/B 槽位", "本機沒有 A/B 槽位", "This phone has no A/B slots"])).trail(Trail::None)]);
-        return Frame::new(t, c, out, title, top);
+        let list = widgets::list(&mut c, t, f, top, &[Row::new(l.pick(["本机没有 A/B 槽位", "本機沒有 A/B 槽位", "This phone has no A/B slots"])).trail(Trail::None)]);
+        return Frame::new(t, fit(c, t, list.bottom), out, title, top);
     };
     let slots = match &s.boot_slots {
         Some(Ok(slots)) => *slots,
         Some(Err(why)) => {
             let list = widgets::list(&mut c, t, f, top, &[Row::new(l.pick(["无法读取启动槽位", "無法讀取啟動槽位", "Couldn't read the boot slots"])).trail(Trail::None)]);
-            widgets::footnote(&mut c, t, f, list.bottom, why);
-            return Frame::new(t, c, out, title, top);
+            let bottom = widgets::footnote(&mut c, t, f, list.bottom, why);
+            return Frame::new(t, fit(c, t, bottom), out, title, top);
         }
-        None => return Frame::new(t, c, out, title, top),
+        None => return Frame::new(t, fit(c, t, top), out, title, top),
     };
     let chosen = s.next_slot.unwrap_or(slots.active);
     let y = widgets::section_first(&mut c, t, f, top, l.pick(["下次启动", "下次啟動", "Next boot"]));
@@ -4759,8 +4780,8 @@ pub fn slot(cx: &Ctx) -> Frame {
     let list = widgets::list(&mut c, t, f, y, &rows);
     out.extend(hits(&list.rows, &[Slot::A, Slot::B].map(Action::PickSlot)));
     if let Some(note) = fmt::snapshot_slot_note(l, &i.snapshot) {
-        widgets::footnote(&mut c, t, f, list.bottom, note);
-        return Frame::new(t, c, out, title, top);
+        let bottom = widgets::footnote(&mut c, t, f, list.bottom, note);
+        return Frame::new(t, fit(c, t, bottom), out, title, top);
     }
     let note = l.pick([
         "另一个槽位中没有完整的系统时，切换后将无法开机。",
@@ -4771,7 +4792,7 @@ pub fn slot(cx: &Ctx) -> Frame {
     let (label, danger) = confirm_label(Confirm::Slot, cx.state);
     let track = widgets::confirm(&mut c, t, f, y + t.m.dp(24.0), label, danger, s.confirm);
     out.push(Hit { rect: track, action: Action::Confirm(Confirm::Slot) });
-    Frame::new(t, c, out, title, top)
+    Frame::new(t, fit(c, t, track.y + track.h), out, title, top)
 }
 
 const MAIN_SYSTEM: Text = ["主系统", "主系統", "Main system"];
@@ -4982,7 +5003,9 @@ pub fn systems(cx: &Ctx) -> Frame {
 /// keys and lit where they are.
 pub fn fastboot(cx: &Ctx) -> Frame {
     let (t, f, s, i, l) = (cx.t, cx.f, cx.state, cx.info, cx.state.lang);
-    let mut c = page(cx);
+    // A scrolling page: on the cover screen the choices under the status have
+    // to be reachable too.
+    let mut c = long_page(cx);
     let top = t.m.content_top;
     let running = l.pick(if s.fastboot.running { ["正在运行", "正在執行", "Running"] } else { ["未运行", "未執行", "Not running"] });
     let link = l.pick(match s.fastboot.link {
@@ -5012,8 +5035,8 @@ pub fn fastboot(cx: &Ctx) -> Frame {
     let choices = widgets::list(&mut c, t, f, y, &rows);
     let actions: Vec<Action> = FASTBOOT_CHOICES.iter().map(|&(_, action)| action).collect();
     let out = hits(&choices.rows, &actions);
-    widgets::footnote(&mut c, t, f, choices.bottom, l.pick(["按音量键选择，按电源键确认。", "按音量鍵選擇，按電源鍵確認。", "Choose with the volume keys, and press the power key to confirm."]));
-    Frame { back: false, ..Frame::new(t, c, out, "Fastboot", top) }
+    let bottom = widgets::footnote(&mut c, t, f, choices.bottom, l.pick(["按音量键选择，按电源键确认。", "按音量鍵選擇，按電源鍵確認。", "Choose with the volume keys, and press the power key to confirm."]));
+    Frame { back: false, ..Frame::new(t, fit(c, t, bottom), out, "Fastboot", top) }
 }
 
 /// Where to go once what the system asked for has stopped or cannot be
