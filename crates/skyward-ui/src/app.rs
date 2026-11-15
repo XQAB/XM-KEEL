@@ -13342,6 +13342,19 @@ mod tests {
         assert!(app.state.browser.reading, "and it is the read shown as under way");
     }
 
+    #[test]
+    fn going_home_takes_the_page_away_and_leaves_the_pages_kept() {
+        let mut app = App::new(Screen::Browser, W, H, PPD);
+        app.state.browser.page = Some(web::parse("https://example.com/a", "<html><head><title>A</title></head><body>one</body></html>", false));
+        app.state.browser.address = "https://example.com/a".into();
+        app.state.browser.book = vec![Sheet { url: "https://example.com/kept".into(), title: "Kept".into() }];
+        let effects = app.act(Action::BrowserHome, 0);
+        assert!(effects.is_empty(), "going home asks the device for nothing");
+        assert!(app.state.browser.page.is_none(), "no page is read now");
+        assert!(app.state.browser.address.is_empty(), "and the address is cleared");
+        assert_eq!(app.state.browser.book.len(), 1, "the pages kept stay, as the tiles the opening starts from");
+    }
+
     // The cover of a foldable: 1208 × 1392 beside a 1224 × 2912 screen, at
     // the density both are laid out to.
     const COVER_W: u32 = 1208;
