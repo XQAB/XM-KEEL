@@ -2310,7 +2310,7 @@ pub fn facts(c: &mut Canvas, t: &Theme, f: &Fonts, top: f32, rows: &[Fact], tone
             Some(lines) => {
                 for (k, line) in lines.iter().enumerate() {
                     let at = y + row_h + line_h * (k as f32 + 0.5);
-                    c.text_vc(&f.value, *line, tx, at, m.sub_px, tone.value, Some(full));
+                    c.text_vc(&f.value, line, tx, at, m.sub_px, tone.value, Some(full));
                 }
             }
         }
