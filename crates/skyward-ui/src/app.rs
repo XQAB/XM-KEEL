@@ -5073,10 +5073,15 @@ impl App {
                 let prev = self.frame.take().expect("checked above");
                 // A page whose height follows what it holds — the search page
                 // grows as its results come in — comes to a different height
-                // than the rows marked allowed for: it is drawn again whole
-                // rather than in part.
+                // than the rows marked belonged to: it is drawn again whole,
+                // rather than those rows into a frame that cannot hold them.
                 if prev.canvas.h != fresh.canvas.h {
-                    self.frame = None;
+                    let cx = Ctx { t: &t, f, info, state: &self.state, term: self.term.as_ref(), band: None };
+                    let frame = pages::render(screen, &cx);
+                    self.height = frame.height(&t);
+                    self.cols = frame.canvas.cols().end;
+                    self.frame = Some(frame);
+                    self.clamp_scroll();
                     break;
                 }
                 let mut canvas = prev.canvas;
