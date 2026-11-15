@@ -1,5 +1,5 @@
 use crate::app::{
-    Action, BackupAt, BackupEnd, BackupJob, Check, ClashChoice, Confirm, Damage, Data, Dock, DownloadEnd, EraseStop, Field, FileKind,
+    Action, BackupAt, BackupEnd, BackupJob, Browser, Check, ClashChoice, Confirm, Damage, Data, Dock, DownloadEnd, EraseStop, Field, FileKind,
     FileOp, FileRow, FileTask, Fold, Folder, Frame, FsAction, FsChoice, FsRow, Have, HeroArt, Hit, Install, JobEnd, Keys, Pick, Place, Rows,
     Screen, SkywardCheck, SkywardEnd, SkywardJob, SkywardStage, Slider, SortKey, Source, State, Switch, SystemsWork, Target, UsbDrive,
     UsbLink, Weighing, Wipe, ADDABLE, PluginEnd,
@@ -4032,6 +4032,60 @@ fn browser_bar(c: &mut Canvas, t: &Theme, f: &Fonts, l: Lang, y: f32, kept: bool
     (y + h, out)
 }
 
+/// The browser before anything has been read: the card that says what it is
+/// for, and the pages kept as a row of tiles to start from. Returns where
+/// it ends.
+fn browser_opening(c: &mut Canvas, t: &Theme, f: &Fonts, b: &Browser, l: Lang, top: f32, out: &mut Vec<Hit>) -> f32 {
+    let m = &t.m;
+    let w = m.w as f32 - m.margin * 2.0;
+    let hero_h = m.dp(132.0);
+    // Blue into violet down the card, as the browser's own opening is: the
+    // one place on this phone that is not a settings page.
+    let (from, to) = (BLUE, PURPLE);
+    c.fill_round_rect_graded(m.margin, top, w, hero_h, m.dp(28.0), &|fy| {
+        let k = ((fy - top) / hero_h).clamp(0.0, 1.0);
+        let along = |a: u8, b: u8| (a as f32 + (b as f32 - a as f32) * k) as u8;
+        Rgba { r: along(from.r, to.r), g: along(from.g, to.g), b: along(from.b, to.b), a: 255 }
+    });
+    let white = Rgba::rgb(255, 255, 255);
+    let disc = m.dp(44.0);
+    let (dcx, dcy) = (m.margin + w - m.dp(52.0), top + hero_h / 2.0);
+    c.fill_circle(dcx, dcy, disc, white.with_alpha(38));
+    icons::glyph(c, Icon::Globe, dcx, dcy, m.dp(50.0), white);
+    let x = m.margin + m.dp(24.0);
+    let room = w - m.dp(130.0);
+    c.text_top(&f.heading, "Skyward", x, top + m.dp(30.0), m.dp(26.0), white, Some(room));
+    c.text_top(&f.body, l.pick(BROWSER), x, top + m.dp(72.0), m.dp(16.0), white.with_alpha(220), Some(room));
+    c.text_top(&f.body, l.pick(BROWSER_HOME_HINT), x, top + m.dp(98.0), m.dp(13.0), white.with_alpha(185), Some(room));
+    let mut y = top + hero_h + m.dp(14.0);
+
+    // The pages kept, four to a row, as tiles a thumb starts from: the
+    // address they hold under a globe, and the whole tile a way to read it
+    // again.
+    if !b.book.is_empty() {
+        y = widgets::section(c, t, f, y, l.pick(BROWSER_SHORTCUTS));
+        let gap = m.dp(10.0);
+        let cols = 4;
+        let tile_w = (w - gap * (cols - 1) as f32) / cols as f32;
+        let tile_h = m.dp(106.0);
+        for (k, sheet) in b.book.iter().take(8).enumerate() {
+            let (row, col) = (k / cols, k % cols);
+            let (tx, ty) = (m.margin + col as f32 * (tile_w + gap), y + row as f32 * (tile_h + gap));
+            c.fill_round_rect(tx, ty, tile_w, tile_h, m.dp(20.0), t.pal.card);
+            let (ccx, ccy) = (tx + tile_w / 2.0, ty + m.dp(36.0));
+            c.fill_circle(ccx, ccy, m.dp(22.0), BLUE);
+            icons::glyph(c, Icon::Globe, ccx, ccy, m.dp(26.0), white);
+            let host = web::host_of(&sheet.url);
+            let name = if host.is_empty() { sheet.named() } else { host.as_str() };
+            c.text_center(&f.body, name, ccx, ty + m.dp(82.0), m.dp(13.0), t.pal.text);
+            out.push(Hit { rect: Rect::new(tx, ty, tile_w, tile_h), action: Action::BrowserGo(k) });
+        }
+        let rows = b.book.len().min(8).div_ceil(cols);
+        y += rows as f32 * (tile_h + gap);
+    }
+    widgets::footnote(c, t, f, y, l.pick(BROWSER_HOW))
+}
+
 /// One drawing of the browser page: what it holds from `top` down, and
 /// where its cursor stands. Drawn twice when the page is longer than the
 /// canvas it was first laid out on.
@@ -4122,10 +4176,11 @@ fn browser_page(cx: &Ctx, c: &mut Canvas, out: &mut Vec<Hit>, top: f32) -> (f32,
                 y = widgets::footnote(c, t, f, y, l.pick(BROWSER_CUT));
             }
         }
-        // Nothing read yet: what the page does is said once, under the
-        // controls that do it.
+        // Nothing read yet: the browser's own opening -- what it is for, and
+        // the pages kept as tiles to start from -- rather than a paragraph
+        // saying the field above reads addresses.
         None if !b.reading => {
-            y = widgets::footnote(c, t, f, y + t.m.dp(4.0), l.pick(BROWSER_HOW));
+            y = browser_opening(c, t, f, b, l, y + t.m.dp(4.0), out);
         }
         None => {}
     }
@@ -4185,6 +4240,8 @@ const BROWSER_BOOKMARKS: Text = ["书签", "書籤", "Bookmarks"];
 const BROWSER_FORGET: Text = ["清空书签", "清空書籤", "Forget every bookmark"];
 const BROWSER_READ: Text = ["读取", "讀取", "Read"];
 const BROWSER_ADDRESS: Text = ["输入网址，如 example.com", "輸入網址，如 example.com", "Type an address, such as example.com"];
+const BROWSER_SHORTCUTS: Text = ["快捷访问", "快速存取", "Shortcuts"];
+const BROWSER_HOME_HINT: Text = ["输入网址，下载刷机包", "輸入網址，下載刷機包", "Addresses, pages and files"];
 
 /// The keys for the parts of an address that the keyboard buries two layers
 /// down, three to a row just above it: `https://`, `http://` and the
