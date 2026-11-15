@@ -7559,18 +7559,21 @@ impl App {
                         self.glide = Some((Fling::new(now, 0.0, speed, self.px_per_dp * 160.0), pitch, 0));
                     }
                 }
+                // A drag that went no further than a finger shakes counts as
+                // the tap it began as: what it came down on is pressed, and
+                // the page goes back where it was. This comes before the
+                // spring-back below, which a shake on a page that cannot
+                // scroll would otherwise take: the travel past its end went
+                // into the pull, and a lift there only let it spring.
+                Drag::Scroll { tap: Some(a), down_y, last, .. } if (last - down_y).abs() <= m.dp(TAP_SLOP_DP) => {
+                    self.drag_by(last - down_y);
+                    fx.extend(self.act(a, now));
+                }
                 Drag::Scroll { .. } if self.pull != 0.0 => {
                     // A page let go past its end springs back.
                     self.bounce = Some(Spring::new(now, motion::rubber(self.pull, self.h as f32), 0.0, 0.4));
                     self.pull = 0.0;
                     self.dirty = true;
-                }
-                // A drag that went no further than a finger shakes counts as
-                // the tap it began as: what it came down on is pressed, and
-                // the page goes back where it was.
-                Drag::Scroll { tap: Some(a), down_y, last, .. } if (last - down_y).abs() <= m.dp(TAP_SLOP_DP) => {
-                    self.drag_by(last - down_y);
-                    fx.extend(self.act(a, now));
                 }
                 Drag::Scroll { .. } => {
                     // A finger lifted while still moving sends the page
