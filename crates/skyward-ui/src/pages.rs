@@ -4038,7 +4038,9 @@ fn browser_bar(c: &mut Canvas, t: &Theme, f: &Fonts, l: Lang, y: f32, kept: bool
 fn browser_page(cx: &Ctx, c: &mut Canvas, out: &mut Vec<Hit>, top: f32) -> (f32, widgets::Caret) {
     let (t, f, s, l) = (cx.t, cx.f, cx.state, cx.state.lang);
     let b = &s.browser;
-    let (mut y, caret) = widgets::text_field(c, t, f, top, &b.address);
+    // The address stands in a pill at the top, as a browser keeps it, with
+    // the placeholder in it while nothing is typed.
+    let (mut y, caret) = widgets::address_field(c, t, f, top, &b.address, l.pick(BROWSER_ADDRESS));
     // How the reading of the address goes, where one is under way, or why
     // the last one did not come to a page.
     if b.reading {
@@ -4182,6 +4184,7 @@ const BROWSER_HOW: Text = [
 const BROWSER_BOOKMARKS: Text = ["书签", "書籤", "Bookmarks"];
 const BROWSER_FORGET: Text = ["清空书签", "清空書籤", "Forget every bookmark"];
 const BROWSER_READ: Text = ["读取", "讀取", "Read"];
+const BROWSER_ADDRESS: Text = ["输入网址，如 example.com", "輸入網址，如 example.com", "Type an address, such as example.com"];
 
 /// The keys for the parts of an address that the keyboard buries two layers
 /// down, three to a row just above it: `https://`, `http://` and the

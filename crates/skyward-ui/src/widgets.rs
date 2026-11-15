@@ -1314,6 +1314,53 @@ pub fn text_field(c: &mut Canvas, t: &Theme, f: &Fonts, top: f32, text: &str) ->
     (top + t.m.dp(56.0), caret)
 }
 
+/// The browser's address bar from `top` down: a pill with a globe at its
+/// left, the address typed into it or the placeholder where none is, and
+/// the cursor after the text. Returns where the bar ends and where its
+/// cursor stands.
+pub fn address_field(c: &mut Canvas, t: &Theme, f: &Fonts, top: f32, text: &str, placeholder: &str) -> (f32, Caret) {
+    let at = draw_address_bar(c, t, f, t.m.margin, top, text, placeholder, false);
+    let caret = caret_over(at, |art, dx, dy| {
+        draw_address_bar(art, t, f, t.m.margin - dx, top - dy, text, placeholder, true);
+    });
+    (top + t.m.dp(56.0), caret)
+}
+
+/// Draw the address bar, with its cursor if `caret`; returns where the
+/// cursor is.
+fn draw_address_bar(c: &mut Canvas, t: &Theme, f: &Fonts, x0: f32, top: f32, text: &str, placeholder: &str, caret: bool) -> Rect {
+    let m = &t.m;
+    let (w, h) = (m.w as f32 - m.margin * 2.0, m.dp(56.0));
+    // The pill, not a card: the round ends say a browser's address rather
+    // than one more field of the page under it.
+    c.fill_round_rect(x0, top, w, h, h / 2.0, t.pal.search);
+    // A globe at its left: the ring, the equator, and the meridian down it.
+    let (gx, gy, r, sw) = (x0 + m.dp(26.5), top + h / 2.0, m.dp(9.2), m.dp(1.4));
+    c.stroke_circle(gx, gy, r, sw, t.pal.search_icon);
+    c.line(gx - r, gy, gx + r, gy, sw, t.pal.search_icon);
+    c.line(gx, gy - r, gx, gy + r, sw, t.pal.search_icon);
+    let tx = x0 + m.dp(50.0);
+    let room = w - m.dp(50.0) - m.inner;
+    let px = m.row_title_px;
+    // An address longer than the bar shows its end, where the typing is.
+    let mut shown = text;
+    while c.text_width(&f.heading, shown, px) > room {
+        let mut chars = shown.chars();
+        chars.next();
+        shown = chars.as_str();
+    }
+    let at = cursor(t, f, tx + c.text_width(&f.heading, shown, px), top + h / 2.0, px);
+    if caret {
+        c.fill_round_rect(at.x, at.y, at.w, at.h, m.dp(CARET_RADIUS_DP), t.pal.accent);
+    }
+    if text.is_empty() {
+        c.text_vc(&f.heading, placeholder, tx, top + h / 2.0, px, t.pal.placeholder, None);
+    } else {
+        c.text_vc(&f.heading, shown, tx, top + h / 2.0, px, t.pal.text, None);
+    }
+    at
+}
+
 /// Draw the text field's card from `x0`, `top`, with its cursor if
 /// `caret`; returns where the cursor is.
 fn draw_text_field(c: &mut Canvas, t: &Theme, f: &Fonts, x0: f32, top: f32, text: &str, caret: bool) -> Rect {
