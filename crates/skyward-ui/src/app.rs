@@ -121,6 +121,10 @@ pub enum Screen {
     /// The pages read, the newest first, apart from the bookmarks: one row
     /// each, tapped to read it again, with the way to take them all away.
     BrowserHistory,
+    /// What the browser keeps besides the address and the dock: the pages
+    /// read, the pages kept, the page shown bookmarked or not, and the
+    /// plugin that opens pages in Chromium.
+    BrowserMenu,
     /// The full browser the owner may keep on the phone: its download,
     /// the download under way, or the one on the phone and its removal.
     /// A page of its own, so its states are reached from Settings rather
@@ -1726,6 +1730,8 @@ pub enum Action {
     BrowserHistoryGo(usize),
     /// Take the pages read away, leaving the bookmarks.
     BrowserClearHistory,
+    /// Open the browser's own menu, apart from its dock.
+    BrowserMenu,
     /// Have adb listen on the network too, or stop it doing so.
     SetAdbWifi(bool),
     /// Wipe the note in misc that asks the bootloader for the recovery.
@@ -6928,6 +6934,13 @@ impl App {
             Action::BrowserClearHistory => {
                 self.state.browser.history.clear();
                 self.refresh();
+                return Vec::new();
+            }
+            Action::BrowserMenu => {
+                if self.screen() != Screen::BrowserMenu {
+                    self.open(Screen::BrowserMenu);
+                    return self.arrive_at(Screen::BrowserMenu);
+                }
                 return Vec::new();
             }
             Action::BrowserForgetOne(at) => {
@@ -13493,6 +13506,18 @@ mod tests {
         assert_eq!(tap(&mut app, &f, &i, Action::BrowserClearHistory), Vec::new(), "forgetting them asks the device for nothing");
         assert!(app.state.browser.history.is_empty(), "the pages read are gone");
         assert_eq!(app.screen(), Screen::BrowserHistory, "and the page stays open");
+    }
+
+    #[test]
+    fn the_menu_gathers_the_pages_and_the_plugin_apart_from_the_dock() {
+        let (f, i) = (fonts(), info());
+        let mut app = App::new(Screen::Browser, W, H, PPD);
+        assert_eq!(tap(&mut app, &f, &i, Action::BrowserMenu), Vec::new());
+        assert_eq!(app.screen(), Screen::BrowserMenu, "the menu has a page of its own, off the dock");
+        let fr = app.frame(&f, &i);
+        for (n, action) in [Action::BrowserHistory, Action::BrowserBookmarks, Action::BrowserBookmark, Action::Open(Screen::Plugin)].into_iter().enumerate() {
+            assert!(fr.hits.iter().any(|h| h.action == action), "the menu offers what it holds, row {n}");
+        }
     }
 
     #[test]

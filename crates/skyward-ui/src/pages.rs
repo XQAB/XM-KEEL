@@ -103,6 +103,7 @@ pub fn render(screen: Screen, cx: &Ctx) -> Frame {
         Screen::Browser => browser(cx),
         Screen::BrowserBookmarks => browser_bookmarks(cx),
         Screen::BrowserHistory => browser_history(cx),
+        Screen::BrowserMenu => browser_menu(cx),
         Screen::Plugin => plugin(cx),
         Screen::Modules => modules(cx),
         Screen::Images => images(cx),
@@ -4037,6 +4038,7 @@ fn browser_bar(c: &mut Canvas, t: &Theme, y: f32, kept: bool) -> (f32, Vec<Hit>)
         Action::BrowserBookmark,
         Action::BrowserBookmarks,
         Action::BrowserHistory,
+        Action::BrowserMenu,
     ];
     let (left, right) = (m.margin, m.w as f32 - m.margin);
     let w = right - left;
@@ -4089,10 +4091,16 @@ fn browser_bar(c: &mut Canvas, t: &Theme, y: f32, kept: bool) -> (f32, Vec<Hit>)
                 }
             }
             // The pages read: a clock, its face a circle with two hands.
-            _ => {
+            6 => {
                 c.stroke_circle(cx0, cy0, m.dp(7.0), m.dp(1.8), ink);
                 c.line(cx0, cy0, cx0, cy0 - m.dp(4.2), m.dp(1.8), ink);
                 c.line(cx0, cy0, cx0 + m.dp(4.0), cy0 + m.dp(1.6), m.dp(1.8), ink);
+            }
+            // Everything else: three dots in a row.
+            _ => {
+                for k in 0..3 {
+                    c.fill_circle(cx0 + (k as f32 - 1.0) * m.dp(5.0), cy0, m.dp(1.9), ink);
+                }
             }
         }
         let rect = Rect::new(cx0 - key / 2.0, cy0 - key / 2.0, key, key);
@@ -4166,6 +4174,27 @@ pub fn browser_history(cx: &Ctx) -> Frame {
         bottom = clear.bottom;
     }
     Frame::new(t, fit(c, t, bottom), out, l.pick(BROWSER_HISTORY), t.m.content_top)
+}
+
+/// What the browser keeps besides its address and its dock: the pages
+/// read, the pages kept, the page shown kept or not, and the plugin that
+/// opens pages in Chromium, as the browser the phone came with has it.
+pub fn browser_menu(cx: &Ctx) -> Frame {
+    let (t, f, s, l) = (cx.t, cx.f, cx.state, cx.state.lang);
+    let b = &s.browser;
+    let mut c = page(cx);
+    let mut out = Vec::new();
+    let y = widgets::section_first(&mut c, t, f, t.m.content_top, l.pick(BROWSER_MENU));
+    let kept = b.page.as_ref().is_some_and(|page| b.book.iter().any(|one| one.url == page.url));
+    let rows = [
+        Row::new(l.pick(BROWSER_HISTORY)).icon(BLUE, Icon::Restore).trail(Trail::Arrow),
+        Row::new(l.pick(BROWSER_BOOKMARKS)).icon(ORANGE, Icon::Backup).trail(Trail::Arrow),
+        Row::new(l.pick(if kept { BROWSER_MENU_DROP } else { BROWSER_MENU_KEEP })).icon(ORANGE, Icon::Backup).trail(Trail::None),
+        Row::new(l.pick(BROWSER_FULL)).icon(PURPLE, Icon::Layers).trail(Trail::Arrow),
+    ];
+    let list = widgets::list(&mut c, t, f, y, &rows);
+    out.extend(hits(&list.rows, &[Action::BrowserHistory, Action::BrowserBookmarks, Action::BrowserBookmark, Action::Open(Screen::Plugin)]));
+    Frame::new(t, fit(c, t, list.bottom), out, l.pick(BROWSER_MENU), t.m.content_top)
 }
 
 /// The browser before anything has been read: the card that says what it is
@@ -4386,6 +4415,10 @@ const BROWSER_NO_HISTORY: Text = [
     "還沒有讀過頁面。在瀏覽器裡輸入一個網址，讀到的每一頁都會記在這裡。",
     "No pages read yet. Type an address in the browser, and every page read is kept here.",
 ];
+const BROWSER_MENU: Text = ["浏览器菜单", "瀏覽器選單", "Browser menu"];
+const BROWSER_MENU_KEEP: Text = ["添加书签", "加入書籤", "Add a bookmark"];
+const BROWSER_MENU_DROP: Text = ["取消书签", "取消書籤", "Remove the bookmark"];
+const BROWSER_FULL: Text = ["完整模式（外置插件）", "完整模式（外掛）", "Full mode (the plugin)"];
 
 /// The keys for the parts of an address that the keyboard buries two layers
 /// down, three to a row just above it: `https://`, `http://` and the
