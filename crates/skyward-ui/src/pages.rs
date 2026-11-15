@@ -100,7 +100,8 @@ pub fn render(screen: Screen, cx: &Ctx) -> Frame {
         Screen::Update => update(cx),
         Screen::SkywardUpdate => skyward_update(cx),
         Screen::Fetch => fetch(cx),
-    Screen::Browser => browser(cx),
+        Screen::Browser => browser(cx),
+        Screen::BrowserBookmarks => browser_bookmarks(cx),
         Screen::Modules => modules(cx),
         Screen::Images => images(cx),
         Screen::License => license(cx),
@@ -3989,7 +3990,14 @@ pub fn browser(cx: &Ctx) -> Frame {
 /// it does on the browser the phone came with.
 fn browser_bar(c: &mut Canvas, t: &Theme, y: f32, kept: bool) -> (f32, Vec<Hit>) {
     let m = &t.m;
-    let actions = [Action::BrowserBack, Action::BrowserAhead, Action::Browse, Action::BrowserHome, Action::BrowserBookmark];
+    let actions = [
+        Action::BrowserBack,
+        Action::BrowserAhead,
+        Action::Browse,
+        Action::BrowserHome,
+        Action::BrowserBookmark,
+        Action::BrowserBookmarks,
+    ];
     let (left, right) = (m.margin, m.w as f32 - m.margin);
     let w = right - left;
     let h = m.dp(68.0);
@@ -4026,17 +4034,62 @@ fn browser_bar(c: &mut Canvas, t: &Theme, y: f32, kept: bool) -> (f32, Vec<Hit>)
                 c.line(cx0 - m.dp(5.5), cy0 + m.dp(7.0), cx0 + m.dp(5.5), cy0 + m.dp(7.0), m.dp(2.2), ink);
             }
             // Keeping the page: a bookmark, its foot notched.
-            _ => {
+            4 => {
                 c.line(cx0 - m.dp(5.0), cy0 - m.dp(7.5), cx0 - m.dp(5.0), cy0 + m.dp(7.5), m.dp(2.0), ink);
                 c.line(cx0 + m.dp(5.0), cy0 - m.dp(7.5), cx0 + m.dp(5.0), cy0 + m.dp(7.5), m.dp(2.0), ink);
                 c.line(cx0 - m.dp(5.0), cy0 + m.dp(7.5), cx0, cy0 + m.dp(2.5), m.dp(2.0), ink);
                 c.line(cx0, cy0 + m.dp(2.5), cx0 + m.dp(5.0), cy0 + m.dp(7.5), m.dp(2.0), ink);
+            }
+            // The pages kept: a list of them, a dot before each line.
+            _ => {
+                for off in [-5.0f32, 0.0, 5.0] {
+                    let yy = cy0 + m.dp(off);
+                    c.fill_circle(cx0 - m.dp(6.5), yy, m.dp(1.3), ink);
+                    c.line(cx0 - m.dp(3.0), yy, cx0 + m.dp(7.0), yy, m.dp(1.8), ink);
+                }
             }
         }
         let rect = Rect::new(cx0 - key / 2.0, cy0 - key / 2.0, key, key);
         out.push(Hit { rect, action: *action });
     }
     (y + h, out)
+}
+
+/// The pages kept as bookmarks, apart from the browser: a row each, with the
+/// name the page gave itself, the address under it, and a bin at the end of
+/// the row that drops that one. A tap on the rest of the row reads it again,
+/// and a last row takes them all away.
+pub fn browser_bookmarks(cx: &Ctx) -> Frame {
+    let (t, f, s, l) = (cx.t, cx.f, cx.state, cx.state.lang);
+    let b = &s.browser;
+    let mut c = long_page(cx);
+    let mut out = Vec::new();
+    let mut bottom = t.m.content_top;
+    if b.book.is_empty() {
+        bottom = widgets::footnote(&mut c, t, f, bottom, l.pick(BROWSER_NO_BOOKMARKS));
+    } else {
+        let rows: Vec<Row> = b
+            .book
+            .iter()
+            .map(|sheet| Row::new(sheet.named()).subtitle(&sheet.url).icon(BLUE, Icon::Globe).trail(Trail::None))
+            .collect();
+        let kept = widgets::list(&mut c, t, f, bottom, &rows);
+        // The bin is its own target at the end of each row: a tap there drops
+        // that page alone, while a tap on the row reads it again.
+        let bin_w = t.m.dp(46.0);
+        for (i, rect) in kept.rows.iter().enumerate() {
+            let bin = Rect::new(rect.x + rect.w - bin_w, rect.y, bin_w, rect.h);
+            icons::glyph(&mut c, Icon::Wipe, bin.x + bin_w / 2.0, bin.y + bin.h / 2.0, t.m.dp(18.0), RED);
+            let mut row = *rect;
+            row.w -= bin_w;
+            out.push(Hit { rect: row, action: Action::BrowserGo(i) });
+            out.push(Hit { rect: bin, action: Action::BrowserForgetOne(i) });
+        }
+        let forget = widgets::list(&mut c, t, f, kept.bottom, &[Row::new(l.pick(BROWSER_FORGET)).icon(RED, Icon::Wipe).trail(Trail::None)]);
+        out.extend(hits(&forget.rows, &[Action::BrowserClearBookmarks]));
+        bottom = forget.bottom;
+    }
+    Frame::new(t, fit(c, t, bottom), out, l.pick(BROWSER_BOOKMARKS), t.m.content_top)
 }
 
 /// The browser before anything has been read: the card that says what it is
@@ -4245,6 +4298,11 @@ const BROWSER_READ: Text = ["读取", "讀取", "Read"];
 const BROWSER_ADDRESS: Text = ["输入网址，如 example.com", "輸入網址，如 example.com", "Type an address, such as example.com"];
 const BROWSER_SHORTCUTS: Text = ["快捷访问", "快速存取", "Shortcuts"];
 const BROWSER_HOME_HINT: Text = ["输入网址，下载刷机包", "輸入網址，下載刷機包", "Addresses, pages and files"];
+const BROWSER_NO_BOOKMARKS: Text = [
+    "还没有书签。在浏览器里读到一页后，点底部的书签键把它存下来。",
+    "還沒有書籤。在瀏覽器裡讀到一頁後，點底部的書籤鍵把它存下來。",
+    "No bookmarks yet. Read a page in the browser, then tap the bookmark key in its dock to keep it.",
+];
 
 /// The keys for the parts of an address that the keyboard buries two layers
 /// down, three to a row just above it: `https://`, `http://` and the

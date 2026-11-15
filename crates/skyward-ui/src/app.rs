@@ -115,6 +115,9 @@ pub enum Screen {
     /// words and where its links go, with the pages behind and ahead of it
     /// and the ones kept as bookmarks.
     Browser,
+    /// The pages kept as bookmarks, apart from the browser: one row each,
+    /// tapped to read it again, with a bin at the end of the row.
+    BrowserBookmarks,
     /// Skyward's own licence.
     License,
     /// The interface typeface and the terms it is used under.
@@ -1695,6 +1698,10 @@ pub enum Action {
     BrowserLink(usize),
     /// Read the page kept as the bookmark at this place.
     BrowserGo(usize),
+    /// Open the pages kept as bookmarks, apart from the browser page.
+    BrowserBookmarks,
+    /// Drop the bookmark at this place, leaving the rest.
+    BrowserForgetOne(usize),
     /// Take every bookmark away, leaving the pages the browser has read.
     BrowserClearBookmarks,
     /// Have adb listen on the network too, or stop it doing so.
@@ -6845,7 +6852,26 @@ impl App {
             Action::BrowserGo(at) => {
                 let Some(sheet) = self.state.browser.book.get(at) else { return Vec::new() };
                 let url = sheet.url.clone();
+                // Tapping a bookmark from the page that lists them comes back
+                // to the browser; tapping one from the browser itself stays.
+                if self.screen() != Screen::Browser {
+                    self.open(Screen::Browser);
+                }
                 return self.browse(url);
+            }
+            Action::BrowserBookmarks => {
+                if self.screen() != Screen::BrowserBookmarks {
+                    self.open(Screen::BrowserBookmarks);
+                    return self.arrive_at(Screen::BrowserBookmarks);
+                }
+                Vec::new()
+            }
+            Action::BrowserForgetOne(at) => {
+                if at < self.state.browser.book.len() {
+                    self.state.browser.book.remove(at);
+                    self.say(self.state.lang.pick(BOOKMARK_DROPPED), now);
+                }
+                self.refresh();
             }
             Action::BrowserClearBookmarks => {
                 if !self.state.browser.book.is_empty() {
@@ -13343,8 +13369,7 @@ mod tests {
     }
 
     #[test]
-    fn going_home_takes_the_page_away_and_leaves_the_pages_kept() {
-        let mut app = App::new(Screen::Browser, W, H, PPD);
+    fn going_home_takes_the_page_away_and_leaves_the_pages_kept() {        let mut app = App::new(Screen::Browser, W, H, PPD);
         app.state.browser.page = Some(web::parse("https://example.com/a", "<html><head><title>A</title></head><body>one</body></html>", false));
         app.state.browser.address = "https://example.com/a".into();
         app.state.browser.book = vec![Sheet { url: "https://example.com/kept".into(), title: "Kept".into() }];
@@ -13353,6 +13378,23 @@ mod tests {
         assert!(app.state.browser.page.is_none(), "no page is read now");
         assert!(app.state.browser.address.is_empty(), "and the address is cleared");
         assert_eq!(app.state.browser.book.len(), 1, "the pages kept stay, as the tiles the opening starts from");
+    }
+
+    #[test]
+    fn the_bookmarks_page_opens_from_the_browser_and_drops_one_at_a_time() {
+        let (f, i) = (fonts(), info());
+        let mut app = App::new(Screen::Browser, W, H, PPD);
+        app.state.browser.book = vec![
+            Sheet { url: "https://one.example/".into(), title: "One".into() },
+            Sheet { url: "https://two.example/".into(), title: "Two".into() },
+        ];
+        assert_eq!(tap(&mut app, &f, &i, Action::BrowserBookmarks), Vec::new());
+        assert_eq!(app.screen(), Screen::BrowserBookmarks, "the pages kept have a page of their own");
+        let effects = tap(&mut app, &f, &i, Action::BrowserForgetOne(0));
+        assert_eq!(effects, Vec::new(), "dropping one asks the device for nothing");
+        assert_eq!(app.screen(), Screen::BrowserBookmarks, "and the page stays open");
+        assert_eq!(app.state.browser.book.len(), 1, "only the one tapped is gone");
+        assert_eq!(app.state.browser.book[0].url, "https://two.example/", "the other is the one left");
     }
 
     // The cover of a foldable: 1208 × 1392 beside a 1224 × 2912 screen, at
