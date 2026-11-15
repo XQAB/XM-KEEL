@@ -3964,22 +3964,21 @@ pub fn browser(cx: &Ctx) -> Frame {
     let top = t.m.content_top;
     let mut c = long_page(cx);
     let mut out = Vec::new();
-    let (bottom, caret) = browser_page(cx, &mut c, &mut out, top);
+    let (mut bottom, mut caret) = browser_page(cx, &mut c, &mut out, top);
     // What lies past the canvas's bottom was clipped away: a page longer
     // than the three screens it was drawn on is drawn again on a canvas
-    // tall enough to hold it, which the page then scrolls through.
-    let (c, bottom) = if cx.band.is_none() && bottom + t.m.margin * 2.0 > c.h as f32 {
-        let mut taller = sheet(cx, fitted(t, bottom), t.pal.bg);
+    // tall enough to hold it, which the page then scrolls through. The
+    // band a row-at-a-time redraw puts on the canvas holds the page whole
+    // down, so the second drawing is the same there as anywhere.
+    if bottom + t.m.margin * 2.0 > c.h as f32 {
         out.clear();
-        let (bottom, _) = browser_page(cx, &mut taller, &mut out, top);
-        (taller, bottom)
-    } else {
-        (c, bottom)
-    };
+        c = sheet(cx, fitted(t, bottom), t.pal.bg);
+        (bottom, caret) = browser_page(cx, &mut c, &mut out, top);
+    }
     // The keyboard is held at the bottom of the screen as a strip of its
     // own, so the page above it scrolls under it.
     let dock = Some(keyboard_dock(t, f, s, l.pick(BROWSER_READ)));
-    let canvas = if cx.band.is_some() { c } else { fit(c, t, bottom) };
+    let canvas = fit(c, t, bottom);
     Frame { dock, caret: Some(caret), ..Frame::new(t, canvas, out, l.pick(BROWSER), top) }
 }
 
