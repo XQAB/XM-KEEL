@@ -3982,25 +3982,25 @@ pub fn browser(cx: &Ctx) -> Frame {
     Frame { dock, caret: Some(caret), ..Frame::new(t, canvas, out, l.pick(BROWSER), top) }
 }
 
-/// The browser's four controls as one bar of keys at `y`: back, forward,
-/// reading the address again, and keeping the page. Each is a rounded key
-/// with its glyph and the word for it under that, so a thumb finds them
-/// without reading a list, and the page they work stays whole above them.
-fn browser_bar(c: &mut Canvas, t: &Theme, f: &Fonts, l: Lang, y: f32, kept: bool) -> (f32, Vec<Hit>) {
+/// The browser's controls as one dock at `y`: a single rounded strip holding
+/// back, forward, reading the address again, going home and keeping the
+/// page, each a round key with its glyph and no word under it. The page
+/// above them keeps its whole height, and a thumb finds the glyphs the way
+/// it does on the browser the phone came with.
+fn browser_bar(c: &mut Canvas, t: &Theme, y: f32, kept: bool) -> (f32, Vec<Hit>) {
     let m = &t.m;
-    let actions = [Action::BrowserBack, Action::BrowserAhead, Action::Browse, Action::BrowserBookmark];
-    let labels = [l.pick(BROWSER_BACK), l.pick(BROWSER_AHEAD), l.pick(BROWSER_AGAIN), l.pick(BROWSER_KEEP)];
+    let actions = [Action::BrowserBack, Action::BrowserAhead, Action::Browse, Action::BrowserHome, Action::BrowserBookmark];
     let (left, right) = (m.margin, m.w as f32 - m.margin);
-    let gap = m.dp(8.0);
-    let w = (right - left - gap * 3.0) / 4.0;
+    let w = right - left;
     let h = m.dp(68.0);
-    let mut out = Vec::with_capacity(4);
+    c.fill_round_rect(left, y, w, h, m.dp(20.0), t.pal.card);
+    let key = m.dp(44.0);
+    let step = w / actions.len() as f32;
+    let mut out = Vec::with_capacity(actions.len());
     for (k, action) in actions.iter().enumerate() {
-        let x = left + k as f32 * (w + gap);
+        let (cx0, cy0) = (left + step * (k as f32 + 0.5), y + h / 2.0);
         // A page already kept says so in the accent colour.
-        let ink = if k == 3 && kept { t.pal.accent } else { t.pal.text };
-        c.fill_round_rect(x, y, w, h, m.dp(16.0), t.pal.card);
-        let (cx0, cy0) = (x + w / 2.0, y + m.dp(25.0));
+        let ink = if k == 4 && kept { t.pal.accent } else { t.pal.text };
         match k {
             // Back and forward, as the chevrons of a browser.
             0 => {
@@ -4017,6 +4017,14 @@ fn browser_bar(c: &mut Canvas, t: &Theme, f: &Fonts, l: Lang, y: f32, kept: bool
                 c.line(cx0 + m.dp(2.0), cy0 - m.dp(9.5), cx0 + m.dp(6.6), cy0 - m.dp(5.4), m.dp(2.0), ink);
                 c.line(cx0 + m.dp(6.6), cy0 - m.dp(5.4), cx0 + m.dp(2.6), cy0 - m.dp(3.0), m.dp(2.0), ink);
             }
+            // Going home: a house, its roof over two walls.
+            3 => {
+                c.line(cx0 - m.dp(7.0), cy0 - m.dp(1.0), cx0, cy0 - m.dp(8.0), m.dp(2.2), ink);
+                c.line(cx0, cy0 - m.dp(8.0), cx0 + m.dp(7.0), cy0 - m.dp(1.0), m.dp(2.2), ink);
+                c.line(cx0 - m.dp(5.5), cy0 - m.dp(1.0), cx0 - m.dp(5.5), cy0 + m.dp(7.0), m.dp(2.2), ink);
+                c.line(cx0 + m.dp(5.5), cy0 - m.dp(1.0), cx0 + m.dp(5.5), cy0 + m.dp(7.0), m.dp(2.2), ink);
+                c.line(cx0 - m.dp(5.5), cy0 + m.dp(7.0), cx0 + m.dp(5.5), cy0 + m.dp(7.0), m.dp(2.2), ink);
+            }
             // Keeping the page: a bookmark, its foot notched.
             _ => {
                 c.line(cx0 - m.dp(5.0), cy0 - m.dp(7.5), cx0 - m.dp(5.0), cy0 + m.dp(7.5), m.dp(2.0), ink);
@@ -4025,8 +4033,7 @@ fn browser_bar(c: &mut Canvas, t: &Theme, f: &Fonts, l: Lang, y: f32, kept: bool
                 c.line(cx0, cy0 + m.dp(2.5), cx0 + m.dp(5.0), cy0 + m.dp(7.5), m.dp(2.0), ink);
             }
         }
-        c.text_center(&f.body, labels[k], cx0, y + m.dp(53.0), m.dp(11.0), t.pal.subtitle);
-        let rect = Rect::new(x, y, w, h);
+        let rect = Rect::new(cx0 - key / 2.0, cy0 - key / 2.0, key, key);
         out.push(Hit { rect, action: *action });
     }
     (y + h, out)
@@ -4107,7 +4114,7 @@ fn browser_page(cx: &Ctx, c: &mut Canvas, out: &mut Vec<Hit>, top: f32) -> (f32,
     // is shown: the four a page is worked with, as a bar of keys under the
     // address, where a browser keeps them, rather than four rows that pushed
     // the page itself down the screen.
-    let (bar, keys) = browser_bar(c, t, f, l, y + t.m.dp(10.0), b.kept());
+    let (bar, keys) = browser_bar(c, t, y + t.m.dp(10.0), b.kept());
     out.extend(keys);
     let mut y = bar;
     match &b.page {
@@ -4214,10 +4221,6 @@ fn keyboard_dock(t: &Theme, f: &Fonts, s: &State, enter: &str) -> Dock {
 
 const BROWSER: Text = ["浏览器", "瀏覽器", "Browser"];
 const BROWSER_READING: Text = ["正在读取网页", "正在讀取網頁", "Reading the page"];
-const BROWSER_BACK: Text = ["后退", "上一頁", "Back"];
-const BROWSER_AHEAD: Text = ["前进", "下一頁", "Forward"];
-const BROWSER_AGAIN: Text = ["重新读取", "重新讀取", "Read again"];
-const BROWSER_KEEP: Text = ["存为书签", "存為書籤", "Keep as a bookmark"];
 const BROWSER_LINK_PAGE: Text = ["网页", "網頁", "page"];
 const BROWSER_LINK_FILE: Text = ["文件", "檔案", "file"];
 const BROWSER_FORM: Text = ["［表单］", "［表單］", "［form］"];

@@ -1686,6 +1686,9 @@ pub enum Action {
     /// Read the page behind the one shown again, or the one ahead of it.
     BrowserBack,
     BrowserAhead,
+    /// Put the browser back at its opening: no page read, no address typed,
+    /// the pages kept still there to start from.
+    BrowserHome,
     /// Keep the page shown as a bookmark, or take it out of them.
     BrowserBookmark,
     /// Read the page behind the link at this place among the page's blocks.
@@ -6788,6 +6791,17 @@ impl App {
                     self.state.browser.back.push(shown);
                 }
                 return self.read_page(onward.url);
+            }
+            // Home clears what is read and typed, but not the pages kept:
+            // they are the tiles the opening is for.
+            Action::BrowserHome => {
+                let b = &mut self.state.browser;
+                b.page = None;
+                b.address.clear();
+                b.reading = false;
+                b.said = None;
+                b.ahead.clear();
+                self.refresh();
             }
             Action::BrowserBookmark => {
                 let sheet = match self.state.browser.page.as_ref() {
