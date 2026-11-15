@@ -102,6 +102,7 @@ pub fn render(screen: Screen, cx: &Ctx) -> Frame {
         Screen::Fetch => fetch(cx),
         Screen::Browser => browser(cx),
         Screen::BrowserBookmarks => browser_bookmarks(cx),
+        Screen::BrowserHistory => browser_history(cx),
         Screen::Plugin => plugin(cx),
         Screen::Modules => modules(cx),
         Screen::Images => images(cx),
@@ -4035,6 +4036,7 @@ fn browser_bar(c: &mut Canvas, t: &Theme, y: f32, kept: bool) -> (f32, Vec<Hit>)
         Action::BrowserHome,
         Action::BrowserBookmark,
         Action::BrowserBookmarks,
+        Action::BrowserHistory,
     ];
     let (left, right) = (m.margin, m.w as f32 - m.margin);
     let w = right - left;
@@ -4079,12 +4081,18 @@ fn browser_bar(c: &mut Canvas, t: &Theme, y: f32, kept: bool) -> (f32, Vec<Hit>)
                 c.line(cx0, cy0 + m.dp(2.5), cx0 + m.dp(5.0), cy0 + m.dp(7.5), m.dp(2.0), ink);
             }
             // The pages kept: a list of them, a dot before each line.
-            _ => {
+            5 => {
                 for off in [-5.0f32, 0.0, 5.0] {
                     let yy = cy0 + m.dp(off);
                     c.fill_circle(cx0 - m.dp(6.5), yy, m.dp(1.3), ink);
                     c.line(cx0 - m.dp(3.0), yy, cx0 + m.dp(7.0), yy, m.dp(1.8), ink);
                 }
+            }
+            // The pages read: a clock, its face a circle with two hands.
+            _ => {
+                c.stroke_circle(cx0, cy0, m.dp(7.0), m.dp(1.8), ink);
+                c.line(cx0, cy0, cx0, cy0 - m.dp(4.2), m.dp(1.8), ink);
+                c.line(cx0, cy0, cx0 + m.dp(4.0), cy0 + m.dp(1.6), m.dp(1.8), ink);
             }
         }
         let rect = Rect::new(cx0 - key / 2.0, cy0 - key / 2.0, key, key);
@@ -4128,6 +4136,36 @@ pub fn browser_bookmarks(cx: &Ctx) -> Frame {
         bottom = forget.bottom;
     }
     Frame::new(t, fit(c, t, bottom), out, l.pick(BROWSER_BOOKMARKS), t.m.content_top)
+}
+
+/// The pages read, the newest first, apart from the ones kept as
+/// bookmarks: a row each with the name the page gave itself and the
+/// address under it, tapped to read it again, and a last row that takes
+/// them all away.
+pub fn browser_history(cx: &Ctx) -> Frame {
+    let (t, f, s, l) = (cx.t, cx.f, cx.state, cx.state.lang);
+    let b = &s.browser;
+    let mut c = long_page(cx);
+    let mut out = Vec::new();
+    let mut bottom = t.m.content_top;
+    if b.history.is_empty() {
+        bottom = widgets::footnote(&mut c, t, f, bottom, l.pick(BROWSER_NO_HISTORY));
+    } else {
+        let rows: Vec<Row> = b
+            .history
+            .iter()
+            .rev()
+            .map(|sheet| Row::new(sheet.named()).subtitle(&sheet.url).icon(SLATE, Icon::Globe).trail(Trail::None))
+            .collect();
+        let read = widgets::list(&mut c, t, f, bottom, &rows);
+        for (i, rect) in read.rows.iter().enumerate() {
+            out.push(Hit { rect: *rect, action: Action::BrowserHistoryGo(i) });
+        }
+        let clear = widgets::list(&mut c, t, f, read.bottom, &[Row::new(l.pick(BROWSER_FORGET_HISTORY)).icon(RED, Icon::Wipe).trail(Trail::None)]);
+        out.extend(hits(&clear.rows, &[Action::BrowserClearHistory]));
+        bottom = clear.bottom;
+    }
+    Frame::new(t, fit(c, t, bottom), out, l.pick(BROWSER_HISTORY), t.m.content_top)
 }
 
 /// The browser before anything has been read: the card that says what it is
@@ -4340,6 +4378,13 @@ const BROWSER_NO_BOOKMARKS: Text = [
     "还没有书签。在浏览器里读到一页后，点底部的书签键把它存下来。",
     "還沒有書籤。在瀏覽器裡讀到一頁後，點底部的書籤鍵把它存下來。",
     "No bookmarks yet. Read a page in the browser, then tap the bookmark key in its dock to keep it.",
+];
+const BROWSER_HISTORY: Text = ["历史记录", "歷史記錄", "History"];
+const BROWSER_FORGET_HISTORY: Text = ["清空历史记录", "清空歷史記錄", "Forget the history"];
+const BROWSER_NO_HISTORY: Text = [
+    "还没有读过页面。在浏览器里输入一个网址，读到的每一页都会记在这里。",
+    "還沒有讀過頁面。在瀏覽器裡輸入一個網址，讀到的每一頁都會記在這裡。",
+    "No pages read yet. Type an address in the browser, and every page read is kept here.",
 ];
 
 /// The keys for the parts of an address that the keyboard buries two layers

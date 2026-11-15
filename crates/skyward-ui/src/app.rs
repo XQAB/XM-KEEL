@@ -118,6 +118,9 @@ pub enum Screen {
     /// The pages kept as bookmarks, apart from the browser: one row each,
     /// tapped to read it again, with a bin at the end of the row.
     BrowserBookmarks,
+    /// The pages read, the newest first, apart from the bookmarks: one row
+    /// each, tapped to read it again, with the way to take them all away.
+    BrowserHistory,
     /// The full browser the owner may keep on the phone: its download,
     /// the download under way, or the one on the phone and its removal.
     /// A page of its own, so its states are reached from Settings rather
@@ -245,11 +248,18 @@ pub struct Browser {
     /// the same.
     pub back: Vec<Sheet>,
     pub ahead: Vec<Sheet>,
+    /// The pages read, the newest last, each once: what was read before
+    /// the page shown, kept apart from the bookmarks the owner keeps on
+    /// purpose.
+    pub history: Vec<Sheet>,
     pub book: Vec<Sheet>,
 }
 
 /// The most bookmarks kept; the oldest goes when another comes.
 pub const BOOKMARKS_KEPT: usize = 40;
+
+/// The most pages the history keeps; the oldest goes when another comes.
+pub const HISTORY_KEPT: usize = 40;
 
 impl Browser {
     /// Whether the page shown is kept as a bookmark.
@@ -1709,6 +1719,13 @@ pub enum Action {
     BrowserForgetOne(usize),
     /// Take every bookmark away, leaving the pages the browser has read.
     BrowserClearBookmarks,
+    /// Open the pages read, the newest first, apart from the bookmarks.
+    BrowserHistory,
+    /// Read the page at this place in the history, the newest counting from
+    /// nothing.
+    BrowserHistoryGo(usize),
+    /// Take the pages read away, leaving the bookmarks.
+    BrowserClearHistory,
     /// Have adb listen on the network too, or stop it doing so.
     SetAdbWifi(bool),
     /// Wipe the note in misc that asks the bootloader for the recovery.
@@ -4603,6 +4620,15 @@ impl App {
             Ok(web::Opened::Page(page)) => {
                 self.state.browser.address = page.url.clone();
                 self.state.browser.said = None;
+                let sheet = Sheet { url: page.url.clone(), title: page.title.clone() };
+                // What was read is kept once, the newest last: reading the
+                // same page again moves nothing, and the oldest goes when
+                // the history is full.
+                if self.state.browser.history.last().map_or(true, |last| last.url != sheet.url) {
+                    self.state.browser.history.push(sheet);
+                    let over = self.state.browser.history.len().saturating_sub(HISTORY_KEPT);
+                    self.state.browser.history.drain(..over);
+                }
                 self.state.browser.page = Some(page);
                 self.wake(now);
             }
@@ -6879,6 +6905,29 @@ impl App {
                     self.open(Screen::BrowserBookmarks);
                     return self.arrive_at(Screen::BrowserBookmarks);
                 }
+                return Vec::new();
+            }
+            Action::BrowserHistory => {
+                if self.screen() != Screen::BrowserHistory {
+                    self.open(Screen::BrowserHistory);
+                    return self.arrive_at(Screen::BrowserHistory);
+                }
+                return Vec::new();
+            }
+            Action::BrowserHistoryGo(at) => {
+                let len = self.state.browser.history.len();
+                let Some(sheet) = len.checked_sub(at + 1).and_then(|i| self.state.browser.history.get(i)) else {
+                    return Vec::new();
+                };
+                let url = sheet.url.clone();
+                if self.screen() != Screen::Browser {
+                    self.open(Screen::Browser);
+                }
+                return self.browse(url);
+            }
+            Action::BrowserClearHistory => {
+                self.state.browser.history.clear();
+                self.refresh();
                 return Vec::new();
             }
             Action::BrowserForgetOne(at) => {
@@ -13426,6 +13475,24 @@ mod tests {
         let fr = app.frame(&f, &i);
         assert!(fr.hits.iter().any(|h| h.action == Action::DropPlugin), "and the way to take it away once it is on the phone");
         assert!(!fr.hits.iter().any(|h| h.action == Action::GetPlugin), "the download it already has is not offered again");
+    }
+
+    #[test]
+    fn the_history_page_lists_what_was_read_and_forgets_it_all() {
+        let (f, i) = (fonts(), info());
+        let mut app = App::new(Screen::Browser, W, H, PPD);
+        app.state.browser.history = vec![
+            Sheet { url: "https://one.example/".into(), title: "One".into() },
+            Sheet { url: "https://two.example/".into(), title: "Two".into() },
+        ];
+        assert_eq!(tap(&mut app, &f, &i, Action::BrowserHistory), Vec::new());
+        assert_eq!(app.screen(), Screen::BrowserHistory, "the pages read have a page of their own");
+        let fr = app.frame(&f, &i);
+        assert!(fr.hits.iter().any(|h| h.action == Action::BrowserHistoryGo(0)), "each page read is a row, tapped to read it again");
+        assert!(fr.hits.iter().any(|h| h.action == Action::BrowserClearHistory), "with a last row that takes them all away");
+        assert_eq!(tap(&mut app, &f, &i, Action::BrowserClearHistory), Vec::new(), "forgetting them asks the device for nothing");
+        assert!(app.state.browser.history.is_empty(), "the pages read are gone");
+        assert_eq!(app.screen(), Screen::BrowserHistory, "and the page stays open");
     }
 
     #[test]
