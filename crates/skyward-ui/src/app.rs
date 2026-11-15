@@ -5070,8 +5070,16 @@ impl App {
                 let band = Band { rows, cols: (0, self.cols) };
                 let cx = Ctx { t: &t, f, info, state: &self.state, term: self.term.as_ref(), band: Some(band) };
                 let fresh = pages::render(screen, &cx);
-                let mut canvas = self.frame.take().expect("checked above").canvas;
-                assert_eq!(canvas.h, fresh.canvas.h, "a page drawn again in part is as tall as it was");
+                let prev = self.frame.take().expect("checked above");
+                // A page whose height follows what it holds — the search page
+                // grows as its results come in — comes to a different height
+                // than the rows marked allowed for: it is drawn again whole
+                // rather than in part.
+                if prev.canvas.h != fresh.canvas.h {
+                    self.frame = None;
+                    break;
+                }
+                let mut canvas = prev.canvas;
                 canvas.replace(&fresh.canvas);
                 self.frame = Some(Frame { canvas, ..fresh });
             }
