@@ -13428,6 +13428,24 @@ mod tests {
         assert!(!fr.hits.iter().any(|h| h.action == Action::GetPlugin), "the download it already has is not offered again");
     }
 
+    #[test]
+    fn not_now_leaves_the_lock_page_with_the_data_partition_as_it_was() {
+        let mut app = App::new(Screen::Decrypt, W, H, PPD);
+        app.state.data = Data::Locked { user: 0, keys: Keys::Digits, checking: false };
+        app.act(Action::Skip, 0);
+        assert_eq!(app.screen(), Screen::Home, "not now goes back to the home page");
+        assert_eq!(app.state.data, Data::Locked { user: 0, keys: Keys::Digits, checking: false }, "with the data partition left as it was");
+    }
+
+    #[test]
+    fn the_files_that_open_leave_the_lock_page_where_it_stands() {
+        let mut app = App::new(Screen::Decrypt, W, H, PPD);
+        app.state.data = Data::Locked { user: 0, keys: Keys::Digits, checking: true };
+        app.data_waiting(None);
+        assert_eq!(app.state.data, Data::Open, "the answer to the lock opened the files themselves");
+        assert_eq!(app.screen(), Screen::Decrypt, "and the page it was answered on stays, rather than going home");
+    }
+
     // The cover of a foldable: 1208 × 1392 beside a 1224 × 2912 screen, at
     // the density both are laid out to.
     const COVER_W: u32 = 1208;

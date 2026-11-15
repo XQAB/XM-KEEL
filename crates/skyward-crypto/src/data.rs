@@ -235,11 +235,19 @@ pub fn open_without_credential(service: &KeyMint) -> Result<Opening> {
 /// the phone made up behind theirs; give those still closed.
 pub fn unlock(service: &KeyMint, closed: &[Closed], user: u32, credential: &[u8]) -> Result<Vec<Closed>> {
     let note = open_user_files(service, user, Some(credential), None)?;
-    let rest = closed.iter().filter(|c| c.user != user).cloned().collect();
+    let rest = still_closed(closed, user);
     Ok(match user == OWNER {
         true => open_made_up(service, rest, &note),
         false => rest,
     })
+}
+
+/// The users still closed once `user`'s own files are open: every one of
+/// `closed` but that user. What the screen lock opens is the user's files
+/// themselves, so the answer to the lock is the same step as the opening,
+/// and no user whose lock was answered is left listed as closed.
+fn still_closed(closed: &[Closed], user: u32) -> Vec<Closed> {
+    closed.iter().filter(|c| c.user != user).cloned().collect()
 }
 
 /// Open the own files of each of `closed` whose credential the phone made
@@ -611,7 +619,16 @@ mod tests {
     }
 
     #[test]
-    fn the_phones_own_words_for_the_cipher_become_the_kernels() {
+    fn a_user_whose_screen_lock_was_answered_is_no_longer_counted_among_the_closed() {
+        let closed = [
+            Closed { user: 0, lock: 3, made_up: false, why: None },
+            Closed { user: 999, lock: 3, made_up: false, why: None },
+        ];
+        let rest = still_closed(&closed, 0);
+        assert_eq!(rest, vec![Closed { user: 999, lock: 3, made_up: false, why: None }], "the user whose own files the answer opened is gone from the closed ones");
+    }
+
+
         let e = entry("metadata_encryption=aes-256-xts:wrappedkey_v0,keydirectory=/metadata/vold/metadata_encryption");
         assert_eq!(Encryption::of(&e).unwrap(), Encryption { cipher: "aes-xts-plain64".into(), wrapped: true });
         let plain = entry("metadata_encryption=adiantum");
