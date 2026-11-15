@@ -13428,7 +13428,8 @@ mod tests {
     }
 
     // The cover of a foldable: 1208 × 1392 beside a 1224 × 2912 screen, at
-    // the density both are laid out to.    const COVER_W: u32 = 1208;
+    // the density both are laid out to.
+    const COVER_W: u32 = 1208;
     const COVER_H: u32 = 1392;
     const COVER_PPD: f32 = 2.875;
 
