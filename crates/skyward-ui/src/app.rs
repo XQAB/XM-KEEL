@@ -4021,6 +4021,19 @@ impl App {
         self.refresh();
     }
 
+    /// The phone asks for the screen lock before its pages are used: the
+    /// page that answers it goes over the one showing, so a phone whose lock
+    /// is never answered falls back to it as before. A system with no
+    /// credential of its own never comes here, and neither does one whose
+    /// password the recovery kept and just tried.
+    pub fn ask_for_the_screen_lock(&mut self) {
+        if self.screen() == Screen::Decrypt {
+            return;
+        }
+        self.open(Screen::Decrypt);
+        self.refresh();
+    }
+
     /// The data partition did not open, and why.
     pub fn data_failed(&mut self, why: String) {
         self.state.data = Data::Failed(why);
@@ -8672,6 +8685,103 @@ mod tests {
         fx
     }
 
+
+    /// The cover panel is shorter than a phone's screen, and a page laid out
+    /// on a screen's worth of canvas cannot scroll: a control drawn past its
+    /// bottom edge is one nothing can reach. Every page drawn on a screen
+    /// shorter than what it holds must have its controls inside the canvas it
+    /// scrolls on.
+    #[test]
+    fn no_control_is_drawn_past_the_bottom_of_the_page_it_scrolls() {
+        let (f, i) = (fonts(), info());
+        // The cover, in pixels, as the panel reports it when the phone is shut.
+        const CW: u32 = 1000;
+        const CH: u32 = 1200;
+        let screens = [
+            Screen::Reboot,
+            Screen::Relabel,
+            Screen::Logs,
+            Screen::Language,
+            Screen::TimeZone,
+            Screen::Fastboot,
+            Screen::CantStart,
+            Screen::Unhandled,
+            Screen::Slot,
+            Screen::Systems,
+            Screen::About,
+            Screen::Specs,
+            Screen::Images,
+            Screen::Files,
+        ];
+        for screen in screens {
+            let mut app = App::new(screen, CW, CH, PPD);
+            let fr = app.frame(&f, &i);
+            let bottom = fr.canvas.h as f32;
+            for hit in &fr.hits {
+                assert!(
+                    hit.rect.y + hit.rect.h <= bottom + 0.5,
+                    "{screen:?} draws {:?} past the bottom of the page it scrolls: {} > {bottom}",
+                    hit.action,
+                    hit.rect.y + hit.rect.h,
+                );
+            }
+        }
+    }
+
+    /// The cover's restart page holds six targets, the slots and the swipe
+    /// that restarts: it is longer than the cover's screen, so it must scroll,
+    /// and the swipe must be on screen once it has scrolled to the bottom.
+    #[test]
+    fn the_restart_page_scrolls_on_the_cover_to_the_swipe_that_restarts() {
+        let (f, i) = (fonts(), info());
+        const CW: u32 = 1000;
+        const CH: u32 = 1200;
+        let mut app = App::new(Screen::Reboot, CW, CH, PPD);
+        app.frame(&f, &i);
+        assert!(app.max_scroll() > 0.0, "the restart page does not scroll, so its swipe stays off screen");
+        // A thumb's drag from the bottom to the top, taken in steps as a
+        // touchscreen sends them.
+        let x = CW as f32 / 2.0;
+        let mut y = CH as f32 - 20.0;
+        app.touch(Touch::Down(x, y), &f, 0);
+        for _ in 0..24 {
+            y -= 40.0;
+            app.touch(Touch::Move(x, y), &f, 0);
+        }
+        app.touch(Touch::Up, &f, 0);
+        let scroll = app.top().1;
+        let fr = app.frame(&f, &i);
+        let swipe = fr
+            .hits
+            .iter()
+            .find(|h| h.action == Action::Confirm(Confirm::Reboot))
+            .expect("the restart page holds the swipe that restarts");
+        let on_screen = swipe.rect.y - scroll;
+        assert!(
+            on_screen >= 0.0 && on_screen + swipe.rect.h <= CH as f32,
+            "scrolled to {}, the swipe still stands at {}..{} outside the cover's {CH} pixels",
+            scroll,
+            on_screen,
+            on_screen + swipe.rect.h
+        );
+    }
+
+    /// A user's own files waiting on a lock the phone never shows is a lock
+    /// the owner works past: the phone comes up on the page that answers it,
+    /// and leaving that page falls back to the home page under it.
+    #[test]
+    fn a_screen_lock_the_phone_never_asked_for_is_asked_for_before_the_pages() {
+        let (f, i) = (fonts(), info());
+        let mut app = App::new(Screen::Home, W, H, PPD);
+        app.data_waiting(Some((0, Keys::Digits)));
+        app.ask_for_the_screen_lock();
+        assert_eq!(app.screen(), Screen::Decrypt, "the phone came up on a home page a screen lock never covered");
+        // Asking twice puts nothing further over it.
+        app.ask_for_the_screen_lock();
+        assert_eq!(app.screen(), Screen::Decrypt);
+        tap(&mut app, &f, &i, Action::Skip);
+        assert_eq!(app.screen(), Screen::Home, "the way off the lock screen leaves the home page under it");
+    }
 
     #[test]
     fn a_tap_that_shakes_a_little_still_presses_what_it_landed_on() {

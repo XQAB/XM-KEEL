@@ -2331,17 +2331,43 @@ pub fn spec_card(c: &mut Canvas, t: &Theme, f: &Fonts, top: f32, title: &str, it
     let first_title = top + m.dp(23.0) + f.heading.cap(title_px);
     let title_pitch = m.dp(33.0);
     let first = first_title + title_pitch * lines.len().saturating_sub(1) as f32 + m.dp(39.4);
-    let (pitch, drop) = (m.dp(45.7), m.dp(15.5));
-    let last_caption = first + pitch * items.len().saturating_sub(1) as f32 + drop;
+    // A value wider than the card used to be cut off at its edge, and the
+    // caption under it stayed where it was: each is wrapped now, and the ones
+    // after it move down by the lines it took.
+    let value_px = m.dp(14.1);
+    let value_pitch = m.dp(19.0);
+    let drop = m.dp(15.5);
+    let between = m.dp(30.2);
+    let wrapped: Vec<Vec<String>> = items
+        .iter()
+        .map(|(_, value)| {
+            let mut out: Vec<String> = value.lines().flat_map(|l| wrap(c, &f.heading, l, value_px, room)).collect();
+            if out.is_empty() {
+                out.push(String::new());
+            }
+            out
+        })
+        .collect();
+    let mut bases = Vec::with_capacity(items.len());
+    let mut y = first;
+    let mut last_caption = first;
+    for value in &wrapped {
+        bases.push(y);
+        let n = value.len().max(1) as f32;
+        last_caption = y + value_pitch * (n - 1.0) + drop;
+        y = last_caption + between;
+    }
     let bottom = last_caption + m.dp(19.7);
     c.fill_round_rect(card_x, top, right - card_x, bottom - top, m.card_radius, tone.card);
     for (k, line) in lines.iter().enumerate() {
         c.text(&f.heading, line, x, first_title + title_pitch * k as f32, title_px, tone.text, Some(room));
     }
-    for (i, (caption, value)) in items.iter().enumerate() {
-        let base = first + pitch * i as f32;
-        c.text(&f.heading, value, x, base, m.dp(14.1), tone.text, Some(room));
-        c.text(&f.body, caption, x, base + drop, m.dp(11.0), tone.caption, None);
+    for (i, (caption, _)) in items.iter().enumerate() {
+        for (k, line) in wrapped[i].iter().enumerate() {
+            c.text(&f.heading, line, x, bases[i] + value_pitch * k as f32, value_px, tone.text, Some(room));
+        }
+        let n = wrapped[i].len().max(1) as f32;
+        c.text(&f.body, caption, x, bases[i] + value_pitch * (n - 1.0) + drop, m.dp(11.0), tone.caption, None);
     }
     bottom
 }

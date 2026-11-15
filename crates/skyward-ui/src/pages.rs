@@ -2619,7 +2619,11 @@ const STOPPING: Text = ["正在停止", "正在停止", "Stopping"];
 /// how far it has come, a way to stop it, and how it ended.
 pub fn relabel(cx: &Ctx) -> Frame {
     let (t, f, s, l) = (cx.t, cx.f, cx.state, cx.state.lang);
-    let mut c = page(cx);
+    // A page drawn on a screen's worth of canvas cannot scroll, and the swipe
+    // that starts the repair sits under the note: on the cover, whose screen
+    // is shorter than a phone's, it fell past the bottom edge. Laid out on a
+    // long page and cut to what it holds, it scrolls to it instead.
+    let mut c = long_page(cx);
     let mut out = Vec::new();
     let top = t.m.content_top;
     let title = l.pick(RELABEL);
@@ -2643,7 +2647,7 @@ pub fn relabel(cx: &Ctx) -> Frame {
         let (label, danger) = confirm_label(Confirm::Relabel, cx.state);
         let track = widgets::confirm(&mut c, t, f, y + t.m.dp(24.0), label, danger, s.confirm);
         out.push(Hit { rect: track, action: Action::Confirm(Confirm::Relabel) });
-        return Frame::new(t, c, out, title, top);
+        return Frame::new(t, fit(c, t, track.y + track.h), out, title, top);
     };
     let repair = Verb::of(&crate::app::PartKind::Repair);
     let heading = match &job.outcome {
@@ -2656,7 +2660,7 @@ pub fn relabel(cx: &Ctx) -> Frame {
         (0, _) if job.outcome.is_none() => l.pick(GETTING_READY).to_string(),
         (total, checked) => tr!(l, "已检查 {checked} 项，共 {total} 项", "已檢查 {checked} 項，共 {total} 項", "{checked} of {total} checked"),
     };
-    let y = widgets::progress_card(&mut c, t, f, top, &heading, &detail, Some(share(job.checked, job.total)));
+    let mut y = widgets::progress_card(&mut c, t, f, top, &heading, &detail, Some(share(job.checked, job.total)));
     match &job.outcome {
         None => {
             let label = l.pick(if job.stopping { STOPPING } else { STOP });
@@ -2664,6 +2668,7 @@ pub fn relabel(cx: &Ctx) -> Frame {
             if !job.stopping {
                 out.extend(hits(&stop.rows, &[Action::StopRelabel]));
             }
+            y = stop.bottom;
         }
         Some(end) => {
             let changed = job.changed;
@@ -2680,12 +2685,13 @@ pub fn relabel(cx: &Ctx) -> Frame {
                 JobEnd::Stopped => tr!(l, "已停止，已重新设置 {changed} 项。", "已停止，已重新設定 {changed} 項。", "Stopped, with {changed} entries set again."),
                 JobEnd::Failed(why) => tr!(l, "修复失败：{why}", "修復失敗：{why}", "Repair failed: {why}"),
             };
-            let y = widgets::footnote(&mut c, t, f, y, &note);
-            let finish = widgets::list(&mut c, t, f, y + t.m.card_gap, &[Row::new(l.pick(DONE)).trail(Trail::None)]);
+            let y0 = widgets::footnote(&mut c, t, f, y, &note);
+            let finish = widgets::list(&mut c, t, f, y0 + t.m.card_gap, &[Row::new(l.pick(DONE)).trail(Trail::None)]);
             out.extend(hits(&finish.rows, &[Action::Back]));
+            y = finish.bottom;
         }
     }
-    Frame { back: job.outcome.is_some(), ..Frame::new(t, c, out, title, top) }
+    Frame { back: job.outcome.is_some(), ..Frame::new(t, fit(c, t, y), out, title, top) }
 }
 
 /// The partitions whose filesystems can be repaired or made afresh as
@@ -4444,7 +4450,7 @@ pub fn clash(cx: &Ctx) -> Frame {    let (t, f, s, l) = (cx.t, cx.f, cx.state, c
         FileOp::Copy => ["复制", "複製", "copy"],
         FileOp::Move => ["移动", "移動", "move"],
     });
-    let mut c = page(cx);
+    let mut c = long_page(cx);
     let top = t.m.content_top;
     let there = tr!(l, "\"{into}\"中已有同名的\"{name}\"。", "「{into}」中已有同名的「{name}」。", "“{into}” already holds an entry named “{name}”.");
     let y = widgets::paragraph(&mut c, t, f, top, &there);
@@ -4459,7 +4465,7 @@ pub fn clash(cx: &Ctx) -> Frame {    let (t, f, s, l) = (cx.t, cx.f, cx.state, c
         Action::Resolve(ClashChoice::Skip),
         Action::Resolve(ClashChoice::KeepBoth),
     ]);
-    Frame::new(t, c, out, l.pick(["名称已存在", "名稱已存在", "Name taken"]), top)
+    Frame::new(t, fit(c, t, choices.bottom), out, l.pick(["名称已存在", "名稱已存在", "Name taken"]), top)
 }
 
 /// How work on files is told of: the Chinese verb its sentences build on,
@@ -4620,7 +4626,9 @@ pub fn time_zone(cx: &Ctx) -> Frame {
 /// Saving the logs, as a bug report asks for them.
 pub fn logs(cx: &Ctx) -> Frame {
     let (t, f, s, l) = (cx.t, cx.f, cx.state, cx.state.lang);
-    let mut c = page(cx);
+    // Two choices of what to save, two of where, a note and the button that
+    // saves them: on the cover the button sat past the bottom edge.
+    let mut c = long_page(cx);
     let mut out = Vec::new();
     let top = t.m.content_top;
     let y = widgets::section_first(&mut c, t, f, top, l.pick(["日志内容", "記錄內容", "Logs"]));
@@ -4653,7 +4661,7 @@ pub fn logs(cx: &Ctx) -> Frame {
     let y = widgets::footnote(&mut c, t, f, places.bottom, note);
     let export = widgets::button(&mut c, t, f, y + t.m.dp(24.0), l.pick(["导出", "匯出", "Export"]));
     out.push(Hit { rect: export, action: Action::ExportLogs });
-    Frame::new(t, c, out, l.pick(LOGS), top)
+    Frame::new(t, fit(c, t, export.y + export.h), out, l.pick(LOGS), top)
 }
 
 /// Skyward's licence, in Chinese, ahead of the words the licence gives for
@@ -5145,7 +5153,9 @@ const FACTORY_RESET: Text = ["恢复出厂设置", "恢復原廠設定", "Factor
 /// data: start it again, look around the recovery first, or erase.
 pub fn cant_start(cx: &Ctx) -> Frame {
     let (t, f, s, l) = (cx.t, cx.f, cx.state, cx.state.lang);
-    let mut c = page(cx);
+    // The page ends in the swipe that wipes the phone: on the cover it fell
+    // past the bottom edge, so it is laid out long and cut to what it holds.
+    let mut c = long_page(cx);
     let mut out = Vec::new();
     let top = t.m.content_top;
     let what = l.pick([
@@ -5168,14 +5178,16 @@ pub fn cant_start(cx: &Ctx) -> Frame {
     let (label, danger) = confirm_label(Confirm::FactoryReset, cx.state);
     let track = widgets::confirm(&mut c, t, f, y + t.m.dp(24.0), label, danger, s.confirm);
     out.push(Hit { rect: track, action: Action::Confirm(Confirm::FactoryReset) });
-    Frame { back: false, ..Frame::new(t, c, out, l.pick(["无法启动系统", "無法啟動系統", "Can't start the system"]), top) }
+    Frame { back: false, ..Frame::new(t, fit(c, t, track.y + track.h), out, l.pick(["无法启动系统", "無法啟動系統", "Can't start the system"]), top) }
 }
 
 /// Something the system asked of the recovery that it does not do: what
 /// was asked, and where to go instead.
 pub fn unhandled(cx: &Ctx) -> Frame {
     let (t, f, s, l) = (cx.t, cx.f, cx.state, cx.state.lang);
-    let mut c = page(cx);
+    // What was asked, and the ways off the page, can be longer than the
+    // cover's screen: laid out long, the page scrolls to them.
+    let mut c = long_page(cx);
     let mut out = Vec::new();
     let top = t.m.content_top;
     let mut items = vec![(l.pick(["请求", "要求", "Request"]), s.asked.unhandled.clone().unwrap_or_default())];
@@ -5185,8 +5197,8 @@ pub fn unhandled(cx: &Ctx) -> Frame {
     let y = widgets::info_card(&mut c, t, f, top, &items);
     let y = widgets::footnote(&mut c, t, f, y, l.pick(["Skyward 暂不支持该请求，本机未做任何改动。", "Skyward 尚不支援這項要求，本機未做任何變更。", "Skyward doesn't support this request, and changed nothing on this phone."]));
     let y = widgets::section(&mut c, t, f, y, l.pick(ACTIONS));
-    afterwards(&mut c, t, f, l, y, true, &mut out);
-    Frame { back: false, ..Frame::new(t, c, out, l.pick(["无法处理该请求", "無法處理這項要求", "Can't handle the request"]), top) }
+    let bottom = afterwards(&mut c, t, f, l, y, true, &mut out);
+    Frame { back: false, ..Frame::new(t, fit(c, t, bottom), out, l.pick(["无法处理该请求", "無法處理這項要求", "Can't handle the request"]), top) }
 }
 
 #[cfg(test)]

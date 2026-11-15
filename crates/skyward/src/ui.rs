@@ -2895,6 +2895,15 @@ pub fn run(cfg: &DeviceConfig, font: &Path, mono: &Path, request: bcb::Request, 
                             }
                         }
                     }
+                    // A user's own files still closed, and nothing left to
+                    // try on their own: the phone asks for the screen lock
+                    // before the pages are used. Until the lock is answered
+                    // the pages that read those files cannot work, so the
+                    // owner is shown the lock screen rather than a home page
+                    // that a lock never covered.
+                    if decryptor.is_none() && closed.iter().any(|c| !c.made_up) {
+                        app.ask_for_the_screen_lock();
+                    }
                     if wlan_at_start {
                         wlan_at_start = false;
                         if let Some(w) = &wlan {
