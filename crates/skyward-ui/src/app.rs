@@ -13422,6 +13422,7 @@ mod tests {
         assert!(fr.hits.iter().any(|h| h.action == Action::GetPlugin), "with the way to download it on the page");
         app.state.plugin.there = true;
         app.state.plugin.size = Some(436 * 1024 * 1024);
+        app.refresh();
         let fr = app.frame(&f, &i);
         assert!(fr.hits.iter().any(|h| h.action == Action::DropPlugin), "and the way to take it away once it is on the phone");
         assert!(!fr.hits.iter().any(|h| h.action == Action::GetPlugin), "the download it already has is not offered again");
