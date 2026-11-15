@@ -743,12 +743,29 @@ fn about_cards(cx: &Ctx, c: &mut Canvas) -> (Vec<Hit>, f32, f32) {
 
 /// Every reading the recovery has, modelled on the stock「全部参数与信息」.
 pub fn specs(cx: &Ctx) -> Frame {
-    let (t, f, i, l) = (cx.t, cx.f, cx.info, cx.state.lang);
-    let gap = t.m.card_gap;
-    let mut c = long_page(cx);
-    let mut out = Vec::new();
+    let (t, l) = (cx.t, cx.state.lang);
     // This page leaves more room under the title than the settings pages.
     let top = t.m.dp(188.0);
+    let mut out = Vec::new();
+    let (mut c, mut bottom) = specs_page(cx, long_page(cx), &mut out, top);
+    // A cover's screen is shorter than a phone's, and this page holds enough
+    // cards to run past the canvas first laid out for them: drawn again on
+    // one tall enough, so the last card and the licences under it are on the
+    // page rather than past its edge.
+    if bottom + t.m.margin * 2.0 > c.h as f32 {
+        out.clear();
+        let again = sheet(cx, fitted(t, bottom), t.pal.bg);
+        (c, bottom) = specs_page(cx, again, &mut out, top);
+    }
+    Frame::new(t, fit(c, t, bottom), out, l.pick(SPECS), top)
+}
+
+/// One drawing of the specs page on `canvas` from `top` down: the canvas
+/// itself, and where what it holds ends.
+fn specs_page(cx: &Ctx, canvas: Canvas, out: &mut Vec<Hit>, top: f32) -> (Canvas, f32) {
+    let (t, f, i, l) = (cx.t, cx.f, cx.info, cx.state.lang);
+    let gap = t.m.card_gap;
+    let mut c = canvas;
 
     let mut grid = vec![Spec { icon: Outline::Phone, label: l.pick(MODEL), value: fmt::model_lines(&i.model) }];
     if let Some(design) = i.battery.as_ref().and_then(|b| b.design) {
@@ -824,7 +841,7 @@ pub fn specs(cx: &Ctx) -> Frame {
         Row::new(l.pick(FONTS)).trail(Trail::Value("MiSans")),
     ]);
     out.extend(hits(&links.rows, &[Action::Open(Screen::License), Action::Open(Screen::FontLicense)]));
-    Frame::new(t, fit(c, t, links.bottom), out, l.pick(SPECS), top)
+    (c, links.bottom)
 }
 
 /// The data partition and its users' own files. The page opens the
@@ -1925,29 +1942,28 @@ pub fn search(cx: &Ctx) -> Frame {
     widgets::cancel_button(&mut c, t, cancel);
     out.push(Hit { rect: cancel, action: Action::CloseSearch });
     let top = field.field.y + field.field.h + m.dp(12.0);
-    let mut bottom = top;
-    if s.search.trim().is_empty() {
+    let bottom = if s.search.trim().is_empty() {
         let how = l.pick([
             "输入功能或分区名称，支持拼音全拼和首字母，例如输入 bf 可找到「备份」。",
             "輸入功能或分割區名稱，支援英文和漢語拼音的全拼與首字母，例如輸入 bf 可找到「備份」。",
             "Type the name of a feature or partition, such as backup to find Backup.",
         ]);
-        bottom = widgets::footnote(&mut c, t, f, top, how);
+        widgets::footnote(&mut c, t, f, top, how)
     } else {
         let found = search::find_on(&s.search, l, |screen| s.offers(screen));
         if found.is_empty() {
             let typed = s.search.trim();
             let none = tr!(l, "未找到\"{typed}\"", "找不到「{typed}」", "Nothing found for “{typed}”");
-            bottom = widgets::list(&mut c, t, f, top, &[Row::new(&none).trail(Trail::None)]).bottom;
+            widgets::list(&mut c, t, f, top, &[Row::new(&none).trail(Trail::None)]).bottom
         } else {
             let rows: Vec<Row> = found.iter().map(|e| Row::new(l.pick(e.title)).subtitle(l.pick(e.place))).collect();
             let list = widgets::list(&mut c, t, f, top, &rows);
             // Everything found is on a page that scrolls, so one the keyboard
             // covers can be scrolled up to rather than being left unreachable.
             out.extend(list.rows.iter().zip(&found).map(|(&rect, e)| Hit { rect, action: Action::Open(e.screen) }));
-            bottom = list.bottom;
+            list.bottom
         }
-    }
+    };
     let find = l.pick(["搜索", "搜尋", "Search"]);
     keyboard_hits(&mut c, t, f, s, find, &mut out);
     if let Some(rect) = field.clear {
@@ -3663,27 +3679,26 @@ fn files_find(cx: &Ctx) -> Frame {
     widgets::cancel_button(&mut c, t, cancel);
     out.push(Hit { rect: cancel, action: Action::FilesFindClose });
     let top = field.field.y + field.field.h + m.dp(12.0);
-    let mut bottom = top;
     let entries: &[FileRow] = s.files.entries.as_ref().map_or(&[], |e| e.as_slice());
-    if s.files.query().trim().is_empty() {
+    let bottom = if s.files.query().trim().is_empty() {
         let how = l.pick([
             "输入名称的一部分即可查找，不区分大小写。",
             "輸入名稱的一部分即可尋找，不分大小寫。",
             "Type part of a name to find it, in any case.",
         ]);
-        bottom = widgets::footnote(&mut c, t, f, top, how);
+        widgets::footnote(&mut c, t, f, top, how)
     } else if entries.is_empty() {
         let typed = s.files.query().trim();
         let none = tr!(l, "未找到\"{typed}\"", "找不到「{typed}」", "Nothing found for “{typed}”");
-        bottom = widgets::list(&mut c, t, f, top, &[Row::new(&none).trail(Trail::None)]).bottom;
+        widgets::list(&mut c, t, f, top, &[Row::new(&none).trail(Trail::None)]).bottom
     } else {
         let rows: Vec<_> = entries.iter().map(|e| Row::new(e.name.as_str())).collect();
         let list = widgets::list(&mut c, t, f, top, &rows);
         // Found files are listed down a page that scrolls: one the keyboard
         // covers can be scrolled up to, so every one of them is reachable.
         out.extend(list.rows.iter().enumerate().map(|(i, &rect)| Hit { rect, action: Action::OpenEntry(i) }));
-        bottom = list.bottom;
-    }
+        list.bottom
+    };
     keyboard_hits(&mut c, t, f, s, l.pick(FILES_FIND), &mut out);
     if let Some(rect) = field.clear {
         out.push(Hit { rect, action: Action::ClearSearch });

@@ -8740,15 +8740,16 @@ mod tests {
         app.frame(&f, &i);
         assert!(app.max_scroll() > 0.0, "the restart page does not scroll, so its swipe stays off screen");
         // A thumb's drag from the bottom to the top, taken in steps as a
-        // touchscreen sends them.
+        // touchscreen sends them, far enough that the page reaches its end.
         let x = CW as f32 / 2.0;
         let mut y = CH as f32 - 20.0;
         app.touch(Touch::Down(x, y), &f, 0);
-        for _ in 0..24 {
+        for _ in 0..40 {
             y -= 40.0;
             app.touch(Touch::Move(x, y), &f, 0);
         }
         app.touch(Touch::Up, &f, 0);
+        assert_eq!(app.top().1, app.max_scroll(), "the drag left the page short of its end");
         let scroll = app.top().1;
         let fr = app.frame(&f, &i);
         let swipe = fr
