@@ -1328,6 +1328,7 @@ pub fn address_field(c: &mut Canvas, t: &Theme, f: &Fonts, top: f32, text: &str,
 
 /// Draw the address bar, with its cursor if `caret`; returns where the
 /// cursor is.
+#[allow(clippy::too_many_arguments)]
 fn draw_address_bar(c: &mut Canvas, t: &Theme, f: &Fonts, x0: f32, top: f32, text: &str, placeholder: &str, caret: bool) -> Rect {
     let m = &t.m;
     let (w, h) = (m.w as f32 - m.margin * 2.0, m.dp(56.0));
