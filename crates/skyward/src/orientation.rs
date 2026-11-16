@@ -17,17 +17,7 @@
 use anyhow::{bail, ensure, Context, Result};
 use std::io;
 use std::os::fd::{AsRawFd, FromRawFd, OwnedFd, RawFd};
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
-
-/// Whether the phone is held the other way up: the pages are turned half a
-/// turn on the panel, and a finger's place is turned with them.
-static UPSIDE_DOWN: AtomicBool = AtomicBool::new(false);
-
-/// Whether the phone is held the other way up, as the sensor last said.
-pub fn upside_down() -> bool {
-    UPSIDE_DOWN.load(Ordering::Relaxed)
-}
 
 /// The socket family the kernel gives QRTR, not yet in libc.
 const AF_QRTR: i32 = 42;
@@ -305,12 +295,7 @@ pub fn start() {
         start_mapper();
         let mut sensor = Sensor::default();
         loop {
-            if let Some(next) = sensor.read() {
-                // Only the other way up turns the pages; held flat they stay
-                // as they are, and so do they when the phone lies down.
-                UPSIDE_DOWN.store(next == Direction::UpsideDown, Ordering::Relaxed);
-                let _ = skyward_sys::kmsg(&format!("orientation: held {next:?}"));
-            }
+            let _ = sensor.read();
             std::thread::sleep(Duration::from_millis(30));
         }
     });

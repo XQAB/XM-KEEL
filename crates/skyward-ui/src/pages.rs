@@ -433,10 +433,14 @@ pub fn settings(cx: &Ctx) -> Frame {
         out.push(Hit { rect: r, action: Action::Toggle(Switch::Vibrate) });
     }
     y = widgets::section(&mut c, t, f, vibration.bottom, l.pick(["屏幕", "螢幕", "Screen"]));
-    let screen = widgets::list(&mut c, t, f, y, &[Row::new(l.pick(WAKE_BY_TAP)).icon(SLATE, Icon::Power).trail(Trail::Switch(s.wake_by_tap))]);
-    out.extend(hits(&screen.rows, &[Action::Toggle(Switch::WakeByTap)]));
+    let screen = widgets::list(&mut c, t, f, y, &[
+        Row::new(l.pick(WAKE_BY_TAP)).icon(SLATE, Icon::Power).trail(Trail::Switch(s.wake_by_tap)),
+        Row::new(l.pick(TURNED)).icon(BLUE, Icon::Restore).trail(Trail::Switch(s.turned)),
+    ]);
+    out.extend(hits(&screen.rows, &[Action::Toggle(Switch::WakeByTap), Action::Toggle(Switch::Turned)]));
     let slept = widgets::footnote(&mut c, t, f, screen.bottom, l.pick(WAKE_BY_TAP_NOTE));
-    y = widgets::section(&mut c, t, f, slept, l.pick(["通用", "一般", "General"]));
+    let turned = widgets::footnote(&mut c, t, f, slept, l.pick(TURNED_NOTE));
+    y = widgets::section(&mut c, t, f, turned, l.pick(["通用", "一般", "General"]));
     let general = widgets::list(&mut c, t, f, y, &[
         Row::new(l.pick(LANGUAGE)).icon(BLUE, Icon::Globe).trail(Trail::Value(l.name())),
         Row::new(l.pick(TIME_ZONE)).icon(ORANGE, Icon::Clock).trail(Trail::Value(l.pick(TIME_ZONES[s.time_zone].0))),
@@ -2431,7 +2435,12 @@ const REMEMBER_NOTE: Text = [
 ];
 const IMAGES: Text = ["分区镜像", "分割區鏡像", "Partition images"];
 const WAKE_BY_TAP: Text = ["双击亮屏", "雙擊亮屏", "Wake on two taps"];
-const WAKE_BY_TAP_NOTE: Text = [
+const TURNED: Text = ["翻转 180°", "翻轉 180°", "Turn the pages half a turn"];
+const TURNED_NOTE: Text = [
+    "打开后整页连同触摸一起转半圈，适合把手机倒过来拿、或者外屏装反了的情况。关掉就恢复。设置会记住，下次进 recovery 还是这个状态。",
+    "打開後整頁連同觸控一起轉半圈，適合把手機倒過來拿、或者外屏裝反了的情況。關掉就恢復。設定會記住，下次進 recovery 還是這個狀態。",
+    "When on, the pages and the touches with them turn half a turn, for a phone held the other way up or a cover panel fitted upside down. Off puts it back. The choice is kept, and the next start in recovery still has it.",
+];const WAKE_BY_TAP_NOTE: Text = [
     "开启后，熄屏状态下在同一处连点两下就把屏幕叫回来，不用按电源键。代价是熄屏时面板只是亮度为 0、并不真的关掉，触摸控制器因此一直在工作，整机也不再休眠：这一版就是拿这点换双击。默认关闭。",
     "開啟後，熄屏狀態下在同一處連點兩下就把螢幕叫回來，不必按電源鍵。代價是熄屏時面板只是亮度為 0、並不真的關掉，觸控控制器因此一直在工作，整機也不再休眠：這一版就是拿這點換雙擊。預設關閉。",
     "When on, two taps in the same place bring a dark screen back without the power key. The cost is that a dark screen is the panel at no brightness rather than off, so the touch controller keeps working and the phone no longer sleeps: that is what buys the double tap here. Off by default.",

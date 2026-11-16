@@ -1613,11 +1613,10 @@ pub fn run(cfg: &DeviceConfig, font: &Path, mono: &Path, request: bcb::Request, 
     let mounts = || read_mounts(&cfg.services).map_err(|e| format!("{e:#}"));
 
     let mut screen = Canvas::new(w, h);
-    // The phone held the other way up shows the pages half a turn round, as
-    // the phone it came with does; the sensor's thread says which way up it
-    // is, and the loop turns the frame and the finger with it.
-    crate::orientation::start();
-    let mut turned = crate::orientation::upside_down();
+    // The pages may be shown half a turn round, turned by hand on the
+    // settings page, for a phone held the other way up or a cover panel
+    // fitted the wrong way: the frame and a finger's place turn together.
+    let mut turned = app.state.turned;
     // A page sliding over another draws on three screens' worth of canvas
     // besides the panel's: made ready now, the first slide finds them so.
     Canvas::keep_ready(w, h, 3);
@@ -2075,8 +2074,9 @@ pub fn run(cfg: &DeviceConfig, font: &Path, mono: &Path, request: bcb::Request, 
         let on_cover = shut_state && cover.is_some() && cover_screen.is_some();
         // The other way up turns the pages; a change of the way up is a page
         // to draw again, not the one already on the panel.
-        if turned != crate::orientation::upside_down() {
-            turned = crate::orientation::upside_down();
+        if turned != app.state.turned {
+            turned = app.state.turned;
+            let _ = skyward_sys::kmsg(&format!("the pages are turned half a turn: {turned}"));
             app.refresh();
         }
         let panel = app.panel(now);
@@ -3044,9 +3044,9 @@ pub fn run(cfg: &DeviceConfig, font: &Path, mono: &Path, request: bcb::Request, 
                     answer(asked, fastboot)
                 }
                 Incoming::Input(Event::Touch(t, at, which)) => {
-                    // The pages are drawn half a turn round when the phone is
-                    // held the other way up, so a finger's place is turned
-                    // with them before anything is looked for under it.
+                    // The pages may be drawn half a turn round, turned by hand
+                    // on the settings page, so a finger's place is turned with
+                    // them before anything is looked for under it.
                     let t = match turned {
                         true => {
                             let (aw, ah) = if which == 1 { (cw, ch) } else { (w, h) };

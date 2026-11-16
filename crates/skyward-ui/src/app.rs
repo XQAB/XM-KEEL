@@ -912,6 +912,8 @@ pub enum Switch {
     RememberCredential,
     /// Wake the screen on two taps rather than the power button alone.
     WakeByTap,
+    /// Show the pages half a turn round, for a phone held the other way up.
+    Turned,
     Wlan,
     /// Show the password typed rather than a dot for each character.
     ShowPassword,
@@ -2315,6 +2317,9 @@ pub struct State {
     /// alone. The panel is then left lit at no brightness instead of going
     /// off, so the phone no longer sleeps.
     pub wake_by_tap: bool,
+    /// The pages are shown half a turn round, for a phone held the other way
+    /// up: the frame is turned and a finger's place with it.
+    pub turned: bool,
     /// Whether a password is kept now, as the file on /metadata says.
     pub credential_kept: bool,
     /// When what was kept was sealed, in whole seconds since 1970, so the
@@ -2530,6 +2535,7 @@ impl Default for State {
             keep_recovery: true,
             remember_credential: false,
             wake_by_tap: false,
+            turned: false,
             credential_kept: false,
             credential_at: None,
             starter: None,
@@ -3136,9 +3142,11 @@ const SLIDER_STEP: f32 = 0.1;
 pub const SLIDER_START: f32 = SLIDER_STEP;
 /// While the backlight eases, it steps once a frame of a 120 Hz panel.
 const BACKLIGHT_STEP_MS: u64 = 8;
-/// Just after the panel lights, a touch or key only keeps it awake: the
-/// second tap of a wake habit, or the hand reaching for a phone whose
-/// screen an install just lit, should not act. Android's double-tap window.
+/// Just after the panel lights, a key only keeps it awake: a power press
+/// meant to wake it should not turn it back off. Android's double-tap
+/// window. A finger is not held to this: a touch on a dark panel does nothing
+/// already, and one landing as the light comes on is the owner reaching for
+/// what it shows.
 const WAKE_GUARD_MS: u64 = 400;
 /// How far, in dp, a finger may wander and still count as a tap on what it
 /// came down on: the page starts following the finger after the touch slop
@@ -6382,6 +6390,7 @@ impl App {
                     Switch::KeepRecovery => &mut self.state.keep_recovery,
                     Switch::RememberCredential => &mut self.state.remember_credential,
                     Switch::WakeByTap => &mut self.state.wake_by_tap,
+                    Switch::Turned => &mut self.state.turned,
                     Switch::ShowPassword => &mut self.state.show_password,
                     Switch::Wlan => unreachable!("the WLAN switch is turned above"),
                 };
@@ -7664,12 +7673,6 @@ impl App {
                 self.dismiss_charging(now);
                 self.drag = Drag::Waking;
             }
-            return Vec::new();
-        }
-        // A finger landing just after the panel lit only keeps it awake.
-        if matches!(ev, Touch::Down(..)) && self.just_woke(now) {
-            self.stir(now);
-            self.drag = Drag::Waking;
             return Vec::new();
         }
         // A finger on the glass puts the keys' light out, whatever a key
@@ -13676,6 +13679,17 @@ mod tests {
             assert!(b.open_tab(), "tabs are opened up to the most");
         }
         assert!(!b.open_tab(), "and another waits until one is closed");
+    }
+
+    fn a_finger_landing_just_after_the_panel_lit_acts_where_it_lands() {
+        let (f, i) = (fonts(), info());
+        let mut app = App::new(Screen::Settings, W, H, PPD);
+        app.woken_by_tap(1000);
+        assert!(!app.state.turned, "the pages start the right way up");
+        // Inside the window a key press only keeps the panel awake; a finger
+        // is the owner reaching for what the panel now shows.
+        let _ = tap_at(&mut app, &f, &i, Action::Toggle(Switch::Turned), 1300);
+        assert!(app.state.turned, "a tap 300 ms after the light came on turns the switch");
     }
 
     #[test]

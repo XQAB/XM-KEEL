@@ -55,6 +55,9 @@ pub struct Settings {
     /// Two taps on the dark screen wake it; the panel then stays lit at no
     /// brightness instead of going off.
     pub wake_by_tap: bool,
+    /// The pages are shown half a turn round, for a phone held the other way
+    /// up: turned by hand on the settings page, and kept between starts.
+    pub turned: bool,
     /// Which mirror an address is taken through, as its place in
     /// [`crate::app::MIRRORS`]; 0 leaves every address alone.
     pub mirror: usize,
@@ -155,6 +158,7 @@ impl Settings {
             file_transfer: state.file_transfer,
             remember_credential: state.remember_credential,
             wake_by_tap: state.wake_by_tap,
+            turned: state.turned,
             mirror: state.mirror,
             install: Install { check_signature: state.check_signature, keep_recovery: state.keep_recovery },
             backup: Backup {
@@ -224,6 +228,7 @@ impl Settings {
         state.file_transfer = self.file_transfer;
         state.remember_credential = self.remember_credential;
         state.wake_by_tap = self.wake_by_tap;
+        state.turned = self.turned;
         if self.mirror < crate::app::MIRRORS.len() {
             state.mirror = self.mirror;
         }
@@ -351,6 +356,23 @@ impl Keeper {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_pages_turned_half_a_turn_come_back_with_the_settings() {
+        let state = State { turned: true, ..State::default() };
+        let text = Settings::of(&state).text();
+        assert!(text.contains("\"turned\": true"), "the file says so: {text}");
+        let kept = Settings::read(&text).unwrap();
+        assert!(kept.turned);
+        let mut back = State::default();
+        kept.apply(&mut back);
+        assert!(back.turned, "a start in recovery turns the pages again");
+        // A file from before the switch has no such line, and starts upright.
+        let old = Settings::read("{\"dark\": true}").unwrap();
+        let mut back = State::default();
+        old.apply(&mut back);
+        assert!(!back.turned, "a file without the line leaves the pages upright");
+    }
 
     #[test]
     fn the_settings_go_round_through_their_file() {
