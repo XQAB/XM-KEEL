@@ -13656,8 +13656,7 @@ mod tests {
 
     #[test]
     fn the_tabs_keep_their_own_pages_and_the_last_one_closes_to_an_empty_tab() {
-        let mut b = Browser::default();
-        b.address = "https://one.example/a".into();
+        let mut b = Browser { address: "https://one.example/a".into(), ..Browser::default() };
         assert_eq!(b.opened(), 1, "a browser that opened nothing else shows the one tab");
         assert!(b.open_tab(), "a new tab is opened");
         assert!(b.address.is_empty() && b.page.is_none(), "and it starts empty");
