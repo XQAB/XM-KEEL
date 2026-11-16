@@ -4036,7 +4036,7 @@ impl App {
     /// the screen back, because those taps come through the controller that
     /// resting would stop.
     pub fn may_rest_in_the_dark(&self, on_cover: bool) -> bool {
-        !on_cover && !self.wake_by_tap
+        !on_cover && !self.state.wake_by_tap
     }
 
     /// Something was touched or pressed: the panel stays at full
