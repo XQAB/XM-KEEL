@@ -3142,11 +3142,10 @@ const SLIDER_STEP: f32 = 0.1;
 pub const SLIDER_START: f32 = SLIDER_STEP;
 /// While the backlight eases, it steps once a frame of a 120 Hz panel.
 const BACKLIGHT_STEP_MS: u64 = 8;
-/// Just after the panel lights, a key only keeps it awake: a power press
-/// meant to wake it should not turn it back off. Android's double-tap
-/// window. A finger is not held to this: a touch on a dark panel does nothing
-/// already, and one landing as the light comes on is the owner reaching for
-/// what it shows.
+/// Just after the panel lights, a touch or key only keeps it awake: the hand
+/// reaching for a page an install just put up, or a power press meant to wake
+/// the phone, should not act. Android's double-tap window. A panel lit by a
+/// finger is exempt, since that finger is the owner and its next tap is meant.
 const WAKE_GUARD_MS: u64 = 400;
 /// How far, in dp, a finger may wander and still count as a tap on what it
 /// came down on: the page starts following the finger after the touch slop
@@ -3545,6 +3544,10 @@ pub struct App {
     /// When the panel last lit from dark, for the brief guard that keeps a
     /// stray touch or key from acting on a page just put up.
     woke_at: Option<u64>,
+    /// The panel lit because a finger tapped the dark glass, rather than
+    /// because an install finished or a cable went in: a finger on the pages
+    /// is the owner there, and the guard does not keep it from acting.
+    tapped_awake: bool,
     /// The panel at full brightness, or easing to the dim level it takes
     /// shortly before going off.
     bright: Fade,
@@ -3640,6 +3643,7 @@ impl App {
             display_on: true,
             active: None,
             woke_at: None,
+            tapped_awake: false,
             bright: full_brightness(),
             curtain: Fade::shown(BRIGHTEN, DARKEN),
             darkening: None,
@@ -4031,6 +4035,7 @@ impl App {
             self.curtain.set(true, now);
         }
         self.woke_at = Some(now);
+        self.tapped_awake = false;
         self.stir(now);
     }
 
@@ -4038,6 +4043,9 @@ impl App {
     /// the power button would bring it back.
     pub fn woken_by_tap(&mut self, now: u64) {
         self.wake(now);
+        // A finger brought it back, so a finger is the owner here: the guard
+        // that keeps a stray touch off a page just put up does not apply.
+        self.tapped_awake = true;
         self.refresh();
     }
 
@@ -4087,7 +4095,7 @@ impl App {
     }
 
     /// Whether the panel lit so recently that a touch or key should only
-    /// keep it awake.
+    /// keep it awake, unless a finger is what lit it.
     fn just_woke(&self, now: u64) -> bool {
         self.woke_at.is_some_and(|w| now.saturating_sub(w) < WAKE_GUARD_MS)
     }
@@ -7673,6 +7681,16 @@ impl App {
                 self.dismiss_charging(now);
                 self.drag = Drag::Waking;
             }
+            return Vec::new();
+        }
+        // A finger landing just after the panel lit only keeps it awake, when
+        // it was something else that lit it: an install finishing, or a cable
+        // going in, puts a page up under a hand that may still be moving. A
+        // panel a finger lit is the owner's, and the guard does not eat that
+        // finger's next tap.
+        if matches!(ev, Touch::Down(..)) && self.just_woke(now) && !self.tapped_awake {
+            self.stir(now);
+            self.drag = Drag::Waking;
             return Vec::new();
         }
         // A finger on the glass puts the keys' light out, whatever a key
