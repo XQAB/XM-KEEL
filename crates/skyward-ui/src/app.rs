@@ -4019,6 +4019,26 @@ impl App {
         Some(full * level + dim_level(full) * (1.0 - level))
     }
 
+    /// Whether the panel the pages show on may rest in the dark, which takes
+    /// its touch controller down with it.
+    ///
+    /// The cover cannot. Its touchscreen is a second controller, and it
+    /// follows the display's own blanking notifications: blanked, it is put
+    /// into a gesture mode where it reports gestures and not the places of
+    /// fingers; here the display is never unblanked again, since a dark
+    /// screen comes back by the backlight turning up rather than by an
+    /// unblank (issue #9). So blanked once, every touch after that goes
+    /// missing. Lit at no brightness instead, the cover's controller keeps
+    /// reporting, at the cost of the phone not sleeping while it is dark —
+    /// minutes in the recovery, which is what that costs.
+    ///
+    /// The inner panel is as it was: it rests, unless two taps are to bring
+    /// the screen back, because those taps come through the controller that
+    /// resting would stop.
+    pub fn may_rest_in_the_dark(&self, on_cover: bool) -> bool {
+        !on_cover && !self.wake_by_tap
+    }
+
     /// Something was touched or pressed: the panel stays at full
     /// brightness for the screen-off time from now.
     fn stir(&mut self, now: u64) {
@@ -13820,5 +13840,28 @@ mod tests {
         assert!(app.frame.is_none(), "another size drops what is drawn");
         assert_eq!(app.cols, 0, "and the rows laid out to the old width with it");
         assert_eq!((app.w, app.h, app.px_per_dp), (COVER_W, COVER_H, COVER_PPD));
+    }
+
+    #[test]
+    fn the_cover_rests_never_in_the_dark_so_its_touch_controller_keeps_reporting() {
+        let mut app = App::new(Screen::Home, W, H, PPD);
+        // The cover's controller is the one blanking takes into gesture mode,
+        // and nothing here takes it out again: a screen turned dark and lit
+        // again leaves the controller reporting gestures and no touches, so
+        // the cover is never rested nor turned off, with two taps on it or
+        // without (issue #9).
+        for wake_by_tap in [false, true] {
+            app.state.wake_by_tap = wake_by_tap;
+            assert!(!app.may_rest_in_the_dark(true), "the cover rests never, two taps {wake_by_tap}");
+        }
+    }
+
+    #[test]
+    fn the_inner_panel_rests_in_the_dark_unless_two_taps_are_to_bring_it_back() {
+        let mut app = App::new(Screen::Home, W, H, PPD);
+        app.state.wake_by_tap = false;
+        assert!(app.may_rest_in_the_dark(false), "one tap is no way back, so the panel rests");
+        app.state.wake_by_tap = true;
+        assert!(!app.may_rest_in_the_dark(false), "two taps come through the controller resting would stop");
     }
 }

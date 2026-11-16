@@ -2155,20 +2155,20 @@ pub fn run(cfg: &DeviceConfig, font: &Path, mono: &Path, request: bcb::Request, 
             rested_at = None;
         } else {
             let on = if on_cover { cover.as_ref().is_some_and(KmsSurface::is_on) } else { inner.is_on() };
-            if on {
-                // With the backlight off, the panel rests, and the touch
-                // controller following it stops drawing power. A screen that
-                // two taps are to bring back cannot rest, since the taps come
-                // from that controller: it stays lit at no brightness
-                // instead, and the phone no longer sleeps.
-                if !app.state.wake_by_tap {
-                    match (on_cover, cover.as_mut()) {
-                        (true, Some(c)) => c.rest()?,
-                        _ => inner.rest()?,
-                    }
-                    rested_at = Some(Instant::now());
+            // With the backlight off, the panel rests, and the touch
+            // controller following it stops drawing power. A screen that two
+            // taps are to bring back cannot rest, since the taps come from
+            // that controller. Neither can the cover's, ever: a blanked cover
+            // is never unblanked here, and a cover blanked once stays in the
+            // gesture mode it blanked into, reporting gestures and no touches
+            // (issue #9) — see App::may_rest_in_the_dark.
+            if on && app.may_rest_in_the_dark(on_cover) {
+                match (on_cover, cover.as_mut()) {
+                    (true, Some(c)) => c.rest()?,
+                    _ => inner.rest()?,
                 }
-            } else if rested_at.is_some_and(|at| at.elapsed() >= REST) {
+                rested_at = Some(Instant::now());
+            } else if !on_cover && rested_at.is_some_and(|at| at.elapsed() >= REST) {
                 // Rested long enough, the display goes off: the panel and the
                 // display processor feeding it stop drawing power.
                 match (on_cover, cover.as_mut()) {
