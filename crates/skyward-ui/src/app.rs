@@ -3544,10 +3544,11 @@ pub struct App {
     /// When the panel last lit from dark, for the brief guard that keeps a
     /// stray touch or key from acting on a page just put up.
     woke_at: Option<u64>,
-    /// The panel lit because a finger tapped the dark glass, rather than
-    /// because an install finished or a cable went in: a finger on the pages
-    /// is the owner there, and the guard does not keep it from acting.
-    tapped_awake: bool,
+    /// The owner brought the panel back — a finger on the dark glass, or the
+    /// power key they pressed — rather than an install finishing or a cable
+    /// going in. A finger on the pages is the owner there, and the guard does
+    /// not keep it from acting.
+    owner_awake: bool,
     /// The panel at full brightness, or easing to the dim level it takes
     /// shortly before going off.
     bright: Fade,
@@ -3643,7 +3644,7 @@ impl App {
             display_on: true,
             active: None,
             woke_at: None,
-            tapped_awake: false,
+            owner_awake: false,
             bright: full_brightness(),
             curtain: Fade::shown(BRIGHTEN, DARKEN),
             darkening: None,
@@ -4035,7 +4036,7 @@ impl App {
             self.curtain.set(true, now);
         }
         self.woke_at = Some(now);
-        self.tapped_awake = false;
+        self.owner_awake = false;
         self.stir(now);
     }
 
@@ -4045,7 +4046,7 @@ impl App {
         self.wake(now);
         // A finger brought it back, so a finger is the owner here: the guard
         // that keeps a stray touch off a page just put up does not apply.
-        self.tapped_awake = true;
+        self.owner_awake = true;
         self.refresh();
     }
 
@@ -7686,9 +7687,9 @@ impl App {
         // A finger landing just after the panel lit only keeps it awake, when
         // it was something else that lit it: an install finishing, or a cable
         // going in, puts a page up under a hand that may still be moving. A
-        // panel a finger lit is the owner's, and the guard does not eat that
-        // finger's next tap.
-        if matches!(ev, Touch::Down(..)) && self.just_woke(now) && !self.tapped_awake {
+        // panel the owner brought back, by a finger on the glass or the power
+        // key, is theirs: the guard does not eat the tap that follows.
+        if matches!(ev, Touch::Down(..)) && self.just_woke(now) && !self.owner_awake {
             self.stir(now);
             self.drag = Drag::Waking;
             return Vec::new();
@@ -8017,9 +8018,12 @@ impl App {
         let mut fx = self.let_chord_go(now);
         if !self.display_on {
             // The power key lights the dark panel, and does only that, as on
-            // the phone's own system; the other keys leave it dark.
+            // the phone's own system; the other keys leave it dark. The owner
+            // pressed it, so the finger that follows is theirs: the guard does
+            // not take that tap, which is what a phone woken to be used does.
             if key == Key::Power {
                 self.wake(now);
+                self.owner_awake = true;
             }
             self.button = Some((key, Press::Spent));
             return fx;
@@ -13705,10 +13709,23 @@ mod tests {
         let mut app = App::new(Screen::Settings, W, H, PPD);
         app.woken_by_tap(1000);
         assert!(!app.state.turned, "the pages start the right way up");
-        // Inside the window a key press only keeps the panel awake; a finger
-        // is the owner reaching for what the panel now shows.
         let _ = tap_at(&mut app, &f, &i, Action::Toggle(Switch::Turned), 1300);
-        assert!(app.state.turned, "a tap 300 ms after the light came on turns the switch");
+        assert!(app.state.turned, "a tap 300 ms after two taps lit it turns the switch");
+    }
+
+    #[test]
+    fn a_finger_landing_just_after_the_power_key_lit_the_panel_acts_too() {
+        let (f, i) = (fonts(), info());
+        let mut app = App::new(Screen::Settings, W, H, PPD);
+        // The owner puts the panel out and presses power to bring it back,
+        // which is how a phone woken to be used comes up.
+        press(&mut app, Key::Power, 0);
+        assert!(!app.display_on(), "the first press put the panel out");
+        press(&mut app, Key::Power, 1000);
+        assert!(app.display_on(), "the second press brought it back");
+        assert!(!app.state.turned);
+        let _ = tap_at(&mut app, &f, &i, Action::Toggle(Switch::Turned), 1300);
+        assert!(app.state.turned, "a tap 300 ms after the key lit it turns the switch");
     }
 
     #[test]
