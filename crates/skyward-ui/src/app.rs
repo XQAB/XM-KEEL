@@ -13681,6 +13681,7 @@ mod tests {
         assert!(!b.open_tab(), "and another waits until one is closed");
     }
 
+    #[test]
     fn a_finger_landing_just_after_the_panel_lit_acts_where_it_lands() {
         let (f, i) = (fonts(), info());
         let mut app = App::new(Screen::Settings, W, H, PPD);
