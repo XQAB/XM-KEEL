@@ -1181,6 +1181,16 @@ fn log_mounted(mounted: &Opened) -> Result<()> {
 /// that lock is answered with, or nothing. Users whose credential the phone
 /// made up open behind the owner and are never asked; one that did not
 /// open goes to the kernel log with why.
+/// Where a finger landed on pages turned half a turn round: the pixel it fell
+/// on is the one the same distance from the other corner.
+fn turned_touch(t: Touch, w: u32, h: u32) -> Touch {
+    match t {
+        Touch::Down(x, y) => Touch::Down(w as f32 - x, h as f32 - y),
+        Touch::Move(x, y) => Touch::Move(w as f32 - x, h as f32 - y),
+        Touch::Up => Touch::Up,
+    }
+}
+
 fn show_closed(app: &mut App, closed: &[Closed]) -> Result<()> {
     use skyward_crypto::user::Lock;
     skyward_sys::kmsg(&format!("the users whose own files are still closed: {:?}", closed.iter().map(|c| c.user).collect::<Vec<_>>()))?;
@@ -1603,6 +1613,11 @@ pub fn run(cfg: &DeviceConfig, font: &Path, mono: &Path, request: bcb::Request, 
     let mounts = || read_mounts(&cfg.services).map_err(|e| format!("{e:#}"));
 
     let mut screen = Canvas::new(w, h);
+    // The phone held the other way up shows the pages half a turn round, as
+    // the phone it came with does; the sensor's thread says which way up it
+    // is, and the loop turns the frame and the finger with it.
+    crate::orientation::start();
+    let mut turned = crate::orientation::upside_down();
     // A page sliding over another draws on three screens' worth of canvas
     // besides the panel's: made ready now, the first slide finds them so.
     Canvas::keep_ready(w, h, 3);
@@ -2058,6 +2073,12 @@ pub fn run(cfg: &DeviceConfig, font: &Path, mono: &Path, request: bcb::Request, 
             }
         }
         let on_cover = shut_state && cover.is_some() && cover_screen.is_some();
+        // The other way up turns the pages; a change of the way up is a page
+        // to draw again, not the one already on the panel.
+        if turned != crate::orientation::upside_down() {
+            turned = crate::orientation::upside_down();
+            app.refresh();
+        }
         let panel = app.panel(now);
         let mut shown = false;
         if panel.is_some() {
@@ -2072,6 +2093,9 @@ pub fn run(cfg: &DeviceConfig, font: &Path, mono: &Path, request: bcb::Request, 
                 let (aw, ah) = surface.size();
                 app.resize(aw, ah, scale);
                 app.compose(canvas, &fonts, &info, &shown_clock, now);
+                if turned {
+                    canvas.turn_half();
+                }
                 surface.present(canvas)?;
                 eprintln!("frame {:?} at {aw}x{ah} in {} ms", app.screen(), t0.elapsed().as_millis());
                 if let Some(path) = dump {
@@ -3020,6 +3044,16 @@ pub fn run(cfg: &DeviceConfig, font: &Path, mono: &Path, request: bcb::Request, 
                     answer(asked, fastboot)
                 }
                 Incoming::Input(Event::Touch(t, at, which)) => {
+                    // The pages are drawn half a turn round when the phone is
+                    // held the other way up, so a finger's place is turned
+                    // with them before anything is looked for under it.
+                    let t = match turned {
+                        true => {
+                            let (aw, ah) = if which == 1 { (cw, ch) } else { (w, h) };
+                            turned_touch(t, aw, ah)
+                        }
+                        false => t,
+                    };
                     // Two taps on a dark screen bring it back, when the panel
                     // is kept lit at no brightness for them instead of being
                     // put to sleep; one tap alone does nothing.

@@ -95,6 +95,25 @@ impl Canvas {
         Self { w, h, data, top, bottom, left, span }
     }
 
+    /// Turn a whole canvas half a turn: what was at `(x, y)` comes to rest at
+    /// `(w - 1 - x, h - 1 - y)`. A canvas that holds only part of its rows or
+    /// columns cannot be turned, and says so.
+    pub fn turn_half(&mut self) {
+        assert!(
+            self.top == 0 && self.bottom == self.h && self.left == 0 && self.span == self.w,
+            "only a canvas holding all its pixels can be turned"
+        );
+        let mut data = std::mem::take(&mut self.data);
+        let n = data.len() / 4;
+        for i in 0..n / 2 {
+            let (a, b) = (i * 4, (n - 1 - i) * 4);
+            for k in 0..4 {
+                data.swap(a + k, b + k);
+            }
+        }
+        self.data = data;
+    }
+
     /// A canvas `w` × `h` that holds rows `rows` of it whole, as whatever
     /// its memory held before: for drawing into a part at a time, where
     /// what is not drawn yet is never shown.
@@ -1217,6 +1236,20 @@ fn rr_sdf(px: f32, py: f32, cx: f32, cy: f32, hx: f32, hy: f32, r: f32) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn turning_the_whole_canvas_half_a_turn_puts_each_pixel_where_the_turn_takes_it() {
+        let mut c = Canvas::filled(2, 2, Rgba::rgb(0, 0, 0));
+        for (i, px) in c.data.chunks_mut(4).enumerate() {
+            px.copy_from_slice(&[i as u8, 0, 0, 255]);
+        }
+        c.turn_half();
+        let order: Vec<u8> = c.data.chunks(4).map(|px| px[0]).collect();
+        assert_eq!(order, vec![3, 2, 1, 0], "the last pixel comes first, the first last");
+        c.turn_half();
+        let back: Vec<u8> = c.data.chunks(4).map(|px| px[0]).collect();
+        assert_eq!(back, vec![0, 1, 2, 3], "turned twice it is the canvas it was");
+    }
 
     #[test]
     fn a_picture_holds_the_colors_the_panel_shows() {
