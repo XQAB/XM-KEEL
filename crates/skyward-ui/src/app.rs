@@ -279,7 +279,6 @@ pub struct Tab {
 
 /// The most tabs open at once; a new one waits until one is closed.
 pub const TABS_KEPT: usize = 8;
-}
 
 /// The most bookmarks kept; the oldest goes when another comes.
 pub const BOOKMARKS_KEPT: usize = 40;
