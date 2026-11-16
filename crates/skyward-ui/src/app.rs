@@ -125,6 +125,10 @@ pub enum Screen {
     /// read, the pages kept, the page shown bookmarked or not, and the
     /// plugin that opens pages in Chromium.
     BrowserMenu,
+    /// The tabs open, apart from the browser: one row each, the one shown
+    /// marked, tapped to come forward, with closing the one shown and a
+    /// new one that starts empty.
+    BrowserTabs,
     /// The full browser the owner may keep on the phone: its download,
     /// the download under way, or the one on the phone and its removal.
     /// A page of its own, so its states are reached from Settings rather
@@ -257,6 +261,24 @@ pub struct Browser {
     /// purpose.
     pub history: Vec<Sheet>,
     pub book: Vec<Sheet>,
+    /// The tabs open, the one shown among `active`: the fields above hold
+    /// the shown tab while it is shown, and the others wait here with the
+    /// page, the address and the pages behind and ahead of their own.
+    pub tabs: Vec<Tab>,
+    pub active: usize,
+}
+
+/// A tab not shown: what it had of its own while it was.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Tab {
+    pub address: String,
+    pub page: Option<web::Page>,
+    pub back: Vec<Sheet>,
+    pub ahead: Vec<Sheet>,
+}
+
+/// The most tabs open at once; a new one waits until one is closed.
+pub const TABS_KEPT: usize = 8;
 }
 
 /// The most bookmarks kept; the oldest goes when another comes.
@@ -274,6 +296,103 @@ impl Browser {
     /// What the page shown is called, for the bar over it.
     pub fn named(&self) -> Option<&str> {
         self.page.as_ref().map(|page| if page.title.is_empty() { page.url.as_str() } else { page.title.as_str() })
+    }
+
+    /// How many tabs are open: the one shown counts, and a browser that never
+    /// opened another has the one it is showing.
+    pub fn opened(&self) -> usize {
+        self.tabs.len().max(1)
+    }
+
+    /// What the tab at `at` is called, and the address it holds.
+    pub fn tab(&self, at: usize) -> Option<(&str, &str)> {
+        if at == self.active {
+            let named = match &self.page {
+                Some(page) if !page.title.is_empty() => page.title.as_str(),
+                _ => self.address.as_str(),
+            };
+            return Some((named, self.address.as_str()));
+        }
+        self.tabs.get(at).map(|tab| {
+            let named = match &tab.page {
+                Some(page) if !page.title.is_empty() => page.title.as_str(),
+                _ if !tab.address.is_empty() => tab.address.as_str(),
+                _ => "",
+            };
+            (named, tab.address.as_str())
+        })
+    }
+
+    /// Write the tab shown into the place it keeps among the others.
+    fn put_back(&mut self) {
+        let address = self.address.clone();
+        let page = self.page.clone();
+        let back = std::mem::take(&mut self.back);
+        let ahead = std::mem::take(&mut self.ahead);
+        if self.tabs.is_empty() {
+            self.tabs.push(Tab::default());
+        }
+        let at = self.active.min(self.tabs.len() - 1);
+        let tab = &mut self.tabs[at];
+        tab.address = address;
+        tab.page = page;
+        tab.back = back;
+        tab.ahead = ahead;
+    }
+
+    /// Take the tab at `at` out of its place and show it.
+    fn take_out(&mut self, at: usize) {
+        let kept = self.tabs.get(at).cloned().unwrap_or_default();
+        self.active = at.min(self.tabs.len().saturating_sub(1));
+        self.address = kept.address;
+        self.page = kept.page;
+        self.back = kept.back;
+        self.ahead = kept.ahead;
+        self.reading = false;
+        self.said = None;
+    }
+
+    /// Show the tab at `at`, the pages it had left as they were.
+    pub fn show_tab(&mut self, at: usize) {
+        if at >= self.opened() || at == self.active {
+            return;
+        }
+        self.put_back();
+        self.take_out(at);
+    }
+
+    /// Open a tab and show it, empty; a browser already holding the most
+    /// tabs keeps what it has.
+    pub fn open_tab(&mut self) -> bool {
+        if self.opened() >= TABS_KEPT {
+            return false;
+        }
+        self.put_back();
+        self.tabs.push(Tab::default());
+        self.active = self.tabs.len() - 1;
+        self.address.clear();
+        self.page = None;
+        self.back.clear();
+        self.ahead.clear();
+        self.reading = false;
+        self.said = None;
+        true
+    }
+
+    /// Close the tab shown; the last one closes to an empty tab, so there is
+    /// always one to show.
+    pub fn close_tab(&mut self) {
+        if self.tabs.is_empty() {
+            self.tabs.push(Tab::default());
+            self.active = 0;
+        }
+        self.tabs.remove(self.active);
+        if self.tabs.is_empty() {
+            self.tabs.push(Tab::default());
+        }
+        self.active = self.active.min(self.tabs.len() - 1);
+        let at = self.active;
+        self.take_out(at);
     }
 }
 
@@ -438,6 +557,8 @@ pub const BOOKMARK_KEPT: Text = ["已存为书签", "已存為書籤", "Kept as 
 pub const BOOKMARK_DROPPED: Text = ["已从书签里删去", "已從書籤裡刪去", "Taken out of the bookmarks"];
 /// Said when every bookmark is taken away.
 pub const BOOKMARKS_GONE: Text = ["书签已清空", "書籤已清空", "The bookmarks are gone"];
+/// Said when another tab is asked for with the most already open.
+pub const TABS_FULL: Text = ["标签页最多开 8 个", "分頁最多開 8 個", "Eight tabs are the most at once"];
 /// Said when the full browser is taken off the phone again.
 pub const PLUGIN_GONE: Text = ["完整浏览器已删除，页面回到纯文本阅读", "完整瀏覽器已刪除，頁面回到純文字閱讀", "The full browser is gone: pages read as text again"];
 
@@ -1732,6 +1853,14 @@ pub enum Action {
     BrowserClearHistory,
     /// Open the browser's own menu, apart from its dock.
     BrowserMenu,
+    /// Open the tabs kept, apart from the browser page.
+    BrowserTabs,
+    /// Show the tab at this place, the pages it had left as they were.
+    BrowserPickTab(usize),
+    /// Close the tab shown.
+    BrowserCloseTab,
+    /// Open a tab and show it, empty.
+    BrowserNewTab,
     /// Have adb listen on the network too, or stop it doing so.
     SetAdbWifi(bool),
     /// Wipe the note in misc that asks the bootloader for the recovery.
@@ -6941,6 +7070,42 @@ impl App {
                     self.open(Screen::BrowserMenu);
                     return self.arrive_at(Screen::BrowserMenu);
                 }
+                return Vec::new();
+            }
+            Action::BrowserTabs => {
+                if self.screen() != Screen::BrowserTabs {
+                    self.open(Screen::BrowserTabs);
+                    return self.arrive_at(Screen::BrowserTabs);
+                }
+                return Vec::new();
+            }
+            Action::BrowserPickTab(at) => {
+                if at != self.state.browser.active {
+                    self.state.browser.show_tab(at);
+                    if self.screen() != Screen::Browser {
+                        self.open(Screen::Browser);
+                        return self.arrive_at(Screen::Browser);
+                    }
+                    self.refresh();
+                }
+                return Vec::new();
+            }
+            Action::BrowserCloseTab => {
+                self.state.browser.close_tab();
+                self.refresh();
+                return Vec::new();
+            }
+            Action::BrowserNewTab => {
+                if !self.state.browser.open_tab() {
+                    self.say(self.state.lang.pick(TABS_FULL), now);
+                    self.refresh();
+                    return Vec::new();
+                }
+                if self.screen() != Screen::Browser {
+                    self.open(Screen::Browser);
+                    return self.arrive_at(Screen::Browser);
+                }
+                self.refresh();
                 return Vec::new();
             }
             Action::BrowserForgetOne(at) => {
@@ -13488,6 +13653,31 @@ mod tests {
         let fr = app.frame(&f, &i);
         assert!(fr.hits.iter().any(|h| h.action == Action::DropPlugin), "and the way to take it away once it is on the phone");
         assert!(!fr.hits.iter().any(|h| h.action == Action::GetPlugin), "the download it already has is not offered again");
+    }
+
+    #[test]
+    fn the_tabs_keep_their_own_pages_and_the_last_one_closes_to_an_empty_tab() {
+        let mut b = Browser::default();
+        b.address = "https://one.example/a".into();
+        assert_eq!(b.opened(), 1, "a browser that opened nothing else shows the one tab");
+        assert!(b.open_tab(), "a new tab is opened");
+        assert!(b.address.is_empty() && b.page.is_none(), "and it starts empty");
+        b.address = "https://two.example/b".into();
+        b.show_tab(0);
+        assert_eq!(b.address, "https://one.example/a", "the tab left kept the address it had");
+        b.show_tab(1);
+        assert_eq!(b.address, "https://two.example/b", "and the other kept its own");
+        assert_eq!(b.opened(), 2, "two tabs are open");
+        b.close_tab();
+        assert_eq!(b.opened(), 1, "closing the one shown leaves the other");
+        assert_eq!(b.address, "https://one.example/a", "which comes forward");
+        b.close_tab();
+        assert_eq!(b.opened(), 1, "the last tab closes to one empty tab, so there is always one to show");
+        assert!(b.address.is_empty(), "and that one is empty");
+        for _ in 1..TABS_KEPT {
+            assert!(b.open_tab(), "tabs are opened up to the most");
+        }
+        assert!(!b.open_tab(), "and another waits until one is closed");
     }
 
     #[test]

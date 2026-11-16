@@ -104,6 +104,7 @@ pub fn render(screen: Screen, cx: &Ctx) -> Frame {
         Screen::BrowserBookmarks => browser_bookmarks(cx),
         Screen::BrowserHistory => browser_history(cx),
         Screen::BrowserMenu => browser_menu(cx),
+        Screen::BrowserTabs => browser_tabs(cx),
         Screen::Plugin => plugin(cx),
         Screen::Modules => modules(cx),
         Screen::Images => images(cx),
@@ -4187,14 +4188,50 @@ pub fn browser_menu(cx: &Ctx) -> Frame {
     let y = widgets::section_first(&mut c, t, f, t.m.content_top, l.pick(BROWSER_MENU));
     let kept = b.page.as_ref().is_some_and(|page| b.book.iter().any(|one| one.url == page.url));
     let rows = [
+        Row::new(l.pick(BROWSER_TABS)).icon(BLUE, Icon::Layers).trail(Trail::Arrow),
         Row::new(l.pick(BROWSER_HISTORY)).icon(BLUE, Icon::Restore).trail(Trail::Arrow),
         Row::new(l.pick(BROWSER_BOOKMARKS)).icon(ORANGE, Icon::Backup).trail(Trail::Arrow),
         Row::new(l.pick(if kept { BROWSER_MENU_DROP } else { BROWSER_MENU_KEEP })).icon(ORANGE, Icon::Backup).trail(Trail::None),
         Row::new(l.pick(BROWSER_FULL)).icon(PURPLE, Icon::Layers).trail(Trail::Arrow),
     ];
     let list = widgets::list(&mut c, t, f, y, &rows);
-    out.extend(hits(&list.rows, &[Action::BrowserHistory, Action::BrowserBookmarks, Action::BrowserBookmark, Action::Open(Screen::Plugin)]));
+    out.extend(hits(
+        &list.rows,
+        &[Action::BrowserTabs, Action::BrowserHistory, Action::BrowserBookmarks, Action::BrowserBookmark, Action::Open(Screen::Plugin)],
+    ));
     Frame::new(t, fit(c, t, list.bottom), out, l.pick(BROWSER_MENU), t.m.content_top)
+}
+
+/// The tabs open: the one shown marked, a row each to come forward, the way
+/// to close the one shown, and a new one that starts empty.
+pub fn browser_tabs(cx: &Ctx) -> Frame {
+    let (t, f, s, l) = (cx.t, cx.f, cx.state, cx.state.lang);
+    let b = &s.browser;
+    let mut c = long_page(cx);
+    let mut out = Vec::new();
+    let mut bottom = widgets::section_first(&mut c, t, f, t.m.content_top, l.pick(BROWSER_TABS));
+    let opened = b.opened();
+    let rows: Vec<Row> = (0..opened)
+        .map(|at| {
+            let (name, address) = b.tab(at).unwrap_or(("", ""));
+            let title = if name.is_empty() { l.pick(BROWSER_TAB_EMPTY) } else { name };
+            let shown = at == b.active;
+            Row::new(title)
+                .subtitle(address)
+                .icon(if shown { BLUE } else { t.pal.subtitle }, Icon::Layers)
+                .trail(if shown { Trail::Value(l.pick(BROWSER_TAB_SHOWN)) } else { Trail::None })
+        })
+        .collect();
+    let list = widgets::list(&mut c, t, f, bottom, &rows);
+    for (at, rect) in list.rows.iter().enumerate() {
+        out.push(Hit { rect: *rect, action: Action::BrowserPickTab(at) });
+    }
+    let close = widgets::list(&mut c, t, f, list.bottom, &[Row::new(l.pick(BROWSER_TAB_CLOSE)).icon(RED, Icon::Wipe).trail(Trail::None)]);
+    out.extend(hits(&close.rows, &[Action::BrowserCloseTab]));
+    let new = widgets::list(&mut c, t, f, close.bottom, &[Row::new(l.pick(BROWSER_TAB_NEW)).icon(GREEN, Icon::Install).trail(Trail::None)]);
+    out.extend(hits(&new.rows, &[Action::BrowserNewTab]));
+    bottom = new.bottom;
+    Frame::new(t, fit(c, t, bottom), out, l.pick(BROWSER_TABS), t.m.content_top)
 }
 
 /// The browser before anything has been read: the card that says what it is
@@ -4419,6 +4456,11 @@ const BROWSER_MENU: Text = ["浏览器菜单", "瀏覽器選單", "Browser menu"
 const BROWSER_MENU_KEEP: Text = ["添加书签", "加入書籤", "Add a bookmark"];
 const BROWSER_MENU_DROP: Text = ["取消书签", "取消書籤", "Remove the bookmark"];
 const BROWSER_FULL: Text = ["完整模式（外置插件）", "完整模式（外掛）", "Full mode (the plugin)"];
+const BROWSER_TABS: Text = ["标签页", "分頁", "Tabs"];
+const BROWSER_TAB_EMPTY: Text = ["新标签页", "新分頁", "New tab"];
+const BROWSER_TAB_SHOWN: Text = ["正在显示", "正在顯示", "Shown"];
+const BROWSER_TAB_CLOSE: Text = ["关闭这个标签页", "關閉這個分頁", "Close this tab"];
+const BROWSER_TAB_NEW: Text = ["新建标签页", "新增分頁", "New tab"];
 
 /// The keys for the parts of an address that the keyboard buries two layers
 /// down, three to a row just above it: `https://`, `http://` and the
