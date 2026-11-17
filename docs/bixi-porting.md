@@ -54,6 +54,17 @@
 副屏背光是 `panel1-backlight` / `dsi_display1`；关一个 CRTC 需先置 `CRTC_ID=None`
 再 `ACTIVE=false`（只置 `ACTIVE=false` 会返回 `EINVAL`）。
 
+### 抓画面：不要在 UI 跑着的时候用 `recovery capture`
+
+`recovery capture <out> --count N` 会另起一个 recovery 实例去抓帧，它要抢 `/dev/dri/card0`
+的 DRM master，而正在跑的 UI 已经持着 master。两边一撞，**手机会直接重启**，重启后 USB
+有时连枚举都不再上来（Windows PnP 里 `VID_18D1` 消失）。
+
+要截图走组合键：`event2`（`pmic_pwrkey`）KEY_POWER + `event3` KEY_VOLUMEDOWN，150 ms 内按下，
+图落 `/sdcard/DCIM/Screenshots`。要抓副屏就把手机合上再按。
+
+同样的坑在 v1.0.13 真机验证时踩过一次（`--count 1` 就把机器重启了），所以记在这里。
+
 ---
 
 ## 3. 内核模块与触摸
