@@ -248,8 +248,12 @@ dmesg | grep -E 'partitions not mounted|devices not brought up|mounted'
 | A | 内部存储（本次路径） | `/data` 开着 → 建快照 → 首启要 merge | 仍卡 logo（则病因在 1/2/4） |
 | B | 同一份包，`adb sideload` | `/data` 关着 → 只能 `Will overwrite existing partitions`（`Log::Overwriting`），首启**不需要 merge** | 能进系统，就证明病因是「快照 → 首启 merge」，与包无关 |
 
-B 的代价：直接覆盖写 A 槽，失败时 A 槽起不来（已有先例，重刷可回）。这条实验能把范围
-从「四条猜」收到一条。
+可执行的步骤、前置、判据表和记录表在 **`docs/exp-404-sideload.md`**，照抄即可跑。主判据只有
+一行：装完后 `recovery.log` 的 `left for the next start` 从 `Snapshotted, merge outstanding
+true` 变成 `snapshots None, merge outstanding false`。
+
+B 的代价：直接覆盖写 A 槽，失败时 A 槽起不来（已有先例，重刷可回）；`init_boot_a` 被包内原厂
+镜像覆盖，**A 槽的 KernelSU 会没**，实验后要重刷补丁。
 
 ### 7.4 取证（卡 logo 那一刻的东西只在 pstore 里）
 
