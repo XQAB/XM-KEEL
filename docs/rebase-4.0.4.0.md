@@ -199,12 +199,27 @@ dmesg | grep -E 'partitions not mounted|devices not brought up|mounted'
 | HAL 二进制换目录（如 `qwesd` 搬进 `/vendor/bin/hw/`） | 改 `[[service]].path` 与其 `libraries` 顺序 |
 | weaver 读不到槽位 / protector 布局变了 | 停，先备份 `/data`，再单独啃 `credential.rs` |
 
-## 7. rec 内装 4.0.4.0 完整包为什么没成（另案，未结案）
+## 7. rec 内装 4.0.4.0 完整包：装完了，是 A 槽第一次启动没起来（另案，未结案）
 
-现象：从内部存储选中这个包，update_engine 跑到 100%（= payload 写完），之后没走完；
-最终不是靠 rec 装进去的。
+**前提已纠正（2026-11-23）**：失败不在安装流程里——安装流程走完了。11-22 那次装包的
+`/skyward/run/recovery.log` 自己留下三行：
 
-**先排除「包太大」这一条**（四条代码事实，都可复核）：
+    install: left for the next start: snapshots Snapshotted, merge outstanding true
+    install: this recovery written back to [A]: Ok(())
+    install: Installed { slot: A, wipe: false }
+
+第三行只在 update_engine **退出码 0** 之后才打（`run.rs:629`）。所以：A 槽写进去了、recovery
+写回了 `[A]`（顺带说明 1.0.13 的 `make_writable`/`BLKROSET` 在 4.0.4.0 上真管用）、没有 wipe。
+没成的是**重启进 A 槽那一步：卡开机 logo**。
+
+现场：`/metadata/ota/state` 74 字节；`/metadata/ota/snapshots/` 下有 9 个分区的快照
+（`system_a`/`vendor_a`/`product_a`/`odm_a`/`system_ext_a`/`system_dlkm_a`/`vendor_dlkm_a`/
+`mi_ext_a`/`mi_product_a`）；`merge outstanding true`。**这是一次走了 Virtual A/B 快照的安装，
+第一次启动必须 merge；卡 logo 就发生在 merge 这一段。**
+
+### 7.1 包大小这一条：只作上限记录，不是病因
+
+四条代码事实，都可复核：
 
 1. **块大小随包长自适应**。`fuse::file_block` 把块放大到 `size / MAX_BLOCKS` 的上一个 2 的幂：
    `9432900450 / 262144 = 35,980` → `64 KiB`，于是 `143,935` 块，上限 `adb::MAX_BLOCKS = 262,144`
@@ -215,26 +230,43 @@ dmesg | grep -E 'partitions not mounted|devices not brought up|mounted'
 4. **不解包到磁盘**：`/sideload/package.zip` 是 FUSE 现取（`skyward-install/src/fuse.rs`），
    不存在「临时空间不够」这一类坑。
 
-**所以问题落在「100% 之后」或「槽位/校验」那一端**，按可能性排：
+安装既然走完，这四条就只是「这个包在我们这儿不会撞上限」的记录，与本次失败无关。
 
-| # | 机制 | 判据（看 `/skyward/run/update_engine.log`） |
+### 7.2 首启 merge 为什么没走完（待证，按可能性排）
+
+| # | 机制 | 判据 |
 | --- | --- | --- |
-| 1 | 第二阶段本身就长：逐分区回读校验 + `FILE_HASH` 整包重读 + postinstall。9.4 GB 要再走一遍（adb 路径=再传 9.4 GB，内部存储路径=再读 9.4 GB）；进度条停在 100% 不动，我们的等待**没有超时**（`adb::Connection::fill` 一直等） | `progress 1.0` 之后没有任何新行，或停在 `Hashing partition N` |
-| 2 | 回读不一致（`kVerificationFailed`）：目标分区是被 dm 覆盖的槽位分区，读回时设备身份/映射变了（`forks-borrowing.md` (b)(c) 记过同一族） | `Error applying update: 15/16/47/56` |
-| 3 | 空间（`kNotEnoughSpace`=60）：包里有 `super` 的动态分区元数据；B 槽分区未定义或 super 不够。包自己 9.4 GB 又在 `/data` 里，若走了快照（COW 也写 `/data`）空间翻倍 | `Error applying update: 60` |
-| 4 | 传输断（`kDownloadTransferError`=9），或 `--headers` 侧的时间戳/SPL 判定 | `Error applying update: 9` / `51` |
-| 5 | 上次中断留下的 `/metadata/ota` state 让**后续每次重试**立刻被拒（`Refusal::Pending`） | `/metadata/ota/state` 非空、`ls -l /metadata/ota` |
+| 1 | **COW 没落盘**：装完是 `sys.powerctl` 直接重启（`skyward_sys::power`），`/data` 里那 9 份 COW 的尾部若没 flush，首启 merge 读不全，就一直等/重试 | pstore 里 `snapuserd`/`dm-` 读 COW 的报错；COW 文件实际大小 < `/metadata/ota/snapshots/` 记的尺寸 |
+| 2 | **COW 在 Android 侧看不见**：COW 是我们用自己的 ext4 挂载写进 `/data` 的，首启 `vold` 解密后路径/属主/SELinux label 与我们写下的不同，`snapuserd` 打不开 | pstore/logcat 里「打不开 COW」的报错 |
+| 3 | **merge 不是病因**：A 槽镜像本身起不来（vbmeta/AVB 与 A 槽新内容不合，或 payload 把 `init_boot` 写回原厂后与 KSU 残留冲突） | 卡 logo 后完全无进展、pstore 有 avb/verity 报错 |
+| 4 | **`snapuserd` 在这版 vendor 上没起来**（init 的 merge 服务失败） | pstore 里 `snapuserd` 根本没启动 |
 
-**复现要抓的东西**（失败后**不要重启**，`/skyward/run` 在 tmpfs 里，重启就没了）：
+### 7.3 一个能二选一的判别实验（下次复现先做这个）
+
+| | 路径 | 引擎行为 | 预期 |
+| --- | --- | --- | --- |
+| A | 内部存储（本次路径） | `/data` 开着 → 建快照 → 首启要 merge | 仍卡 logo（则病因在 1/2/4） |
+| B | 同一份包，`adb sideload` | `/data` 关着 → 只能 `Will overwrite existing partitions`（`Log::Overwriting`），首启**不需要 merge** | 能进系统，就证明病因是「快照 → 首启 merge」，与包无关 |
+
+B 的代价：直接覆盖写 A 槽，失败时 A 槽起不来（已有先例，重刷可回）。这条实验能把范围
+从「四条猜」收到一条。
+
+### 7.4 取证（卡 logo 那一刻的东西只在 pstore 里）
+
+卡死那次的内核日志不会进 `dmesg`，唯一留存副本是 pstore，进 rec 后仍可读：
 
 ```sh
-# 装之前先存基线
-ls -l /metadata/ota; cat /metadata/ota/state 2>/dev/null; df /data; cat /proc/mounts | head
-# 失败/卡住后立刻
-tail -40 /skyward/run/update_engine.log
-tail -40 /skyward/run/recovery.log
-dmesg | grep -iE 'dm-|ueventd|EPERM|update_engine|super' | tail -40
-ls -l /dev/block/mapper/ | head -30
-ls -l /metadata/ota; cat /metadata/ota/state 2>/dev/null
+ls -l /sys/fs/pstore/
+grep -iE 'snapuserd|snapshot|dm-|cow|merge|avb|verity' /sys/fs/pstore/console-ramoops-0 | tail -60
+# rec 侧状态
+ls -l /metadata/ota; cat /metadata/ota/state; ls -l /metadata/ota/snapshots/* | head -30
+lpdump --slot 0 | head -40
+find /data -maxdepth 3 \( -name '*.cow' -o -name 'snapshot*' \) 2>/dev/null | head
+# 若 logo 阶段 adbd 起来了
+adb shell 'logcat -d -b all | grep -iE "snapuserd|snapshot|merge"' | tail -40
 ```
+
+还想确认一件事：最后把系统装进去用的那个「别的办法」是哪一种（系统内 OTA / MiAssistant /
+fastboot 直接刷 A 槽分区）？若是系统内 OTA，说明这台机、这个包的 merge 链本身是通的，
+差别只在「我们这条路径」；若是直接刷分区，那 merge 链是否通还没有证据。
 
