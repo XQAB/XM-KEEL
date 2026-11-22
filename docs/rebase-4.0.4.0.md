@@ -37,8 +37,27 @@
 - `/metadata/skyward/settings.json` 完好：`keep_recovery=true`、`remember_credential=true`。
 - recovery 可进，v1.0.13 起得来。
 
-这四条里最值钱的是第一条：**`keep_recovery` 在跨大版本升级里真的挡住了原厂 recovery**，
-说明「装整包到 A 槽 + 保留 recovery」这条路在 4.0.4.0 上仍然成立。
+第一条要改读法（2026-11-22 修正）。**这次升级不是走 rec 装整包完成的**：进 Skyward rec
+点安装 4.0.4.0 完整包没有成功（另案，见 §7），最后是别的办法进的系统。所以
+`recovery_a/b` 仍是 `3676c676…` 只说明「没有任何东西写过这两个分区」，**推不出**
+`keep_recovery` 的 hold → 装 → reflash 这条链在 4.0.4.0 上验证过；要验它，得等一次
+rec 内装整包真正走通。
+
+### 2.1 4.0.4.0 完整包本身的读数（从包内元数据读出）
+
+- 文件 `bixi-ota_full-OS4.0.4.0.XOHCNXM-user-17.0-a6ba7e3e2c.zip`，`9432900450` 字节，
+  `sha256 = 4f634159e94c9b1cd9d646be93804cdc70f235559826784b2745a2058f898ca5`；
+  镜像地址回 200 且 `Content-Length` 与本地同值（`…/OS4.0.4.0.XOHCNXM/` 那一个文件名）。
+- `ota-type=AB`、`pre-device=bixi`、**没有 `pre-build`/`pre-build-incremental`**（是完整包）、
+  `ota-required-cache=0`、无 `ota-wipe`、`post-sdk-level=37`、
+  `post-security-patch-level=2026-10-01`、`post-timestamp=1794506917`。
+- `post-build-incremental=17OS4.0.261113.004012506.QCPECN.S`，**不等于**标签 `OS4.0.4.0.XOHCNXM`。
+  安装确认页与引擎日志显示的是这个长串（`Update::version()` 取的就是它），属正常；
+  About 页读 `ro.mi.os.version.incremental`（`devices/bixi.toml:7`），仍是 `OS4.0.4.0.XOHCNXM`。
+- payload 在 zip 内起点 `4942`、`9432891836` 字节（与包内 `ota-property-files` 完全一致），Stored；
+  manifest 含 `boot`/`init_boot`/`vbmeta`/`dtbo`/`vendor_boot`/**`recovery`**/`system`/`vendor`/
+  `product`/`odm`/`system_ext`/`system_dlkm`/`mi_ext` 以及 `super` 的动态分区元数据。
+  → **一次成功的整包安装一定会把 recovery_a/b 写成原厂**，`keep_recovery` 的回写必须真跑过才算数。
 
 ## 3. 必须取证才知道的（按风险从高到低）
 
@@ -105,7 +124,7 @@
 
 ### 3.8 打包基线（见 §1 A）
 
-- **看**：4.0.4.0 完整包的 URL、包名、字节数、sha256；从包里取出的 `recovery` 的 sha256。
+- **看**：包地址与字节数已核（§2.1）；**只剩**从包里取出的 `recovery` 的 sha256。
 - **变了会怎样**：不改也能构建（旧包仍在），但资产名/About 页/`verify-release.py` 的名字核对都与机器现状脱节。
 - **对应**：`devices/bixi.toml:239-242`、`.github/stock/bixi.txt` 三行。
 
@@ -166,9 +185,9 @@ dmesg | grep -E 'partitions not mounted|devices not brought up|mounted'
 
 ### 打包侧
 
-4.0.4.0 完整包的 **URL**（你装的时候用的那个）、文件名、字节数、sha256。
-拿到 URL 后我用 `skyward-pack stock --out` 只按 range 取 `recovery` 一段，
-把它的 sha256 写回 `[stock]`，不必下 9 GB。
+包地址、字节数、sha256 都已到手（§2.1），不用再给。剩下的是从包里拆出 `recovery`
+那一段并算它的 sha256（`skyward-pack stock --out` 只按 range 取这一段，不必下 9 GB），
+填回 `[stock].recovery`；`[stock].package` 直接填 §2.1 那条镜像地址。
 
 ## 6. 判据（什么情况才需要改代码）
 
@@ -179,3 +198,43 @@ dmesg | grep -E 'partitions not mounted|devices not brought up|mounted'
 | `system_dlkm` 不再有 `flatten` | 改 `skyward-modules/src/lib.rs` 的路径表（**这是代码**），配一条单测 |
 | HAL 二进制换目录（如 `qwesd` 搬进 `/vendor/bin/hw/`） | 改 `[[service]].path` 与其 `libraries` 顺序 |
 | weaver 读不到槽位 / protector 布局变了 | 停，先备份 `/data`，再单独啃 `credential.rs` |
+
+## 7. rec 内装 4.0.4.0 完整包为什么没成（另案，未结案）
+
+现象：从内部存储选中这个包，update_engine 跑到 100%（= payload 写完），之后没走完；
+最终不是靠 rec 装进去的。
+
+**先排除「包太大」这一条**（四条代码事实，都可复核）：
+
+1. **块大小随包长自适应**。`fuse::file_block` 把块放大到 `size / MAX_BLOCKS` 的上一个 2 的幂：
+   `9432900450 / 262144 = 35,980` → `64 KiB`，于是 `143,935` 块，上限 `adb::MAX_BLOCKS = 262,144`
+   → **还有一倍余量**。（只有块停在 4 KiB 时才会 `2,302,900` 块被 `Offer::check` 拒。）
+2. **payload 起点是对的**。我们从 zip 的 local header 算得 `4,942`，包内 `metadata` 的
+   `ota-property-files` 也写 `4,942`；zip64 的 26 字节 extra 已算进偏移。
+3. **全链路 u64**：`Offer`、`--offset`、`--headers` 的 `FILE_SIZE=9432891836`，没有 4 GiB/2 GiB 截断点。
+4. **不解包到磁盘**：`/sideload/package.zip` 是 FUSE 现取（`skyward-install/src/fuse.rs`），
+   不存在「临时空间不够」这一类坑。
+
+**所以问题落在「100% 之后」或「槽位/校验」那一端**，按可能性排：
+
+| # | 机制 | 判据（看 `/skyward/run/update_engine.log`） |
+| --- | --- | --- |
+| 1 | 第二阶段本身就长：逐分区回读校验 + `FILE_HASH` 整包重读 + postinstall。9.4 GB 要再走一遍（adb 路径=再传 9.4 GB，内部存储路径=再读 9.4 GB）；进度条停在 100% 不动，我们的等待**没有超时**（`adb::Connection::fill` 一直等） | `progress 1.0` 之后没有任何新行，或停在 `Hashing partition N` |
+| 2 | 回读不一致（`kVerificationFailed`）：目标分区是被 dm 覆盖的槽位分区，读回时设备身份/映射变了（`forks-borrowing.md` (b)(c) 记过同一族） | `Error applying update: 15/16/47/56` |
+| 3 | 空间（`kNotEnoughSpace`=60）：包里有 `super` 的动态分区元数据；B 槽分区未定义或 super 不够。包自己 9.4 GB 又在 `/data` 里，若走了快照（COW 也写 `/data`）空间翻倍 | `Error applying update: 60` |
+| 4 | 传输断（`kDownloadTransferError`=9），或 `--headers` 侧的时间戳/SPL 判定 | `Error applying update: 9` / `51` |
+| 5 | 上次中断留下的 `/metadata/ota` state 让**后续每次重试**立刻被拒（`Refusal::Pending`） | `/metadata/ota/state` 非空、`ls -l /metadata/ota` |
+
+**复现要抓的东西**（失败后**不要重启**，`/skyward/run` 在 tmpfs 里，重启就没了）：
+
+```sh
+# 装之前先存基线
+ls -l /metadata/ota; cat /metadata/ota/state 2>/dev/null; df /data; cat /proc/mounts | head
+# 失败/卡住后立刻
+tail -40 /skyward/run/update_engine.log
+tail -40 /skyward/run/recovery.log
+dmesg | grep -iE 'dm-|ueventd|EPERM|update_engine|super' | tail -40
+ls -l /dev/block/mapper/ | head -30
+ls -l /metadata/ota; cat /metadata/ota/state 2>/dev/null
+```
+
