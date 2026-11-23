@@ -275,9 +275,18 @@ dmesg | grep -E 'partitions not mounted|devices not brought up|mounted'
 
 | 排序 | 机制 | 为什么排这里 | 判据 |
 | --- | --- | --- | --- |
-| 1 | **我们交给首启的那份 COW / state，与首启的系统视图对不上** —— 合并期出错或合不完，于是每次起来之后被拖倒 | 唯一能解释「同包、同机、同槽，OTA 成、我们不成」的差异：OTA 的 COW 是 vold 解密后由引擎自己写在 `/data` 上；我们的 COW 是我们**自己的 ext4 挂载**写下去的 | 每次起来后 3–7 分钟内倒、5 次后被回滚；**第一次倒就进 rec** 看 state 是否仍 `Snapshotted`/`Merging`、`snapshots/` 还在；`misc` 里的重试计数与成功标记 |
+| 1 | **我们交给首启的那份 COW / state，与首启的系统视图对不上** —— 合并期出错或合不完，于是每次起来之后被拖倒 | 唯一能解释「同包、同机、同槽，OTA 成、我们不成」的差异：OTA 的 COW 是 vold 解密后由引擎自己写在 `/data` 上；我们的 COW 是我们**自己的 ext4 挂载**写下去的 | 每次起来后 3–7 分钟内倒、5 次后被回滚；**第一次倒就进 rec** 看 state 是否仍 `Snapshotted`/`Merging`、`snapshots/` 还在；同时看 `misc` 里 A 槽的 `retry_count` 归零没——归零就说明回滚已经跑完，那时 state 一定被清，不能拿它判「merge 没推进」 |
 | 2 | **`sync` 的边界与首启视图是否一致**（见下，第 1 条的一个具体成因） | `power()` 只写 `sys.powerctl`，落盘由 init 负责（`lib.rs:146` 注释：`init syncs and unmounts before it acts`）。能问的只是：那次 sync 覆不覆盖我们那份 COW 所在的挂载；以及 update_engine 自己 unmount `/metadata` 时是否已经把它的视图带走 | 与第 1 条同（都只表现成 merge 一动不动）；分开得看装完以后 `/proc/mounts` 里 `/data` 是谁挂的、dm 状态如何 |
 | 3 | **A 槽镜像 / AVB**（排末，基本可排除） | 被反证两次：同 `boot_a`、同 `vbmeta_a` 的 OTA 起得来；且 dropbox 证明那 5 次都到了 `system_server`。只剩一种残留：我们那次写下的 `vbmeta` 与 OTA 写的不一致 | state 已 `None`、`snapshots/` 清空，而系统仍起不来 |
+
+**一条能量化的旁证**：`metrics-merge-start-duration = 78` 是 OTA 那次的读数 —— **单位未核**，只当
+引擎自己记的量级看，而且它记的是 merge 相关的一段耗时，**不等于**完整 merge 全流程。它的用处是
+相对比较：这个量级远小于那 5 次「3–7 分钟才倒」。所以下次「第一次倒就抓 state」有了参照：
+
+- state 仍 `Snapshotted`、`snapshots/` 完整 ⇒ merge 长时间没有推进（远超 OTA 那次的量级）；
+- state 已进 `Merging` 或带失败码 ⇒ merge 真在跑，但出错。
+
+两条都别当绝对时间用。
 
 **关于第 2 条的措辞**：原来说「重启前没落盘」不准确 —— 落盘不是没人管，是 init 在 `sys.powerctl`
 之前 `sync` 并 unmount。所以收窄成「sync 的边界与首启视图是否一致」，而它的两个答案（sync 没覆盖
@@ -307,11 +316,13 @@ B 的代价：直接覆盖写 A 槽，失败时 A 槽起不来（已有先例，
 ### 7.4 现场已核（2026-11-23，手机插回后实测）
 
 1. **`/metadata/ota` 干净**：`state` 0 字节、`snapshots/` 空、`update_engine/` 子目录不存在。
-   ⇒ 开头担心的 `Refusal::Pending` 不存在，下次装包不会被「更新已写入，等待合并」当场拒；
-   也印证「失败的那次启动让 VAB 状态走了标准作废流程」——**这也是为什么现场必须在下一次重启之前
-   拷走**（§7.5）。
-2. **`/sys/fs/pstore/` 是空目录**（`total 0`，只有 `.` 和 `..`）：这台机没有 pstore 后端在留东西，
-   那次的内核日志已经拿不到。**pstore 不再作为取证路线**，取证只用下面这些实测过的源。
+   **这是 22:28 回滚与 22:52 OTA 成功之后的终态，不代表装完当场的样子**（装完当场是 state 74 字节
+   + 9 个快照目录）。⇒ 开头担心的 `Refusal::Pending` 不存在，下次装包不会被「更新已写入，等待合并」
+   当场拒；也印证「失败的那次启动让 VAB 状态走了标准作废流程」——**这也是为什么现场必须在下一次
+   重启（以及回滚）之前拷走**（§7.5）。
+2. **`/sys/fs/pstore/` 是空目录**（`total 0`，只有 `.` 和 `..`，而且连这两个条目的时间戳都是 1970
+   年）：等于**后端根本没注册**，不是"这次没留"。那次的内核日志已经拿不到，**pstore 不再作为取证
+   路线**，取证只用下面这些实测过的源。
 3. **A 槽现在的 4.0.4.0 是好的**：`sys.boot_completed=1`、`ro.boot.slot_suffix=_a`、
    `bootreason=reboot,userrequested`、`veritymode=enforcing`（原样记录）。这套内容来自系统 OTA。
 4. **11-22 那次安装确实写到了 `init_boot_a`**：装完当场读到原厂 `6e636c81…`，现在是 `7c1453fa…`
@@ -400,6 +411,12 @@ for p in boot_a init_boot_a vbmeta_a dtbo_a vendor_boot_a recovery_a ; do
 done > $OUT/partitions.txt
 ls -lR $OUT > $OUT/manifest.txt
 ```
+
+`misc.bin` 的读法：里面是 bootloader 的 `boot_control` —— A/B 两槽各自的 `retry_count`、
+`successful` 标记与 `merging` 位，VAB 要不要回滚全靠它判。**A 槽 `retry_count > 0` 或
+`successful=false`，说明那几次重试记录还在**，可以直接和 dropbox 的 5 条 `SYSTEM_BOOT` 对上；
+**`retry_count` 已归零，则说明回滚流程走完了**，那时 `/metadata/ota` 的 state 一定被清过，别拿它
+判「merge 没推进」。
 
 取走：
 
