@@ -83,6 +83,12 @@ struct Message {
     message: String,
 }
 
+/// The first release of XM KEEL's own numbering. A phone still carrying a
+/// build numbered by the count this fork inherited has a larger number than
+/// every release here — 1.0.13 against 1.0.0 — so the numbers alone would
+/// keep it on the build it has, and only the crossing has to be bridged.
+const FIRST: &str = "1.0.0";
+
 /// A version as semver reads it. Releases of this build are numbered the way
 /// its images are named, 0.44.00, which semver refuses: its numbers carry no
 /// leading zero. Only the zero is taken off, the shape stays as it is, so a
@@ -143,7 +149,12 @@ pub fn newest(answer: &str, codename: &str, running: &str) -> Result<Newest> {
             Some(Build { sha256: sha256.to_lowercase(), name: a.name, url: a.url, link: a.browser_download_url, size: a.size })
         }
     };
-    Ok(Newest { version: numbered_version, newer: newest > this, build })
+    // The crossing is the only place the two counts meet: a build from the
+    // old count sees the first release of this one, whose number is smaller.
+    // Past that both numbers are of the same count and compare as usual.
+    let first = semver::Version::parse(FIRST).context("the first release of this numbering")?;
+    let crossing = newest == first && this > first;
+    Ok(Newest { version: numbered_version, newer: newest > this || crossing, build })
 }
 
 /// The mirrors known to carry GitHub's API, and not only the files it hands
@@ -318,6 +329,13 @@ mod tests {
         assert!(!newest(ANSWERED_013, "ishtar", "0.2.0").unwrap().newer, "a build ahead of every release");
         assert!(newest(ANSWERED_013, "ishtar", "0.1.3-rc.1").unwrap().newer, "a build before the release it led to");
         assert!(newest(ANSWERED_013, "ishtar", "0.1").is_err(), "a version this build cannot have");
+    }
+
+    #[test]
+    fn a_build_from_the_old_count_crosses_to_the_first_of_this_one() {
+        let answered = ANSWERED_013.replace("v0.1.3", "v1.0.0");
+        assert!(newest(&answered, "ishtar", "1.0.13").unwrap().newer, "the old count meets the first of this one");
+        assert!(!newest(&answered, "ishtar", "1.0.0").unwrap().newer, "the first release itself is not newer than itself");
     }
 
     #[test]
