@@ -41,9 +41,11 @@ sources = ["vendor_boot", "vendor_dlkm", "vendor", "system_dlkm"]
 # 那一刻自己 insmod，开盖再卸载（见 ui.rs 的 load_cover_touch）。
 load = ["synaptics_tcm2", "mitee_dlkm", "nxp-nci"]
 
-# 驱动复位后控制器只上报 raw 帧，要靠小米的 touch 算法（/odm/lib64 里的
-# libtouchreport.so）才变成触摸点；recovery 里跑不了这套，所以让驱动
-# 让控制器自己报坐标。
+# 驱动复位后控制器只上报 raw 帧，要靠小米的 touch 算法才变成触摸点：手机上它是
+# /odm/lib64/libtouchreport.so；4.0.4.0 起换成了
+# /vendor/lib64/vendor.xiaomi.hw.touchfeature-V1-ndk.so，服务声明在
+# /odm/etc/vintf/manifest/vendor.xiaomi.hw.touchfeature-service.xml。
+# recovery 里跑不了这套，所以让驱动让控制器自己报坐标。
 [touch]
 writes = [{ path = "/sys/class/touch/touch_dev/enable_touch_raw", value = "0" }]
 
@@ -136,6 +138,13 @@ groups = ["system"]
 # com.android.se 提供，recovery 没有框架，所以必须自己起一个。用 OrangeFox
 # 随包带的 se_omapi（external/se_omapi），它只依赖 libbinder_ndk 与两个 AIDL
 # 库，比 17 Pro 那整只 8.6MB 的 recovery 二进制省事。
+#
+# 这里的 /system/bin/se_omapi 是 recovery 自己的 /system，文件来自
+# bixi_extra/system/bin/se_omapi（自 [stock] 那个 OS4.0.0.11 包取出，见
+# bixi_extra/SOURCES.md），由 skyward-pack --extra 打进镜像；**不是**手机
+# system 分区里的那个。4.0.4.0 的 Android 侧已经没有这个原生二进制了
+# （改由 com.android.se 这个 app 提供服务），但那条不改变这一段的去留：
+# 我们跑的是自带的副本。
 [[service]]
 path = "/system/bin/se_omapi"
 libraries = ["/system/lib64", "/vendor/lib64", "/odm/lib64", "/mnt/system/system/lib64", "/mnt/system/system/lib64/bootstrap"]

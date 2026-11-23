@@ -72,34 +72,122 @@ rec 内装整包真正走通。
   `crates/skyward/src/credential.rs` 的 weaver 绑定。
 - **注意**：4.0.4.0 的 `/data` 是它自己迁移过的，**先确认 data 里没有未完成的 OTA 快照**再去解；不行就先备份。
 
-### 3.2 TEE 服务链是否注册
+### 3.2 TEE 服务链是否注册 —— 4.0.4.0 实测（2026-11-23）
 
-- **看**：`qseecomd` → `vendor.qti.hardware.qseecom@1.0-service` → `qwesd` → `ssgtzd` →
-   `keymint` → `secure_element` → `weaver` → `se_omapi` 八条是否都起来、`ready_service` 是否注册。
-- **变了会怎样**：keymint 拿不到密钥 → 解密/备份都受影响；`vendor_ssgtzd` 组名变了 → ssgtzd 起不来。
-- **对应**：`devices/bixi.toml` `[[service]]` 八段；`/vendor/etc/group` 里的 `vendor_ssgtzd`（2912）；
-  `/system/etc/vintf/weaver-nxp.xml` 是否还在。
+八条：`qseecomd` → `vendor.qti.hardware.qseecom@1.0-service` → `qwesd` → `ssgtzd` →
+`keymint` → `secure_element` → `weaver` → `se_omapi`。**七条都在、路径没变**；
+`se_omapi` 那条要改读法，见 §3.2.1。
 
-### 3.3 模块与 dlkm 路径
+- 服务定义全在 `/vendor/etc/init/*.rc`（**不是** `hw/` 子目录）：
+  - `qseecomd.rc`：`class core`、`user root`、`group root drmrpc`、
+    `socket notify-topology stream 660 system drmrpc`
+  - `qwesd.rc`：`class late_start`、`user system`、`group system inet`、`disabled`
+  - `ssgtzd.rc`：`class late_start`、`user system`、`group system oem_2912 wakelock`、
+    `capabilities WAKE_ALARM BLOCK_SUSPEND`、`disabled`，两个 socket
+    （`ssgtzd 0660 system oem_2912`、`ssgtzd_opener 0660 system system`）
+  - `keymint`：`class early_hal`、`user system`、`group system drmrpc`
+  - `gatekeeper`：`class early_hal`、`user system`、`group system`
+  - `weaver_nxp`：`class hal`、`user vendor_nxp_weaver`、`group vendor_nxp_weaver`、
+    `capabilities WAKE_ALARM`
+  - `secure_element`：`class hal`、`user system`、`group nfc system`；
+    实测 `/proc/2028/status`：`Uid: 1000`、`Gid: 1027`、`Groups: 1000`
+- `oem_2912` 是 init 给 vendor 组自动加的别名，`/vendor/etc/group` 里只有
+  `vendor_ssgtzd::2912:`，两者同一个组 —— toml 写 `vendor_ssgtzd` 不用改。
+- `weaver` 实测 `/proc/2151/status`：`Uid: 2911 2911 2911 2911`、
+  `Gid: 2911 2911 2911 2911`、`Groups:`（空）；`/vendor/etc/group` 有
+  `vendor_nxp_weaver::2911:`，`/vendor/etc/passwd` 有
+  `vendor_nxp_weaver::2911:2911::/:/bin/sh`。**与 toml 现值（`root`/`root`）不一致**，
+  但先不改，理由见 §3.2.2。
+- VINTF 描述的位置（旧版这一节写错了几处，以实测为准）：
+  - keymint：`/vendor/etc/vintf/manifest/android.hardware.security.keymint-service-qti.xml`，
+    版本 3，一个文件报四条：`IKeyMintDevice/default`、
+    `IRemotelyProvisionedComponent/default`、`ISecureClock/default`、`ISharedSecret/default`
+  - weaver：`/odm/etc/vintf/manifest/android.hardware.weaver-service.nxp.xml`，版本 2，
+    `IWeaver/default` —— 旧版写的 `/system/etc/vintf/weaver-nxp.xml` **手机侧已经没有了**
+    （那个文件是我们自己 `bixi_extra/` 里的，同路径但不同主人，见 §3.2.1 的读法）
+  - gatekeeper：`/vendor/etc/vintf/manifest_sun.xml`（按 build 名存的主描述，不在
+    `manifest/` 目录里），`IGatekeeper/default`、`target-level=202404`
+  - secure_element：`/vendor/etc/vintf/manifest/android.hardware.secure_element.xml` 报
+    `ISecureElement/SIM1`、`SIM2`；`/odm/etc/vintf/manifest/manifest_nxp_nfc_ese.xml` 报
+    `ISecureElement/eSE1`。实例名是 **`eSE1`**；上游 `EMBEDDED = "eSE"` 用 `starts_with`
+    匹配，`"eSE1".starts_with("eSE")` 为真，能对上，但别写成 `eSE`
+  - omapi：`/vendor/etc/vintf/manifest/secure_element-service.xml`，`android.se.omapi` v1
+  - boot：`/vendor/etc/vintf/manifest/boot-service.qti.xml`，`IBootControl/default`
+- 1.0.13 没有的一条：`/odm/bin/hw/android.hardware.security.keymint-service.strongbox-nxp`
+  （strongbox keymint + sharedsecret，`vendor.keymint-strongbox`）。
+- 两个 socket 都在：`/dev/socket/notify-topology`（system:drmrpc）、`ssgtzd`
+  （system:vendor_ssgtzd）、`ssgtzd_opener`（system:system）。
+- `persist` 挂在 `/mnt/vendor/persist`（`/dev/block/sdf7`，ext4），与
+  `[partitions] mounted = ["persist"]` 对得上。
 
-- **看**：`synaptics_tcm2`、`xiaomi_touch`、`mitee_dlkm`、`nxp-nci`、`goodix_core`（副屏按需 insmod）、
-  `rfkill`、`qca_cld3_peach_v2` 七个 `.ko` 在不在、在哪个目录；`modules.dep` 有没有 `xiaomi_touch → synaptics_tcm2` 的依赖边；
-  `/system_dlkm/flatten/lib/modules` 这个 **flatten 视图**还在不在（`rfkill` 从这里取）。
-- **变了会怎样**：内屏触摸、副屏触摸、WLAN 依次失效；`system_dlkm` 若不再有 `flatten`，
-  `rfkill` 找不到 → `wlan0` 起不来（这一条是**代码里的路径表**，不是配置）。
-- **对应**：`devices/bixi.toml:24-42`（`sources` 与 `load`）、`crates/skyward-modules/src/lib.rs:12-19`
-  （`vendor_boot`→`/lib/modules`、`vendor_dlkm`→`/vendor_dlkm/lib/modules`、
-  `vendor`→`/vendor/lib/modules`、`system_dlkm`→`/system_dlkm/flatten/lib/modules`）。
+#### 3.2.1 `se_omapi`：手机侧删了，我们侧没删
 
-### 3.4 触摸与显示参数
+4.0.4.0 的 Android 侧已经没有 `/system/bin/se_omapi`（`find /system /system_ext /vendor
+/odm -name 'se_omapi*'` 全空，只剩几个 permissions xml），现在由 `com.android.se`
+（`/system/app/SecureElement/SecureElement.apk`，实测 pid 6819、用户 `secure_element`）
+在 `android.se.omapi.ISecureElementService/default` 上服务。
 
-- **看**：`/sys/class/touch/touch_dev/enable_touch_raw` 在不在（`[touch].writes` 写它）；
-  `/proc/bus/input/devices` 里 `synaptics_tcm_touch`(event7) 与 `goodix_ts`(event8) 的 ABS 范围
-  （内屏 19583/46591 = 1224×2912×16，副屏 1208×1392）；`ro.miui.density.secondaryppi` 还是不是 460；
-  `/sys/class/qcom-haptics/lra_frequency_hz` 还在不在。
-- **变了会怎样**：触摸点落在错位置（换算了但范围变了）、UI 布局密度不对、马达不震。
-- **对应**：`devices/bixi.toml:9-22`（display，值写死 1224×2912 / 460 / 134）、`:47-48`（touch writes）、
-  `:245-248`（haptics）。
+但**我们跑的那个 se_omapi 不是手机 system 分区里的文件**：它是
+`bixi_extra/system/bin/se_omapi`，出自 `[stock]` 指的 OS4.0.0.11 包
+（`bixi_extra/SOURCES.md` 第 14 行），由 `skyward-pack --extra bixi_extra` 打进
+recovery 自己的 `/system`。v1.0.13 的资产报告里就能看到它：
+
+- `v1013_verify.txt:24` —— `ok extra file: system/bin/se_omapi, 139136 bytes`
+- `:31-39` —— 它要的 `libbase` / `libbinder_ndk` / `libutils` / `libc++` 等逐条解析到
+
+所以「4.0.4.0 删了这个文件 ⇒ recovery 里 se_omapi 没了 ⇒ weaver 起不来 ⇒ 密码解锁
+已坏」这条链**不成立**。真正该问的是另一件事：这份 4.0.0.11 的二进制在 4.0.4.0 的
+`libbinder_ndk` / `libutils` 上还能不能跑（recovery 里它从 `/mnt/system/system/lib64`
+取库），以及 weaver → omapi → secure_element 这条 binder 链在 4.0.4.0 上是否仍通。
+**这只能上机看，不能从「文件在不在」推。** 判据三条，都在 recovery 里：
+
+1. `ls -l /system/bin/se_omapi` —— 文件在（139136 字节）
+2. `service list | grep android.se.omapi` —— 服务注册上了
+3. `/skyward/run/recovery.log` 里 se_omapi 那条有没有被 `started`；失败时它带的是
+   加载器报错还是 binder 报错 —— 前者是 ABI 问题，后者才是服务问题
+
+#### 3.2.2 weaver 的 uid：实测是 2911，但先不改
+
+`vendor_nxp_weaver`（2911）是手机侧的实况；toml 现在写 `root`/`root`。改成 2911 之前
+要先解决节点归属：手机侧那些 `/dev/teepriv0`、`/dev/xts*` 是它的 ueventd 交给 2911 的，
+而 recovery 的 `bixi_extra/system/etc/ueventd.rc` 只给了 `/dev/nq-nci 0666 root root`，
+其余 TEE 节点是内核默认的 `root:root`。**以 2911 去开就是被拒。** 要走这条，得同时用
+`[owners]`（`main.rs` 的 `hand_over`，在模块加载之后跑）把这些节点交给
+`vendor_nxp_weaver`；节点清单要实测 `ls -l /dev/teepriv* /dev/xts*` 才有，现在没有。
+所以：**先留 root，等上机拿到节点清单再一起改**，别只改 uid。
+
+### 3.3 模块与 dlkm 路径 —— 4.0.4.0 实测（2026-11-23）
+
+七个 `.ko` 全在 `/vendor_dlkm/lib/modules`（398 条目），`panel_event_notifier.ko` 也在；
+`/vendor/lib/modules` 是指向它的 symlink，同一份。`flatten` 还在，
+`/system_dlkm/flatten/lib/modules` 有内容；`rfkill.ko` 两处都有 ——
+`/system_dlkm/lib/modules/6.6.118-android15-8-g0908354dac1b-ab16143355-4k/kernel/net/rfkill/`
+与 `/system_dlkm/flatten/lib/modules/`。内核 `6.6.118 … g-0908354dac1b`（8-20 那版）。
+
+依赖边与旧记一致：
+
+- `synaptics_tcm2.ko` → `xiaomi_touch.ko`、`panel_event_notifier.ko`
+- `goodix_core.ko` → `synaptics_tcm2.ko`、`xiaomi_touch.ko`、`panel_event_notifier.ko`
+- `nxp-nci.ko` → `smcinvoke_dlkm.ko`、`mem_object.ko`、`si_core_module.ko`、
+  `qseecom_proxy.ko`、`xiaomi_touch.ko`、`panel_event_notifier.ko`
+
+所以这一条**没有变化，不用改配置**。对应 `devices/bixi.toml:24-42`（`sources` 与 `load`）、
+`crates/skyward-modules/src/lib.rs:12-19`。
+
+### 3.4 触摸与显示参数 —— 4.0.4.0 实测（2026-11-23）
+
+- `libtouchreport.so` **在 4.0.4.0 里已经不存在**（`/odm/lib64/` 只剩
+  `sensors.touch.detect.so` 这类）。触摸算法换成了
+  `/vendor/lib64/vendor.xiaomi.hw.touchfeature-V1-ndk.so`，服务声明在
+  `/odm/etc/vintf/manifest/vendor.xiaomi.hw.touchfeature-service.xml`。
+  这对我们**没有行为影响**（recovery 本来就不跑小米的算法，靠
+  `[touch].writes` 让控制器自己报坐标），只是 `devices/bixi.toml` 里那句注释
+  指错了路径，已改。
+- `/sys/module/xiaomi_touch/parameters/` **不存在** —— xiaomi_touch 没有模块参数目录，
+  别照旧文档去写它。
+- 其余（`/sys/class/touch/touch_dev/enable_touch_raw`、两块屏的 ABS 范围、
+  `ro.miui.density.secondaryppi=460`、`/sys/class/qcom-haptics/lra_frequency_hz`）
+  这一轮没有实测读数，**按旧值保留**。
 
 ### 3.5 WLAN 固件与模块名
 
