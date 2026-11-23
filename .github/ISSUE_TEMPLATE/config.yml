@@ -1,5 +1,5 @@
 blank_issues_enabled: true
 contact_links:
-  - name: Upstream XM KEEL
-    url: https://github.com/kirklin/skyward
-    about: Bugs that are not specific to the MIX Flip 2 (bixi) belong upstream.
+  - name: What XM KEEL inherited from Skyward
+    url: https://github.com/XQAB/XM-KEEL/blob/main/README.md
+    about: Everything else belongs in this repository's issues; the README says where the code came from.
