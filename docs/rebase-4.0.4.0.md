@@ -310,6 +310,9 @@ ls -l /metadata/ota/snapshots
 - state 仍为 `Snapshotted`(2)/`Merging`(3)、`snapshots/` 还在 ⇒ merge 没走完（§7.2 第 1 条）；
 - state 已是 `None`(0)、`snapshots/` 清空 ⇒ merge 走完了，卡在更后面（§7.2 第 2 条）。
 
+顺手再试一行：`cat /proc/last_kmsg 2>/dev/null | tail -40`。pstore 空时它通常也空，但有些内核仍
+留着这一份；**在 rec 里读到的是上一次启动的日志**，若真有内容就是白捡的内核证据。
+
 **框架侧三处（现在就能抓，回答的是「后来那次为什么能起来」）**
 
 1. `/data/system/dropbox/`（要 root：`adb shell "su -c 'ls -l /data/system/dropbox'"`）：
