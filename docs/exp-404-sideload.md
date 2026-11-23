@@ -7,8 +7,8 @@
 
 | B 组（sideload）的结果 | 结论 |
 | --- | --- |
-| 首启进得了系统 | merge 是分水岭。11-22 那次卡 logo 的病因在快照那条线（§7.2 的 1/2/4），A 槽镜像本身没问题 |
-| 首启照样卡 logo | 与 merge 无关，A 槽内容或 AVB 那一端有问题（§7.2 的 3）。rec 装整包失败的真因不在快照 |
+| 首启进得了系统 | merge 是分水岭。11-22 那次卡 logo 的病因在快照那条线（§7.2 第 1 条），A 槽镜像本身没问题 |
+| 首启照样卡 logo | 与 merge 无关，A 槽内容或 AVB 那一端有问题（§7.2 第 2 条）。rec 装整包失败的真因不在快照 |
 | 根本没装进去（引擎拒 / 我们拒 / 断链） | 两个假设都还没验到。按 §6 记下拒在哪一步再回来 |
 
 ## 1. 为什么换来源就能换掉 `/data` 的状态
@@ -31,9 +31,10 @@
 
 1. rec 是 v1.0.13：`grep -m1 'recovery up' /skyward/run/recovery.log` 应带 `1.0.13`。
 2. 电量 ≥ 15%（`short_of_charge` 会拒；系统请求的 retry 例外）。
-3. `/metadata/ota/state` 不存在，或里面是 `None`。**若还有 11-22 那次残留的 `Snapshotted`，
-   停在这里报我**——那会以 `Refusal::Pending` 被当场拒（屏幕文案「更新已写入，等待合并。请
-   重启到系统，完成上一次更新后重试。」），而且不要手删 `/metadata/ota` 里的东西。
+3. `/metadata/ota/state` 不存在，或里面是 `None`（11-23 已核：这台机现在是干净的——`state` 0
+   字节、`snapshots/` 空、`update_engine/` 不存在）。**若又出现残留的 `Snapshotted`，停在这里报我**
+   ——那会以 `Refusal::Pending` 被当场拒（屏幕文案「更新已写入，等待合并。请重启到系统，完成上一次
+   更新后重试。」），而且不要手删 `/metadata/ota` 里的东西。
 4. `/proc/mounts` 里**没有** ` /data ` 这一项。有就说明这次 rec 已经把 data 开了（多半是上次
    待装请求触发的自动解密，或你去过「解密」页）：重启 rec 再看；仍开着就先在设置里关掉
    「记住凭证」再重启 rec。
@@ -101,8 +102,15 @@ install: Installed { slot: A, wipe: false }
    `snapshots/` 目录（对照 A 组：74 字节 state + 9 个目录）。
 4. `grep -E 'Hashing partition|Error applying update' /skyward/run/update_engine.log | tail` ——
    回读校验有走到、没有错误码。
-5. 重启到系统（不要进 fastboot）：看首启 —— 进得去 / 卡 logo。卡的话按 `docs/rebase-4.0.4.0.md`
-   §7.4 抓 pstore，别急着重刷。
+5. 重启到系统之前，先把 tmpfs 里的日志取走（重启即失）：
+
+```sh
+adb pull /skyward/run/recovery.log      ./recovery-B.log
+adb pull /skyward/run/update_engine.log ./update_engine-B.log
+```
+
+   然后重启（不要进 fastboot），看首启 —— 进得去 / 卡 logo。卡的话不进系统、先进 rec，按
+   `docs/rebase-4.0.4.0.md` §7.5 取证（**pstore 在这台机上已确认不可用**，别再去翻）。
 
 ## 6. 失败分支怎么判
 
@@ -112,13 +120,14 @@ install: Installed { slot: A, wipe: false }
 | 手机上拒：「电量仅剩…」 | < 15% | 充电后重来 |
 | PC 侧 `adb sideload` 报 `failed to read command` / `protocol fault` | 传到一半断链 | 贴 PC 输出 + `tail /skyward/run/recovery.log` |
 | 引擎在 Prepare 阶段直接报错（不是 overwrite） | `" /data 关着"` 这条路引擎不接受 | 也是一个有效结论，贴 `update_engine.log` 最后 40 行 |
-| 首启卡 logo | 见 §0 第二行 | 按 §7.4 抓 pstore |
+| 首启卡 logo | 见 §0 第二行 | 先进 rec 看 `/metadata/ota` 的 state（§7.2 的两条判据），再按 §7.5 |
 
 ## 7. 收尾
 
 - **进得了系统**：A 槽是干净的 4.0.4.0；重刷 KSU 补丁（`init_boot_a` 已被原厂镜覆盖）；
   核对 `recovery_a` 回到 `3676c676…4aa06`（`written back` 那行是它的证据）。
-- **卡 logo**：重刷 A 槽（有先例），同时把 pstore 留下。
+- **卡 logo**：先进 rec 看 `/metadata/ota` 的 state 与 `snapshots/`（两条判据在 §7.2），再重刷 A 槽
+  （有先例）。卡住那段的内核日志不会被 pstore 留下，别等它。
 - 把 §8 的表填了贴我。
 
 ## 8. 记录表（填完贴回）
