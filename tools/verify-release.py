@@ -66,7 +66,7 @@ PACKED = [
     "system/etc/init/skyward-mtp.rc",
 ]
 # Every command a stock recovery lacks, as links to the recovery binary, each
-# started as the name it is linked under (crates/skyward-config/src/lib.rs,
+# started as the name it is linked under (crates/keel-config/src/lib.rs,
 # ramdisk::COMMANDS).
 COMMANDS = ["7za", "avbctl", "resetprop", "unzip", "zstd"]
 # The properties the packer sets on a recovery: adbd keeps root, lets any

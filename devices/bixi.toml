@@ -141,7 +141,7 @@ groups = ["system"]
 #
 # 这里的 /system/bin/se_omapi 是 recovery 自己的 /system，文件来自
 # bixi_extra/system/bin/se_omapi（自 [stock] 那个 OS4.0.0.11 包取出，见
-# bixi_extra/SOURCES.md），由 skyward-pack --extra 打进镜像；**不是**手机
+# bixi_extra/SOURCES.md），由 keel-pack --extra 打进镜像；**不是**手机
 # system 分区里的那个。4.0.4.0 的 Android 侧已经没有这个原生二进制了
 # （改由 com.android.se 这个 app 提供服务），但那条不改变这一段的去留：
 # 我们跑的是自带的副本。

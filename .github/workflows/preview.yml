@@ -30,8 +30,8 @@ jobs:
       - uses: ./.github/actions/setup
       - name: Draw the pages, in both languages
         run: |
-          cargo run --release -p skyward-preview -- preview-out/zh-CN --lang zh-CN
-          cargo run --release -p skyward-preview -- preview-out/en-US --lang en-US
+          cargo run --release -p keel-preview -- preview-out/zh-CN --lang zh-CN
+          cargo run --release -p keel-preview -- preview-out/en-US --lang en-US
       - name: Sum what was drawn
         run: |
           cd preview-out

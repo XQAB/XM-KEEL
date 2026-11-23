@@ -1,0 +1,17 @@
+[package]
+name = "keel-info"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+anyhow = { workspace = true }
+libc = { workspace = true }
+rsproperties = { version = "0.6.0", features = ["builder"] }
+keel-block = { path = "../keel-block" }
+keel-config = { path = "../keel-config" }
+keel-sys = { path = "../keel-sys" }
+keel-vab = { path = "../keel-vab" }
+
+[dev-dependencies]
+tempfile = "3.27.0"

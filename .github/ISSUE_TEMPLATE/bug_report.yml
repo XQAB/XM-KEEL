@@ -7,7 +7,7 @@ body:
       value: |
         Fill in as much as you can. "It does not boot" with nothing else usually cannot be acted on.
   - type: input
-    id: skyward-version
+    id: keel-version
     attributes:
       label: XM KEEL version
       description: The image you flashed, e.g. 1.0.0, or the release tag.

@@ -205,15 +205,15 @@ XM KEEL builds with the stable Rust that `rust-toolchain.toml` names, with its
 the phone, and the packer for the computer:
 
 ```sh
-cargo ndk -t arm64-v8a --platform 30 build --release -p skyward
-cargo build --release -p skyward-pack
+cargo ndk -t arm64-v8a --platform 30 build --release -p keel
+cargo build --release -p keel-pack
 ```
 
 The second system's first program runs before any library is there to load, so it
 is built as a static program:
 
 ```sh
-RUSTFLAGS="-C target-feature=+crt-static" cargo ndk -t arm64-v8a --platform 30 build --release -p skyward-system-init --target-dir target/system-init
+RUSTFLAGS="-C target-feature=+crt-static" cargo ndk -t arm64-v8a --platform 30 build --release -p keel-system-init --target-dir target/system-init
 ```
 
 The packer takes the stock recovery partition out of the build's full update
@@ -221,15 +221,15 @@ package on Xiaomi's server, reading only the part of the package the partition i
 in, and checks its SHA-256 against the device file:
 
 ```sh
-target/release/skyward-pack stock --config devices/bixi.toml --out target/stock/bixi/recovery.img
+target/release/keel-pack stock --config devices/bixi.toml --out target/stock/bixi/recovery.img
 ```
 
 Then it builds the image on top of it:
 
 ```sh
-target/release/skyward-pack recovery \
+target/release/keel-pack recovery \
   --stock target/stock/bixi/recovery.img \
-  --binary target/aarch64-linux-android/release/skyward \
+  --binary target/aarch64-linux-android/release/keel \
   --system-init target/system-init/aarch64-linux-android/release/system-init \
   --config devices/bixi.toml \
   --font resources/fonts/MiSansVF.ttf \
@@ -266,16 +266,16 @@ Tests and lints run on the computer; what runs only on the phone is linted for i
 ```sh
 cargo test --workspace
 cargo clippy --workspace --all-targets -- -D warnings
-cargo ndk -t arm64-v8a --platform 30 clippy -p skyward -p skyward-install -p skyward-systems -p skyward-system-init -- -D warnings
+cargo ndk -t arm64-v8a --platform 30 clippy -p keel -p keel-install -p keel-systems -p keel-system-init -- -D warnings
 ```
 
-`skyward-preview` draws the pages on the computer, as PNG files, without a phone:
+`keel-preview` draws the pages on the computer, as PNG files, without a phone:
 each page whole, as a long screenshot shows it, in the states it can be in, and the
 screen at moments of touches and motion. `--lang` picks the language by a locale
 such as `en` or `zh-TW`:
 
 ```sh
-cargo run --release -p skyward-preview -- target/preview --lang en
+cargo run --release -p keel-preview -- target/preview --lang en
 ```
 
 ## License

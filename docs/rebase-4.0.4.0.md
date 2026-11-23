@@ -150,7 +150,7 @@ weaver 785，`secure_element-service.qti` 616。`se_omapi` 的来源读法见 §
 
 但**我们跑的那个 se_omapi 不是手机 system 分区里的文件**：它是
 `bixi_extra/system/bin/se_omapi`，出自 `[stock]` 指的 OS4.0.0.11 包
-（`bixi_extra/SOURCES.md` 第 14 行），由 `skyward-pack --extra bixi_extra` 打进
+（`bixi_extra/SOURCES.md` 第 14 行），由 `keel-pack --extra bixi_extra` 打进
 recovery 自己的 `/system`。v1.0.13 的资产报告里就能看到它：
 
 - `v1013_verify.txt:24` —— `ok extra file: system/bin/se_omapi, 139136 bytes`
@@ -212,7 +212,7 @@ recovery 里 `teepriv0` 是 root 独占的 0600，**root 靠 owner 身份直接�
 上机结果（2026-11-23）：**共 458 个模块载入**；七个 `.ko` 全部到齐，`goodix_core.ko` 未载 ——
 它按设计合盖才 insmod（`ui.rs` 的 `load_cover_touch`），当前没加载是正常。所以这一条
 **没有变化，不用改配置**。对应 `devices/bixi.toml:24-42`（`sources` 与 `load`）、
-`crates/skyward-modules/src/lib.rs:12-19`。
+`crates/keel-modules/src/lib.rs:12-19`。
 
 ### 3.4 触摸与显示参数 —— 4.0.4.0 实测（2026-11-23）
 
@@ -265,7 +265,7 @@ recovery 里 `teepriv0` 是 root 独占的 0600，**root 靠 owner 身份直接�
   这是 AOSP 的约定，不是小米的自定义，4.0.4.0 不会改这四个分区的作用。
 - **`[backup] efs` 名单**（`modemst1/2`、`fsg`、`fsc`、`persist`）：分区名由 GPT 定，跨小版本不动。
 - **`[update] server`**：仍是小米更新接口。
-- **双系统 guard**（`skyward-systems/src/guard.rs`）：比的是安装时存下的 SHA-256，不认版本号；
+- **双系统 guard**（`keel-systems/src/guard.rs`）：比的是安装时存下的 SHA-256，不认版本号；
   只要没装第二系统（`state.system` 为空），这条根本不参与。
 - **`[stock].recovery` 的 4.0.0.11 值**：只要不换底座，它仍然是对的（旧包还在）。
 
@@ -332,7 +332,7 @@ dmesg | grep -E 'partitions not mounted|devices not brought up|mounted'
 ### 打包侧
 
 包地址、字节数、sha256 都已到手（§2.1），不用再给。剩下的是从包里拆出 `recovery`
-那一段并算它的 sha256（`skyward-pack stock --out` 只按 range 取这一段，不必下 9 GB），
+那一段并算它的 sha256（`keel-pack stock --out` 只按 range 取这一段，不必下 9 GB），
 填回 `[stock].recovery`；`[stock].package` 直接填 §2.1 那条镜像地址。
 
 ## 6. 判据（什么情况才需要改代码）
@@ -343,7 +343,7 @@ dmesg | grep -E 'partitions not mounted|devices not brought up|mounted'
 | --- | --- |
 | **七个 `.ko` 都在、`flatten` 还在、HAL 八条路径都在、weaver 能解** ✅ 本次 | **零代码改动**，本轮只补文档与基线（基线可延后） |
 | 某个 `.ko` 换了目录/名字，但仍在四个来源内 | 改 `devices/bixi.toml` 的 `load` / `sources`，重出、重验 |
-| `system_dlkm` 不再有 `flatten` | 改 `skyward-modules/src/lib.rs` 的路径表（**这是代码**），配一条单测 |
+| `system_dlkm` 不再有 `flatten` | 改 `keel-modules/src/lib.rs` 的路径表（**这是代码**），配一条单测 |
 | HAL 二进制换目录（如 `qwesd` 搬进 `/vendor/bin/hw/`） | 改 `[[service]].path` 与其 `libraries` 顺序 |
 | weaver 读不到槽位 / protector 布局变了 | 停，先备份 `/data`，再单独啃 `credential.rs` |
 
@@ -375,7 +375,7 @@ dmesg | grep -E 'partitions not mounted|devices not brought up|mounted'
 2. **payload 起点是对的**。我们从 zip 的 local header 算得 `4,942`，包内 `metadata` 的
    `ota-property-files` 也写 `4,942`；zip64 的 26 字节 extra 已算进偏移。
 3. **全链路 u64**：`Offer`、`--offset`、`--headers` 的 `FILE_SIZE=9432891836`，没有 4 GiB/2 GiB 截断点。
-4. **不解包到磁盘**：`/sideload/package.zip` 是 FUSE 现取（`skyward-install/src/fuse.rs`），
+4. **不解包到磁盘**：`/sideload/package.zip` 是 FUSE 现取（`keel-install/src/fuse.rs`），
    不存在「临时空间不够」这一类坑。
 
 安装既然走完，这四条就只是「这个包在我们这儿不会撞上限」的记录，与本次失败无关。
@@ -413,7 +413,7 @@ dmesg | grep -E 'partitions not mounted|devices not brought up|mounted'
 - **`reflash()` 不碰 `boot`/`vbmeta`**：`keep.rs:15` `const PARTITION = "recovery"`，`keep.rs:66-67`
   只把 `image::device(dir, PARTITION, slot)` 交给 `image::flash` —— 两槽 recovery，别的分区没有。
 - **`installed_boot_set()` 在这台机上是 no-op**：调用点 `run.rs:608`（apply 之前），实现在
-  `run.rs:554` → `ensure_installed()`（`skyward-systems/src/install.rs:378`），只有 `state.occupied`
+  `run.rs:554` → `ensure_installed()`（`keel-systems/src/install.rs:378`），只有 `state.occupied`
   有值才动作；这台机没装过第二系统，所以每次都是空转。
 - **merge 执行者没问题**：首启的 `init` + `snapuserd`；系统 OTA 已经用它把 `Snapshotted` 合到
   `None`，而 recovery 内装完根本不跑 merge。

@@ -39,7 +39,7 @@ MIRRORS = [
 
 def ask(url, ranged):
     """Return (http status, body bytes, seconds) for one request."""
-    headers = {"User-Agent": "skyward-mirror-watch", "Accept": "application/vnd.github+json"}
+    headers = {"User-Agent": "keel-mirror-watch", "Accept": "application/vnd.github+json"}
     if ranged:
         headers["Range"] = f"bytes=0-{PROBE_BYTES - 1}"
     request = urllib.request.Request(url, headers=headers)
@@ -75,7 +75,7 @@ def gh(path, method="GET", payload=None):
     request = urllib.request.Request(
         "https://api.github.com" + path, data=body, method=method,
         headers={"Authorization": "Bearer " + token, "Accept": "application/vnd.github+json",
-                 "Content-Type": "application/json", "User-Agent": "skyward-mirror-watch"})
+                 "Content-Type": "application/json", "User-Agent": "keel-mirror-watch"})
     with urllib.request.urlopen(request, timeout=TIMEOUT) as answer:
         text = answer.read().decode()
     return json.loads(text) if text else None

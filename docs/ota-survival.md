@@ -1,6 +1,6 @@
 # 系统更新覆盖 recovery 之后，XM KEEL 还在不在（issue #4 的验证步骤）
 
-> 这一段机制在 `crates/skyward-install/src/keep.rs`：装包之前先把**当前槽的 `recovery` 整块读进内存**、
+> 这一段机制在 `crates/keel-install/src/keep.rs`：装包之前先把**当前槽的 `recovery` 整块读进内存**、
 > 记下两槽当时各是什么（sha256 + 是不是 XM KEEL），装完之后按「装完的现状」算出该写回哪些槽，
 > 写回并逐块读回校验；第一次写入被 `EPERM` 拒掉时等 800 ms 再整块重写一次。
 > 下面是把这件事在 bixi 上跑一遍的步骤。

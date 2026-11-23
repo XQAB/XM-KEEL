@@ -1,0 +1,23 @@
+[package]
+name = "keel-systems"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+anyhow = { workspace = true }
+libc = { workspace = true }
+serde = { workspace = true }
+sha2 = "0.10.9"
+keel-binder = { path = "../keel-binder" }
+keel-block = { path = "../keel-block" }
+keel-bootimg = { path = "../keel-bootimg" }
+keel-config = { path = "../keel-config" }
+keel-sys = { path = "../keel-sys" }
+keel-vab = { path = "../keel-vab" }
+toml = { workspace = true }
+zip = { version = "8.6.0", default-features = false, features = ["deflate-flate2-zlib-rs"] }
+
+[dev-dependencies]
+abootimg-oxide = "0.5.2"
+tempfile = "3.27.0"

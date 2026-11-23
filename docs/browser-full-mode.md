@@ -35,7 +35,7 @@ GitHub 这类页面上会读出一片空。
 
 代码分三处：
 
-- `crates/skyward/src/full.rs`：`plugin()` 找目录，`ready()` 把插件自己的
+- `crates/keel/src/full.rs`：`plugin()` 找目录，`ready()` 把插件自己的
   `tmp/`、`tmp/given/`、`tmp/xdg/` 建好、把宿主机的 `/dev`、`/proc`、`/sys`
   用 `libc::mount` 绑进插件（不用外部 `mount` 命令，recovery 里没有），并把
   宿主机的 `/etc/resolv.conf` 抄给插件；`dom()` 用 `Command::pre_exec`
@@ -48,10 +48,10 @@ GitHub 这类页面上会读出一片空。
   之后那个目录根本不存在，Chromium 建不了 profile。它的 stderr 也不吞：
   落到 `<插件目录>/tmp/plugin.err`（在 chroot 前用 `File::create` 打开，
   描述符跟着 `pre_exec` 过去），起不来时最后三行会被带进报错里。
-- `crates/skyward-net/src/web.rs`：`pub fn rendered(agent, url, html)` 把
+- `crates/keel-net/src/web.rs`：`pub fn rendered(agent, url, html)` 把
   拿回来的 DOM 交给 `parse`，再 `fetch_images`，得到和普通读取完全一样的
   `Page`。UI 侧不知道也不关心这一页是怎么来的。
-- `crates/skyward/src/updates.rs` 的 `Task::Browse`：有插件就先 `full::dom`，
+- `crates/keel/src/updates.rs` 的 `Task::Browse`：有插件就先 `full::dom`，
   成功走 `web::rendered`；插件不在、或者插件起不来（`kmsg` 记一条），退回
   `web::open`。**所以插件是可选的加速项，不是硬依赖**：没装插件的机器，
   浏览器还是原来的纯文本，只是读不动脚本页。

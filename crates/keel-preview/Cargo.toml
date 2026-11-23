@@ -1,0 +1,23 @@
+[package]
+name = "keel-preview"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[[bin]]
+name = "keel-preview"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = { workspace = true }
+png = "0.17.16"
+serde = { workspace = true }
+toml = { workspace = true }
+keel-config = { path = "../keel-config" }
+keel-info = { path = "../keel-info" }
+keel-install = { path = "../keel-install" }
+keel-net = { path = "../keel-net" }
+keel-systems = { path = "../keel-systems" }
+keel-ui = { path = "../keel-ui" }
+keel-vab = { path = "../keel-vab" }

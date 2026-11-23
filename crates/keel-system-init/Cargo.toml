@@ -1,0 +1,21 @@
+[package]
+name = "keel-system-init"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+# Built for the phone and linked statically: it runs before any system's
+# libraries are there to load.
+[[bin]]
+name = "system-init"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = { workspace = true }
+libc = { workspace = true }
+keel-block = { path = "../keel-block" }
+keel-bootimg = { path = "../keel-bootimg" }
+keel-modules = { path = "../keel-modules" }
+keel-sys = { path = "../keel-sys" }
+keel-systems = { path = "../keel-systems" }

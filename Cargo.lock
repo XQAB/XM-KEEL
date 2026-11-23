@@ -2243,7 +2243,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "33f4fe9184a62d842c9ef383018f3306d8ba224fd9d836f56d7288308847c256"
 
 [[package]]
-name = "skyward"
+name = "keel"
 version = "1.0.13"
 dependencies = [
  "anyhow",
@@ -2251,22 +2251,22 @@ dependencies = [
  "evdev",
  "libc",
  "procfs",
- "skyward-backup",
- "skyward-binder",
- "skyward-block",
- "skyward-config",
- "skyward-crypto",
- "skyward-files",
- "skyward-info",
- "skyward-install",
- "skyward-lp",
- "skyward-modules",
- "skyward-mtp",
- "skyward-net",
- "skyward-sys",
- "skyward-systems",
- "skyward-ui",
- "skyward-vab",
+ "keel-backup",
+ "keel-binder",
+ "keel-block",
+ "keel-config",
+ "keel-crypto",
+ "keel-files",
+ "keel-info",
+ "keel-install",
+ "keel-lp",
+ "keel-modules",
+ "keel-mtp",
+ "keel-net",
+ "keel-sys",
+ "keel-systems",
+ "keel-ui",
+ "keel-vab",
  "tempfile",
  "ureq",
  "zip 8.6.0",
@@ -2274,7 +2274,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "skyward-backup"
+name = "keel-backup"
 version = "1.0.13"
 dependencies = [
  "anyhow",
@@ -2282,23 +2282,23 @@ dependencies = [
  "lz4_flex",
  "serde",
  "sha2 0.10.9",
- "skyward-block",
- "skyward-files",
+ "keel-block",
+ "keel-files",
  "tar",
  "toml",
 ]
 
 [[package]]
-name = "skyward-binder"
+name = "keel-binder"
 version = "1.0.13"
 dependencies = [
  "anyhow",
  "libc",
- "skyward-sys",
+ "keel-sys",
 ]
 
 [[package]]
-name = "skyward-block"
+name = "keel-block"
 version = "1.0.13"
 dependencies = [
  "anyhow",
@@ -2309,7 +2309,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "skyward-bootimg"
+name = "keel-bootimg"
 version = "1.0.13"
 dependencies = [
  "abootimg-oxide",
@@ -2321,7 +2321,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "skyward-config"
+name = "keel-config"
 version = "1.0.13"
 dependencies = [
  "anyhow",
@@ -2330,7 +2330,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "skyward-crypto"
+name = "keel-crypto"
 version = "1.0.13"
 dependencies = [
  "aes-gcm",
@@ -2340,12 +2340,12 @@ dependencies = [
  "rusqlite",
  "scrypt",
  "sha2 0.10.9",
- "skyward-binder",
- "skyward-block",
+ "keel-binder",
+ "keel-block",
 ]
 
 [[package]]
-name = "skyward-files"
+name = "keel-files"
 version = "1.0.13"
 dependencies = [
  "anyhow",
@@ -2353,21 +2353,21 @@ dependencies = [
 ]
 
 [[package]]
-name = "skyward-info"
+name = "keel-info"
 version = "1.0.13"
 dependencies = [
  "anyhow",
  "libc",
  "rsproperties",
- "skyward-block",
- "skyward-config",
- "skyward-sys",
- "skyward-vab",
+ "keel-block",
+ "keel-config",
+ "keel-sys",
+ "keel-vab",
  "tempfile",
 ]
 
 [[package]]
-name = "skyward-install"
+name = "keel-install"
 version = "1.0.13"
 dependencies = [
  "abootimg-oxide",
@@ -2382,13 +2382,13 @@ dependencies = [
  "rsa",
  "sha1 0.10.7",
  "sha2 0.10.9",
- "skyward-block",
- "skyward-bootimg",
- "skyward-config",
- "skyward-info",
- "skyward-sys",
- "skyward-systems",
- "skyward-vab",
+ "keel-block",
+ "keel-bootimg",
+ "keel-config",
+ "keel-info",
+ "keel-sys",
+ "keel-systems",
+ "keel-vab",
  "tempfile",
  "x509-cert",
  "zerocopy",
@@ -2397,7 +2397,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "skyward-lp"
+name = "keel-lp"
 version = "1.0.13"
 dependencies = [
  "anyhow",
@@ -2406,7 +2406,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "skyward-modules"
+name = "keel-modules"
 version = "1.0.13"
 dependencies = [
  "anyhow",
@@ -2415,19 +2415,19 @@ dependencies = [
 ]
 
 [[package]]
-name = "skyward-mtp"
+name = "keel-mtp"
 version = "1.0.13"
 dependencies = [
  "anyhow",
  "jiff",
  "libc",
- "skyward-files",
- "skyward-sys",
+ "keel-files",
+ "keel-sys",
  "zerocopy",
 ]
 
 [[package]]
-name = "skyward-net"
+name = "keel-net"
 version = "1.0.13"
 dependencies = [
  "aes",
@@ -2447,60 +2447,60 @@ dependencies = [
 ]
 
 [[package]]
-name = "skyward-pack"
+name = "keel-pack"
 version = "1.0.13"
 dependencies = [
  "anyhow",
  "clap",
  "serde_json",
  "sha2 0.10.9",
- "skyward-bootimg",
- "skyward-config",
+ "keel-bootimg",
+ "keel-config",
  "tempfile",
  "unpayload",
 ]
 
 [[package]]
-name = "skyward-preview"
+name = "keel-preview"
 version = "1.0.13"
 dependencies = [
  "anyhow",
  "png",
  "serde",
- "skyward-config",
- "skyward-info",
- "skyward-install",
- "skyward-net",
- "skyward-systems",
- "skyward-ui",
- "skyward-vab",
+ "keel-config",
+ "keel-info",
+ "keel-install",
+ "keel-net",
+ "keel-systems",
+ "keel-ui",
+ "keel-vab",
  "toml",
 ]
 
 [[package]]
-name = "skyward-sys"
+name = "keel-sys"
 version = "1.0.13"
 dependencies = [
  "anyhow",
  "libc",
- "skyward-block",
+ "keel-block",
 ]
 
 [[package]]
-name = "skyward-system-init"
+name = "keel-system-init"
 version = "1.0.13"
 dependencies = [
  "anyhow",
  "libc",
- "skyward-block",
- "skyward-bootimg",
- "skyward-modules",
- "skyward-sys",
- "skyward-systems",
+ "keel-block",
+ "keel-bootimg",
+ "keel-modules",
+ "keel-sys",
+ "keel-systems",
 ]
 
 [[package]]
-name = "skyward-systems"
+name = "keel-systems"
 version = "1.0.13"
 dependencies = [
  "abootimg-oxide",
@@ -2508,19 +2508,19 @@ dependencies = [
  "libc",
  "serde",
  "sha2 0.10.9",
- "skyward-binder",
- "skyward-block",
- "skyward-bootimg",
- "skyward-config",
- "skyward-sys",
- "skyward-vab",
+ "keel-binder",
+ "keel-block",
+ "keel-bootimg",
+ "keel-config",
+ "keel-sys",
+ "keel-vab",
  "tempfile",
  "toml",
  "zip 8.6.0",
 ]
 
 [[package]]
-name = "skyward-ui"
+name = "keel-ui"
 version = "1.0.13"
 dependencies = [
  "ab_glyph",
@@ -2536,11 +2536,11 @@ dependencies = [
  "proc-macro2",
  "serde",
  "serde_json",
- "skyward-info",
- "skyward-install",
- "skyward-net",
- "skyward-systems",
- "skyward-vab",
+ "keel-info",
+ "keel-install",
+ "keel-net",
+ "keel-systems",
+ "keel-vab",
  "svgtypes",
  "syn 2.0.119",
  "tiny-skia",
@@ -2550,15 +2550,15 @@ dependencies = [
 ]
 
 [[package]]
-name = "skyward-vab"
+name = "keel-vab"
 version = "1.0.13"
 dependencies = [
  "anyhow",
  "libc",
  "prost",
- "skyward-binder",
- "skyward-block",
- "skyward-lp",
+ "keel-binder",
+ "keel-block",
+ "keel-lp",
 ]
 
 [[package]]

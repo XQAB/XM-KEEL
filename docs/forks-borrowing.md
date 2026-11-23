@@ -28,10 +28,10 @@
 
 ## 一、值得搬
 
-### 1. 网页读取层 `skyward-net::web`（已搬）
+### 1. 网页读取层 `keel-net::web`（已搬）
 
 来源 `Jamvii/skyward-for-aurora` @ `browser-v034`（头 `ce33a6bc`），文件
-`crates/skyward-net/src/web.rs`（65 548 B，1 791 行）。它在那边是浏览器唯一一处
+`crates/keel-net/src/web.rs`（65 548 B，1 791 行）。它在那边是浏览器唯一一处
 网络侧代码，演进链是 `224ac090`（加浏览器/文件搜索/模块）→ `56dc94aa`（持久
 CDP 全页）→ `af99acbd`（原生滚动/视口帧）→ `d5604e72`（菜单/历史/书签）→
 `3f1e8c8f`（表单内联 + JS 页回退）→ `45784226`（下 chromium 插件）→
@@ -46,8 +46,8 @@ CDP 全页）→ `af99acbd`（原生滚动/视口帧）→ `d5604e72`（菜单/�
 
 ### 2. 浏览器页面（UI）：搬行为，不搬结构
 
-来源同仓 `crates/skyward-ui/src/browser.rs`（67 863 B）与
-`crates/skyward-ui/src/app/browser.rs`（26 934 B）。它那边的页面状态机在上游
+来源同仓 `crates/keel-ui/src/browser.rs`（67 863 B）与
+`crates/keel-ui/src/app/browser.rs`（26 934 B）。它那边的页面状态机在上游
 0.3.1 之后已经拆成 `app/` 下的 27 个模块，我们是单体 `app.rs`（597 KB）+
 `pages.rs`（292 KB），结构照搬不了。取的是它做出来的行为：地址栏（打字/粘贴/
 清空）、文字页逐块排版、链接可点、前进后退、书签、菜单（历史/书签/下载）、
@@ -111,7 +111,7 @@ stock 比对的，再往下才是逐项检查。
 来源 `ChuiShui233/realme-pineapple-skyward` `a15e7b29`（`docs(roadmap)`：记录
 首张镜像、阻塞项解除与可复现的打包命令）。我们此前只有 CI 里的 yml，没有一
 页写「在别的机器上怎么原样打出来」。已经补进 `docs/roadmap.md`：从 stock 包
-抽 recovery、编译三个产物、`skyward-pack recovery` 的完整命令行、校验、打包
+抽 recovery、编译三个产物、`keel-pack recovery` 的完整命令行、校验、打包
 与 sha256，以及 Windows 上要靠 WSL 的那几句。
 
 
@@ -139,7 +139,7 @@ blob**。
 ### 13. 内核模块跨请求共用一个「已加载」集合
 
 来源同上。它的坑是共享依赖的内核模块被 `insmod` 两次。我们双系统要加载另一套
-模块时，第二次 `insmod` 会踩同一个问题：`skyward-modules` 该跨请求记住已经加载
+模块时，第二次 `insmod` 会踩同一个问题：`keel-modules` 该跨请求记住已经加载
 过的名字，而不是每次从头装。
 
 ### 14. WLAN 起不来的重试与「记住密码」
@@ -232,7 +232,7 @@ bixi 也没有外接显示器的场景，先记着不搬。
 
 | 提交 | 做了什么 | 动到哪 |
 | --- | --- | --- |
-| `d1ed6a56` | 触摸决定显示 | `skyward-config` 加 `TouchPanel { device, display_index, width, height }`、`Touch.panels`；新增 `skyward-ui/src/touch.rs` 的 `map_touch_point(raw, ranges, pixels, rotation)`（`rotation==180` 时先对调 ranges 两端）；`surface.rs` +253/−5；`input.rs` +69/−30；`ui.rs` +154/−47 |
+| `d1ed6a56` | 触摸决定显示 | `keel-config` 加 `TouchPanel { device, display_index, width, height }`、`Touch.panels`；新增 `keel-ui/src/touch.rs` 的 `map_touch_point(raw, ranges, pixels, rotation)`（`rotation==180` 时先对调 ranges 两端）；`surface.rs` +253/−5；`input.rs` +69/−30；`ui.rs` +154/−47 |
 | `2271098c` | 让两块面板都留在 active | `surface.rs` **+764/−117**；`touch.rs` +40/−5；`ruyi.toml` 加 `display_rotation=180`、`touch_rotation=180` |
 | `033c0715` | 「独立双显示」 | `surface.rs` +175/−9、`config` +213/−3、`app.rs` +252/−1、`pages.rs` +44/−3、`settings.rs` +28，共 11 个文件 |
 | `0c3a3781` | 初始化两块面板的 scanout | `open_heads_with_primary_fallback` → `open_all_heads`（一块开不了直接 anyhow 报错，**不降级**）；`display_mode_selection_available(configured, opened)`；`crtcs_to_disable_with_panel_orphans(...)` 处理「面板没了但 CRTC 还占着」；`surface.rs` +145/−33 |
@@ -249,16 +249,16 @@ bixi 也没有外接显示器的场景，先记着不搬。
 重启进程，状态在 `State` 里不丢。
 
 **哪天真要做，动这几处**（照它的次序，不照它的结构）：
-1. `crates/skyward-ui/src/surface.rs`：把现在的「开一个 head」拆成 `open_all_heads`
+1. `crates/keel-ui/src/surface.rs`：把现在的「开一个 head」拆成 `open_all_heads`
    + 一个 `crtcs_to_disable_with_panel_orphans` 式的清理（面板不在了 CRTC 要收回，
    否则下一次 modeset 会带着孤儿 CRTC）；
 2. `devices/bixi.toml` 的 `[display]`：从单组 `width/height/rotation` 扩成面板数组，
    每个面板带 `display_index` / `rotation` / `touch_rotation`（外屏像素转 180、
    触摸不转，`0b667b88` 那条结论直接可用）；
-3. `crates/skyward/src/input.rs`：从「一个触摸设备」变成 `panels: Vec<TouchPanel>`，
+3. `crates/keel/src/input.rs`：从「一个触摸设备」变成 `panels: Vec<TouchPanel>`，
    读到事件后按 `display_index` 决定主头（它 `d1ed6a56` 的 `map_touch_point` 里
    那段 ranges 对调可以整段照抄，与我们无关机型差异）；
-4. `crates/skyward/src/ui.rs`：换屏不再重建 surface，只切主头 + 重绘；
+4. `crates/keel/src/ui.rs`：换屏不再重建 surface，只切主头 + 重绘；
 5. **一条它自己写在注释里的红线**：`wake-on-touch from suspend` 没在真机验过之前，
    不要在多面板要可触摸时挂起。翻盖机的日常就是「合盖息屏、开盖点亮」，
    这句话正好指着我们最常用的那条路径，所以真要做也得先把挂起/唤醒验了。
@@ -274,7 +274,7 @@ bixi 也没有外接显示器的场景，先记着不搬。
 `while !stop { make_dm_nodes(); sleep(1ms) }`。
 **对我们的适用性**：我们这侧没有 `by-uuid` 那套链接的代码（全仓 grep 不到），
 能装上说明 bixi 的 ueventd/内核会补；我们等节点的地方是
-`skyward-block/src/dm.rs` 的 `NODE_TIMEOUT`——等不到会**报错**而不是挂死，
+`keel-block/src/dm.rs` 的 `NODE_TIMEOUT`——等不到会**报错**而不是挂死，
 比它温和。但教训记下：`update_engine` 那一侧没有任何超时，凡是给它准备节点的
 地方都要能自愈。
 
@@ -296,7 +296,7 @@ update 会在**同一个 minor** 上连续造 dm 设备，ueventd 听到「上�
 **对我们的适用性：风险面真实存在。** 我们的 `skyward-vab/src/partitions.rs`
 里 `map_writable` 遇到已存在的只读映射会**就地 reload 复用**，`mount_one` 也用
 裸名（`system_b` 这种）；而我们的 sideload 跑的正是
-`/system/bin/update_engine_sideload`（`skyward-install/src/ota.rs` 的 `PROGRAM`）。
+`/system/bin/update_engine_sideload`（`keel-install/src/ota.rs` 的 `PROGRAM`）。
 **这次没有改**：命名一改会牵到挂载点、unmount、snapshot 的 `snapshot-<name>`、
 以及安装脚本按 `/dev/block/mapper/<name>` 找设备的那条约定，必须有一次真机
 「装整包 + wipe」走通才敢合。改动清单已经定：`skyward-vab/src/partitions.rs`
@@ -306,7 +306,7 @@ update 会在**同一个 minor** 上连续造 dm 设备，ueventd 听到「上�
 **(d) `df33fcae`：内存储关闭时也要清 snapshot state。** 一次停掉的 update 会留下
 `/metadata/ota/state` 与快照文件，XM KEEL 之后每次都拒装；原来只有 data 开着才清，
 而恰恰是「update 把 data 卸了」这条路径留下了它。
-**对我们的适用性**：值得照抄。我们的清理入口在 `skyward-block/src/cache.rs`，
+**对我们的适用性**：值得照抄。我们的清理入口在 `keel-block/src/cache.rs`，
 要核一遍「data 没开时这条还跑不跑」。**列进下一批。**
 
 **(e) `c7ea7554`：没设锁屏的用户也要能开。** 手机的 synthetic-password blob

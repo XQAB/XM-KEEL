@@ -1,13 +1,13 @@
 # 双系统在 bixi 上的方案（issue #3，待真机验证）
 
-> 结论：机制在树上（`crates/skyward-systems`）、桌面测试有，但 **bixi 一次真机都没跑过**。
+> 结论：机制在树上（`crates/keel-systems`）、桌面测试有，但 **bixi 一次真机都没跑过**。
 > 本文只写「它是怎么工作的、会占用什么、bixi 上有哪些必须先确认的点、验收怎么做」，**不刷机**。
 
 ## 1. 它是怎么工作的（照着代码说话）
 
 | 环节 | 事实 | 位置 |
 | --- | --- | --- |
-| 第二系统的根 | data 分区里的一块 area，按分区直读直写，不挂文件系统 | `install.rs::FOLDER = /data/skyward/systems`、`skyward-block::area` |
+| 第二系统的根 | data 分区里的一块 area，按分区直读直写，不挂文件系统 | `install.rs::FOLDER = /data/skyward/systems`、`keel-block::area` |
 | 启动镜像集 | `boot` + `init_boot` 整套存在**另一块** area（store，3 个 entry 滚动保存） | `store.rs::ENTRIES = 3`、`OTHER = 2` |
 | 切换改哪两个分区 | 只改「下次启动槽位」的 `boot` 与 `init_boot`，别的一个都不碰 | `switch.rs::restore` |
 | 第二系统怎么起 | 用**主系统的 `vendor_boot` 和 `dtbo`**；它自己的 `init_boot` 里被塞进 XM KEEL 的程序，first stage 由 XM KEEL 接 | `store::restore(..., init_boot)`、`boot::with_program` |
@@ -47,7 +47,7 @@ init_boot.img   可选：系统自带 first-stage ramdisk 时才有
 
 ### 4.1 切换**不**靠 boot control：它自己写分区
 
-`crates/skyward-systems/src/switch.rs` 里没有 `bootctl`、没有
+`crates/keel-systems/src/switch.rs` 里没有 `bootctl`、没有
 `bootloader_control`、没有 `set_active`、也没有 `misc`。切换的做法是：把目标
 系统的启动集**直接写进那个槽的 `boot` / `init_boot` 分区**（`store::restore` 按
 `places.by_name` 里的链接写），进度写在 `/metadata/skyward/systems.toml`，断电
@@ -70,7 +70,7 @@ user = "root"
 bootloader 换槽」，缺了这个服务就切不动；我们是**只读不写**——它没起来时，
 「下次启动是哪个槽」读不到，界面会直接报
 「…is not running; the phone's boot control has to be started first」
-（`crates/skyward-preview/src/main.rs:899` 就是这条文案），而不去猜一个槽写。
+（`crates/keel-preview/src/main.rs:899` 就是这条文案），而不去猜一个槽写。
 所以 `bixi_extra` 里只有 `weaver-nxp.xml` 与 `android.se.omapi-service.xml`
 两个 manifest 是对的，不需要再加一个。
 

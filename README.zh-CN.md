@@ -134,28 +134,28 @@ XM KEEL 可以在手机自身分区中的系统旁边安装第二系统，主系
 XM KEEL 使用 `rust-toolchain.toml` 指定的稳定版 Rust 和它的 `aarch64-linux-android` 目标、Android NDK r29 和 [cargo-ndk](https://github.com/bbqsrc/cargo-ndk) 构建。recovery 服务针对手机构建，打包工具针对电脑构建：
 
 ```sh
-cargo ndk -t arm64-v8a --platform 30 build --release -p skyward
-cargo build --release -p skyward-pack
+cargo ndk -t arm64-v8a --platform 30 build --release -p keel
+cargo build --release -p keel-pack
 ```
 
 第二系统启动时运行的第一个程序在任何动态库可用之前运行，因此构建为静态程序：
 
 ```sh
-RUSTFLAGS="-C target-feature=+crt-static" cargo ndk -t arm64-v8a --platform 30 build --release -p skyward-system-init --target-dir target/system-init
+RUSTFLAGS="-C target-feature=+crt-static" cargo ndk -t arm64-v8a --platform 30 build --release -p keel-system-init --target-dir target/system-init
 ```
 
 打包工具从小米服务器上这个版本的完整更新包中取出原厂 recovery 分区，只读取这个分区所在的部分，并且按照设备配置文件核对 SHA-256：
 
 ```sh
-target/release/skyward-pack stock --config devices/bixi.toml --out target/stock/bixi/recovery.img
+target/release/keel-pack stock --config devices/bixi.toml --out target/stock/bixi/recovery.img
 ```
 
 然后在它的基础上构建镜像：
 
 ```sh
-target/release/skyward-pack recovery \
+target/release/keel-pack recovery \
   --stock target/stock/bixi/recovery.img \
-  --binary target/aarch64-linux-android/release/skyward \
+  --binary target/aarch64-linux-android/release/keel \
   --system-init target/system-init/aarch64-linux-android/release/system-init \
   --config devices/bixi.toml \
   --font resources/fonts/MiSansVF.ttf \
@@ -174,13 +174,13 @@ target/release/skyward-pack recovery \
 ```sh
 cargo test --workspace
 cargo clippy --workspace --all-targets -- -D warnings
-cargo ndk -t arm64-v8a --platform 30 clippy -p skyward -p skyward-install -p skyward-systems -p skyward-system-init -- -D warnings
+cargo ndk -t arm64-v8a --platform 30 clippy -p keel -p keel-install -p keel-systems -p keel-system-init -- -D warnings
 ```
 
-`skyward-preview` 无需手机，在电脑上把页面绘制成 PNG 文件：每个页面完整绘制成长截图的样子，覆盖它可能处于的各种状态，另外还有触摸和动画过程中某些时刻的屏幕。`--lang` 按照地区代码选择语言，例如 `en` 或者 `zh-TW`：
+`keel-preview` 无需手机，在电脑上把页面绘制成 PNG 文件：每个页面完整绘制成长截图的样子，覆盖它可能处于的各种状态，另外还有触摸和动画过程中某些时刻的屏幕。`--lang` 按照地区代码选择语言，例如 `en` 或者 `zh-TW`：
 
 ```sh
-cargo run --release -p skyward-preview -- target/preview --lang en
+cargo run --release -p keel-preview -- target/preview --lang en
 ```
 
 ## 许可证

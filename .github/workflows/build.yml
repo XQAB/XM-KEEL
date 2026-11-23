@@ -54,7 +54,7 @@ jobs:
       - name: Test
         run: cargo test --locked --workspace
       - name: Lint what runs on the phone
-        run: cargo ndk -t arm64-v8a --platform 30 clippy --locked -p skyward -p skyward-install -p skyward-systems -p skyward-system-init -- -D warnings
+        run: cargo ndk -t arm64-v8a --platform 30 clippy --locked -p keel -p keel-install -p keel-systems -p keel-system-init -- -D warnings
 
   tools:
     name: Build the recovery service and the packer
@@ -70,21 +70,21 @@ jobs:
         if: github.ref_type == 'tag'
         run: sed -i "s/^version = \"[^\"]*\"/version = \"${GITHUB_REF_NAME#v}\"/" Cargo.toml
       - name: Build the recovery service for the phone
-        run: cargo ndk -t arm64-v8a --platform 30 build --release ${{ github.ref_type != 'tag' && '--locked' || '' }} -p skyward
+        run: cargo ndk -t arm64-v8a --platform 30 build --release ${{ github.ref_type != 'tag' && '--locked' || '' }} -p keel
       # It runs as a second system's first program, before any library is
       # there to load.
       - name: Build the second system's first program, static
         env:
           RUSTFLAGS: -C target-feature=+crt-static
-        run: cargo ndk -t arm64-v8a --platform 30 build --release ${{ github.ref_type != 'tag' && '--locked' || '' }} -p skyward-system-init --target-dir target/system-init
+        run: cargo ndk -t arm64-v8a --platform 30 build --release ${{ github.ref_type != 'tag' && '--locked' || '' }} -p keel-system-init --target-dir target/system-init
       - name: Build the packer
-        run: cargo build --release ${{ github.ref_type != 'tag' && '--locked' || '' }} -p skyward-pack
+        run: cargo build --release ${{ github.ref_type != 'tag' && '--locked' || '' }} -p keel-pack
       # The built programs are staged in dist/, apart from the repository's own
       # tools/, which keeps the release checker and is copied out untouched.
       - name: Gather them
         run: |
           mkdir dist
-          cp target/aarch64-linux-android/release/skyward target/release/skyward-pack dist/
+          cp target/aarch64-linux-android/release/keel target/release/keel-pack dist/
           cp target/system-init/aarch64-linux-android/release/system-init dist/
       - uses: actions/upload-artifact@v7
         with:
@@ -130,10 +130,10 @@ jobs:
           name: tools
           path: dist
       - name: Make the tools runnable
-        run: chmod +x dist/skyward dist/skyward-pack
+        run: chmod +x dist/keel dist/keel-pack
       - name: Read the stock build the recovery is made on
         id: stock
-        run: dist/skyward-pack stock --config "devices/${{ matrix.device }}.toml" >> "$GITHUB_OUTPUT"
+        run: dist/keel-pack stock --config "devices/${{ matrix.device }}.toml" >> "$GITHUB_OUTPUT"
       - name: Restore the stock recovery
         id: cache
         uses: actions/cache@v6
@@ -144,7 +144,7 @@ jobs:
       # which is several gigabytes in all.
       - name: Take the recovery partition out of the stock package
         if: steps.cache.outputs.cache-hit != 'true'
-        run: dist/skyward-pack stock --config "devices/${{ matrix.device }}.toml" --out stock/recovery.img
+        run: dist/keel-pack stock --config "devices/${{ matrix.device }}.toml" --out stock/recovery.img
       - name: Check the stock recovery
         env:
           RECOVERY: ${{ steps.stock.outputs.recovery }}
@@ -163,7 +163,7 @@ jobs:
           # recovery's own root; they go into the image along with the binary.
           extra=()
           if [ -d "${DEVICE}_extra" ]; then extra=(--extra "${DEVICE}_extra"); fi
-          dist/skyward-pack recovery --stock stock/recovery.img --binary dist/skyward --system-init dist/system-init \
+          dist/keel-pack recovery --stock stock/recovery.img --binary dist/keel --system-init dist/system-init \
             --config "devices/$DEVICE.toml" --font resources/fonts/MiSansVF.ttf --mono resources/fonts/KirkMono-Regular.ttf \
             --mono-license resources/fonts/KirkMono-OFL.txt "${extra[@]}" --out "out/$name.img"
           echo "name=$name" >> "$GITHUB_OUTPUT"

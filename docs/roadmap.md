@@ -20,23 +20,23 @@ cargo install cargo-ndk --locked
 
 ```sh
 # recovery 本体
-cargo ndk -t arm64-v8a --platform 30 build --release --locked -p skyward
+cargo ndk -t arm64-v8a --platform 30 build --release --locked -p keel
 # 第二系统的第一个程序，静态：它先于任何库起来
 RUSTFLAGS=-C target-feature=+crt-static \
   cargo ndk -t arm64-v8a --platform 30 build --release --locked \
-  -p skyward-system-init --target-dir target/system-init
+  -p keel-system-init --target-dir target/system-init
 # 打包装
-cargo build --release --locked -p skyward-pack
+cargo build --release --locked -p keel-pack
 mkdir -p dist
-cp target/aarch64-linux-android/release/skyward target/release/skyward-pack dist/
+cp target/aarch64-linux-android/release/keel target/release/keel-pack dist/
 cp target/system-init/aarch64-linux-android/release/system-init dist/
 ```
 
 拿 stock 的 recovery 分区（`devices/bixi.toml` 里有它的版本与 sha256）：
 
 ```sh
-dist/skyward-pack stock --config devices/bixi.toml                  # 只说版本与 sha256
-dist/skyward-pack stock --config devices/bixi.toml --out stock/recovery.img
+dist/keel-pack stock --config devices/bixi.toml                  # 只说版本与 sha256
+dist/keel-pack stock --config devices/bixi.toml --out stock/recovery.img
 echo "<上面说的 sha256>  stock/recovery.img" | sha256sum --check     # 对不上就重取
 ```
 
@@ -45,8 +45,8 @@ echo "<上面说的 sha256>  stock/recovery.img" | sha256sum --check     # 对�
 ```sh
 name="skyward-$(git rev-parse --short=7 HEAD)-bixi-<stock 版本>"
 mkdir -p out
-dist/skyward-pack recovery --stock stock/recovery.img \
-  --binary dist/skyward --system-init dist/system-init \
+dist/keel-pack recovery --stock stock/recovery.img \
+  --binary dist/keel --system-init dist/system-init \
   --config devices/bixi.toml \
   --font resources/fonts/MiSansVF.ttf \
   --mono resources/fonts/KirkMono-Regular.ttf \
@@ -64,7 +64,7 @@ python3 tools/verify-release.py "out/$name.img" --config devices/bixi.toml \
 ```
 
 要发 release 时，`--version` 还得给：`python3 tools/verify-release.py ... --version <x.y.z>`，
-打包时也一样（`skyward-pack recovery --version <x.y.z>`）。CI 只有在打 tag 时才
+打包时也一样（`keel-pack recovery --version <x.y.z>`）。CI 只有在打 tag 时才
 补这两个，平时分支上的产物按提交号命名。
 
 **Windows 宿主**：交叉编译那两步必须在 WSL2 里跑（`cargo ndk` 要 Linux 上的
@@ -93,9 +93,9 @@ before the kernel job`）。
 
 ## 三、浏览器
 
-纯文本阅读器已经进 main：`crates/skyward-net/src/web.rs`（网页读取与解析）、
+纯文本阅读器已经进 main：`crates/keel-net/src/web.rs`（网页读取与解析）、
 `Screen::Browser` 的页面与动作（地址、逐块排版、链接、前进后退、书签）、
-书签随设置文件跨重启保留（`crates/skyward-ui/src/settings.rs`）。
+书签随设置文件跨重启保留（`crates/keel-ui/src/settings.rs`）。
 
 主线五条——能打开、能输入地址、能滚、能前进后退、能存书签——都在。没做的：
 表单不显示也不提交、图片只说位置不渲染、完整模式（外置 arm64 Chromium 插件）

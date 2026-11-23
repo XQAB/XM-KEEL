@@ -1,0 +1,669 @@
+use anyhow::{anyhow, bail, Context, Result};
+use keel_config::DeviceConfig;
+use keel_sys::prop;
+use keel_vab::{Slot, SnapshotState};
+use std::collections::HashMap;
+use std::ffi::{CStr, CString};
+use std::fs;
+use std::io::ErrorKind;
+use std::os::unix::fs::MetadataExt;
+use std::path::Path;
+use std::str::FromStr;
+use std::thread;
+use std::time::Duration;
+
+/// Version of this build, shown on the About page.
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+
+const CPU: &str = "/sys/devices/system/cpu";
+const POWER_SUPPLY: &str = "/sys/class/power_supply";
+const SYS_BLOCK: &str = "/sys/class/block";
+/// The property file the packer keeps from the phone maker's recovery, in the
+/// root of the ramdisk, naming the stock build this image was made on.
+const BUILD_PROP: &str = "/prop.default";
+/// The name AOSP gives the same build version, for a phone whose maker's name
+/// is not in its configuration.
+const AOSP_BUILD_VERSION: &str = "ro.build.version.incremental";
+
+/// What the recovery shows about the device. A source that may legitimately
+/// be absent (no battery driver loaded, build properties missing from the
+/// recovery ramdisk) is an `Option`; a source that exists but cannot be read
+/// or parsed is an error.
+#[derive(Debug, Clone, PartialEq)]
+pub struct DeviceInfo {
+    pub model: String,
+    pub codename: String,
+    pub soc: Option<keel_config::Names>,
+    pub cpu: Cpu,
+    /// `MemTotal` in KiB.
+    pub ram_kib: u64,
+    /// Panel resolution as width × height in pixels.
+    pub panel: Option<(u32, u32)>,
+    /// Marketed screen diagonal in inches.
+    pub screen: Option<f32>,
+    pub os_version: Option<String>,
+    /// The stock build the recovery itself was made on, from the property
+    /// file the packer keeps from the phone maker's recovery. The About page
+    /// puts it beside `os_version`, and `tools/verify-release.py` compares it
+    /// with `[stock].version`.
+    pub built_on: Option<String>,
+    pub android: Option<String>,
+    /// The locale the installed system is built to start in, such as
+    /// `zh-CN`.
+    pub locale: Option<String>,
+    pub security_patch: Option<PatchLevel>,
+    pub kernel: String,
+    pub storage: Storage,
+    pub battery: Option<Battery>,
+    pub slot: Option<Slot>,
+    pub snapshot: SnapshotState,
+    pub boot: Boot,
+    /// Build.prop files of the installed system that could not be read, each
+    /// named by its partition and the file, as `system_ext_a etc/build.prop`.
+    /// Empty while Android runs, where there are no such files to read.
+    pub unreadable: Vec<String>,
+}
+
+/// `ro.build.version.security_patch`, a calendar date.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PatchLevel {
+    pub year: u16,
+    pub month: u8,
+    pub day: u8,
+}
+
+impl FromStr for PatchLevel {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self> {
+        let parts: Vec<&str> = s.split('-').collect();
+        let [y, m, d] = parts.as_slice() else { bail!("security patch {s:?} is not YYYY-MM-DD") };
+        let level = PatchLevel { year: parse(y, "patch year")?, month: parse(m, "patch month")?, day: parse(d, "patch day")? };
+        if !(1..=12).contains(&level.month) || !(1..=31).contains(&level.day) {
+            bail!("security patch {s:?} is not a date");
+        }
+        Ok(level)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Cpu {
+    pub cores: u32,
+    /// Highest `cpuinfo_max_freq` across cores in kHz; absent until the
+    /// cpufreq driver is loaded.
+    pub max_khz: Option<u32>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Storage {
+    /// Size of the userdata partition in bytes.
+    pub total: u64,
+    /// Free bytes on /data, counted like `File.getFreeSpace()`, while /data
+    /// is mounted.
+    pub free: Option<u64>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Charge {
+    Charging,
+    Discharging,
+    NotCharging,
+    Full,
+    Unknown,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Battery {
+    pub level: u8,
+    pub charge: Charge,
+    /// Tenths of a degree Celsius.
+    pub temp: Option<i32>,
+    /// Kernel `POWER_SUPPLY_HEALTH` text such as `Good`.
+    pub health: Option<String>,
+    pub cycles: Option<u32>,
+    /// Design capacity in µAh.
+    pub design: Option<u64>,
+    /// Present full-charge capacity in µAh.
+    pub full: Option<u64>,
+    /// Voltage in µV.
+    pub voltage: Option<u64>,
+    /// A charger charging it quickly, as Xiaomi's Qualcomm phones tell
+    /// beside their power supplies.
+    pub quick: bool,
+    /// A charger or a computer powers the phone, by cable or wirelessly: a
+    /// power supply besides the battery is online.
+    pub plugged: bool,
+}
+
+impl Battery {
+    /// Whether it charges, or is full and topped up.
+    pub fn charging(&self) -> bool {
+        matches!(self.charge, Charge::Charging | Charge::Full)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Boot {
+    /// From `androidboot.vbmeta.device_state`.
+    pub unlocked: Option<bool>,
+    /// `androidboot.verifiedbootstate`: green, yellow, orange or red.
+    pub verified: Option<String>,
+}
+
+pub fn collect(cfg: &DeviceConfig) -> Result<DeviceInfo> {
+    let d = &cfg.display;
+    let unlocked = match keel_block::boot_param("androidboot.vbmeta.device_state")?.as_deref() {
+        None => None,
+        Some("locked") => Some(false),
+        Some("unlocked") => Some(true),
+        Some(other) => bail!("androidboot.vbmeta.device_state {other:?}"),
+    };
+    let system = SystemProps::current()?;
+    Ok(DeviceInfo {
+        // The system names the exact edition; the configured model covers a
+        // system whose partitions are not mounted.
+        model: system.get("ro.product.marketname").unwrap_or_else(|| cfg.device.model.clone()),
+        codename: cfg.device.codename.clone(),
+        soc: cfg.device.soc.clone(),
+        cpu: cpu(Path::new(CPU))?,
+        ram_kib: mem_total(&read("/proc/meminfo")?)?,
+        panel: (d.width > 0 && d.height > 0).then_some((d.width, d.height)),
+        screen: d.diagonal,
+        os_version: system.get(&cfg.device.os_version_prop),
+        built_on: build_version(Path::new(BUILD_PROP), &cfg.device.os_version_prop, cfg.stock.as_ref().map(|stock| stock.version.as_str()))
+            // A recovery whose own property file cannot be read still came
+            // from the build the configuration names, which the verifier
+            // holds the image to; the page shows that rather than nothing.
+            .or_else(|| cfg.stock.as_ref().map(|stock| stock.version.clone())),
+        android: system.get("ro.build.version.release"),
+        locale: system.get("ro.product.locale"),
+        security_patch: system.get("ro.build.version.security_patch").map(|s| s.parse()).transpose()?,
+        kernel: kernel_release()?,
+        storage: storage()?,
+        battery: battery(Path::new(POWER_SUPPLY))?,
+        slot: keel_vab::current_slot()?,
+        snapshot: keel_vab::snapshot_state()?,
+        boot: Boot { unlocked, verified: keel_block::boot_param("androidboot.verifiedbootstate")? },
+        unreadable: system.unreadable(),
+    })
+}
+
+/// A build.prop file of the installed system that could not be read, named by
+/// the partition it belongs to and the file itself, so the About page says
+/// which properties it is missing rather than showing fewer without a word.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Unreadable {
+    pub partition: String,
+    pub file: String,
+    pub error: String,
+}
+
+impl Unreadable {
+    /// As the About page names it: the partition and the file.
+    pub fn line(&self) -> String {
+        format!("{} {}", self.partition, self.file)
+    }
+}
+
+/// What the installed system's build.prop files hold, and the ones that
+/// could not be read.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct InstalledProps {
+    pub props: HashMap<String, String>,
+    pub unreadable: Vec<Unreadable>,
+}
+
+/// How long to wait before asking a build.prop file again: long enough for a
+/// slow page to come back, short enough that a file which will never be read
+/// does not hold the start up.
+const RETRY_AFTER: Duration = Duration::from_millis(200);
+
+/// Whether a failure may pass on its own, as a bad page read or a timeout
+/// does. Only these are asked for again: the inode of an image written wrong
+/// fails the same way every time, and a second read of it is 200ms spent
+/// waiting for nothing.
+fn transient(e: &anyhow::Error) -> bool {
+    e.chain().filter_map(|c| c.downcast_ref::<std::io::Error>()).any(|io| {
+        // EIO and ETIMEDOUT as the block layer reports them; the numbers are
+        // written out as `<errno.h>` has them, not taken from `libc`.
+        matches!(io.raw_os_error(), Some(5) | Some(110)) || matches!(io.kind(), ErrorKind::TimedOut)
+    })
+}
+
+/// One read of `path` into `props`: `None` when the file is not there at
+/// all, as a partition that does not carry it.
+fn read_props(path: &Path, props: &mut HashMap<String, String>) -> Result<Option<()>> {
+    match fs::metadata(path) {
+        Err(e) if e.kind() == ErrorKind::NotFound => return Ok(None),
+        Err(e) => return Err(anyhow!("{e}")),
+        Ok(_) => {}
+    }
+    rsproperties::load_properties_from_file(path, None, "u:r:init:s0", props).map_err(|e| anyhow!("{e:#}"))?;
+    Ok(Some(()))
+}
+
+/// The installed system's build properties, in init's order.
+pub fn installed_props(slot: Slot) -> Result<HashMap<String, String>> {
+    Ok(installed_props_report(slot)?.props)
+}
+
+/// The installed system's build properties, in init's order, with the files
+/// that could not be read so the recovery can name them.
+///
+/// A partition that mounts but cannot be looked into must not take the
+/// recovery down with it: these properties are what the About page shows, not
+/// what runs. A file that fails with a bad page or a timeout is asked for
+/// once more after `RETRY_AFTER`; one that still fails is left out, written to
+/// the kernel log, where a phone stuck at a boot logo can be read, and carried
+/// to the About page by name.
+pub fn installed_props_report(slot: Slot) -> Result<InstalledProps> {
+    let base = |m: &keel_vab::Mounted| -> String {
+        m.partition.strip_suffix(slot.suffix()).expect("mounted partitions carry the slot suffix").to_string()
+    };
+    let mut parts = keel_vab::mounted_partitions(slot)?;
+    parts.sort_by_key(|m| PROP_ORDER.iter().position(|b| *b == base(m)).unwrap_or(PROP_ORDER.len()));
+    let mut out = InstalledProps { props: keel_sys::props(BOOT_PROPS).into_iter().collect(), unreadable: Vec::new() };
+    for m in &parts {
+        let files: &[&str] = match base(m).as_str() {
+            "system" => &["system/build.prop"],
+            "vendor" => &["default.prop", "build.prop"],
+            _ => &["etc/build.prop"],
+        };
+        for f in files {
+            let path = m.mount_point.join(f);
+            let mut asked = 0;
+            let failure = loop {
+                asked += 1;
+                match read_props(&path, &mut out.props) {
+                    Ok(_) => break None,
+                    Err(e) if asked == 1 && transient(&e) => thread::sleep(RETRY_AFTER),
+                    Err(e) => break Some(e),
+                }
+            };
+            if let Some(e) = failure {
+                let _ = keel_sys::kmsg(&format!("{} of {} is unreadable: {e:#}", f, m.partition));
+                out.unreadable.push(Unreadable { partition: m.partition.clone(), file: f.to_string(), error: format!("{e:#}") });
+            }
+        }
+    }
+    Ok(out)
+}
+
+/// Whether `one` and `other` name the same stock build. The phone maker's
+/// recovery leaves the channel its package carries at the end off — the
+/// prop.default of the bixi recovery says `OS4.0.0.11.XOHCN` where the
+/// package says `OS4.0.0.11.XOHCNXM` — so a version of exactly two letters
+/// more than the other is the same build. `tools/verify-release.py` holds
+/// [stock].version to the same rule, and the About page holds the two
+/// versions it puts side by side to it.
+pub fn same_build(one: &str, other: &str) -> bool {
+    if one == other {
+        return true;
+    }
+    let (short, long) = if other.len() >= one.len() { (one, other) } else { (other, one) };
+    long.len() == short.len() + 2 && long.starts_with(short) && long[short.len()..].chars().all(|c| c.is_ascii_alphabetic())
+}
+
+/// The stock build the recovery was made on, as the property file the packer
+/// keeps from the phone maker's recovery names it. `name` is the phone's own
+/// name for that version, such as `ro.mi.os.version.incremental`; a phone
+/// that has none falls back to AOSP's. A phone whose property file names the
+/// build `stock` does without its channel is named by the package's version
+/// of it, which is the form the config and the release assets carry. Nothing
+/// at all on a system that has no such file, as Android has not one.
+fn build_version(at: &Path, name: &str, stock: Option<&str>) -> Option<String> {
+    let mut props = HashMap::new();
+    if read_props(at, &mut props).is_err() {
+        return None;
+    }
+    let found = props.get(name).or_else(|| props.get(AOSP_BUILD_VERSION))?;
+    Some(match stock {
+        Some(stock) if same_build(found, stock) => stock.to_string(),
+        _ => found.clone(),
+    })
+}
+
+/// Build properties of the system the About page describes.
+enum SystemProps {
+    /// Android is running and keeps them in its property area.
+    Running,
+    /// Recovery is running; they come from the build.prop files of the
+    /// installed system's mounted partitions, none when nothing is mounted.
+    Installed(InstalledProps),
+}
+
+impl SystemProps {
+    fn current() -> Result<SystemProps> {
+        if !keel_config::ramdisk::in_recovery() {
+            return Ok(SystemProps::Running);
+        }
+        let props = match keel_vab::current_slot()? {
+            Some(slot) => installed_props_report(slot)?,
+            None => InstalledProps::default(),
+        };
+        Ok(SystemProps::Installed(props))
+    }
+
+    fn get(&self, name: &str) -> Option<String> {
+        match self {
+            SystemProps::Running => prop(name),
+            SystemProps::Installed(props) => props.props.get(name).cloned(),
+        }
+    }
+
+    /// The files that could not be read, each as `system_ext_a etc/build.prop`.
+    fn unreadable(&self) -> Vec<String> {
+        match self {
+            SystemProps::Running => Vec::new(),
+            SystemProps::Installed(props) => props.unreadable.iter().map(Unreadable::line).collect(),
+        }
+    }
+}
+
+/// The order init reads build.prop files in at boot; later files override
+/// earlier ones.
+const PROP_ORDER: [&str; 8] = ["system", "system_ext", "system_dlkm", "vendor", "vendor_dlkm", "odm_dlkm", "odm", "product"];
+
+/// What init names the properties the bootloader passes.
+const BOOT_PROPS: &str = "ro.boot.";
+
+fn read(path: impl AsRef<Path>) -> Result<String> {
+    let p = path.as_ref();
+    Ok(fs::read_to_string(p).with_context(|| format!("read {}", p.display()))?.trim().to_string())
+}
+
+/// `None` when the file does not exist; any other failure is an error.
+fn read_opt(path: impl AsRef<Path>) -> Result<Option<String>> {
+    let p = path.as_ref();
+    match fs::read_to_string(p) {
+        Ok(s) => Ok(Some(s.trim().to_string())),
+        Err(e) if e.kind() == ErrorKind::NotFound => Ok(None),
+        Err(e) => Err(e).with_context(|| format!("read {}", p.display())),
+    }
+}
+
+fn parse<T: FromStr>(s: &str, what: &str) -> Result<T>
+where
+    T::Err: std::fmt::Display,
+{
+    s.parse().map_err(|e| anyhow!("{what}: {s:?}: {e}"))
+}
+
+fn parse_opt<T: FromStr>(path: impl AsRef<Path>, what: &str) -> Result<Option<T>>
+where
+    T::Err: std::fmt::Display,
+{
+    read_opt(path)?.map(|s| parse(&s, what)).transpose()
+}
+
+fn cpu(root: &Path) -> Result<Cpu> {
+    let ids = cpulist(&read(root.join("possible"))?)?;
+    let mut max_khz: Option<u32> = None;
+    for id in &ids {
+        let path = root.join(format!("cpu{id}/cpufreq/cpuinfo_max_freq"));
+        if let Some(khz) = parse_opt::<u32>(&path, "cpuinfo_max_freq")? {
+            max_khz = Some(max_khz.map_or(khz, |m| m.max(khz)));
+        }
+    }
+    Ok(Cpu { cores: ids.len() as u32, max_khz })
+}
+
+/// Kernel cpulist syntax: comma-separated ids and inclusive ranges (`0-3,6`).
+fn cpulist(s: &str) -> Result<Vec<u32>> {
+    let mut ids = Vec::new();
+    for part in s.split(',') {
+        match part.split_once('-') {
+            Some((a, b)) => {
+                let (a, b): (u32, u32) = (parse(a, "cpulist")?, parse(b, "cpulist")?);
+                if a > b {
+                    bail!("cpulist range {part:?} runs backwards");
+                }
+                ids.extend(a..=b);
+            }
+            None => ids.push(parse(part, "cpulist")?),
+        }
+    }
+    Ok(ids)
+}
+
+fn mem_total(meminfo: &str) -> Result<u64> {
+    let line = meminfo
+        .lines()
+        .find(|l| l.starts_with("MemTotal:"))
+        .ok_or_else(|| anyhow!("MemTotal missing from /proc/meminfo"))?;
+    let kib = line["MemTotal:".len()..]
+        .trim()
+        .strip_suffix("kB")
+        .ok_or_else(|| anyhow!("MemTotal is not in kB: {line:?}"))?;
+    parse(kib.trim(), "MemTotal")
+}
+
+fn kernel_release() -> Result<String> {
+    let mut u: libc::utsname = unsafe { std::mem::zeroed() };
+    if unsafe { libc::uname(&mut u) } != 0 {
+        return Err(std::io::Error::last_os_error()).context("uname");
+    }
+    let release = unsafe { CStr::from_ptr(u.release.as_ptr()) };
+    Ok(release.to_str().context("kernel release is not UTF-8")?.to_string())
+}
+
+fn storage() -> Result<Storage> {
+    let link = Path::new(keel_block::BY_NAME).join("userdata");
+    let dev = fs::canonicalize(&link).with_context(|| format!("resolve {}", link.display()))?;
+    let name = dev.file_name().ok_or_else(|| anyhow!("{} has no device name", dev.display()))?;
+    let sectors: u64 = parse(&read(Path::new(SYS_BLOCK).join(name).join("size"))?, "block size")?;
+    let free = if is_mountpoint(Path::new("/data"))? { Some(free_bytes("/data")?) } else { None };
+    Ok(Storage { total: sectors * 512, free })
+}
+
+/// A directory is a mountpoint when it lives on a different filesystem from
+/// its parent.
+fn is_mountpoint(path: &Path) -> Result<bool> {
+    let parent = path.parent().ok_or_else(|| anyhow!("{} has no parent", path.display()))?;
+    let here = fs::metadata(path).with_context(|| format!("stat {}", path.display()))?;
+    let up = fs::metadata(parent).with_context(|| format!("stat {}", parent.display()))?;
+    Ok(here.dev() != up.dev())
+}
+
+fn free_bytes(path: &str) -> Result<u64> {
+    let c = CString::new(path)?;
+    let mut s: libc::statvfs = unsafe { std::mem::zeroed() };
+    if unsafe { libc::statvfs(c.as_ptr(), &mut s) } != 0 {
+        return Err(std::io::Error::last_os_error()).with_context(|| format!("statvfs {path}"));
+    }
+    // `fsblkcnt_t` is 32 bits on some hosts and 64 bits on Android.
+    #[allow(clippy::useless_conversion)]
+    let blocks = u64::from(s.f_bfree);
+    Ok(blocks * s.f_frsize)
+}
+
+/// The battery as it is now.
+pub fn battery_now() -> Result<Option<Battery>> {
+    battery(Path::new(POWER_SUPPLY))
+}
+
+/// The first power supply whose type is `Battery`; `None` while no fuel-gauge
+/// driver is loaded.
+fn battery(root: &Path) -> Result<Option<Battery>> {
+    let entries = match fs::read_dir(root) {
+        Ok(e) => e,
+        Err(e) if e.kind() == ErrorKind::NotFound => return Ok(None),
+        Err(e) => return Err(e).with_context(|| format!("read {}", root.display())),
+    };
+    let mut dirs: Vec<_> = entries.map(|e| e.map(|e| e.path())).collect::<Result<_, _>>()?;
+    dirs.sort();
+    let mut first = None;
+    let mut plugged = false;
+    for dir in dirs {
+        match read_opt(dir.join("type"))?.as_deref() {
+            Some("Battery") => {
+                first.get_or_insert(dir);
+            }
+            Some(_) => plugged |= online(&dir)?,
+            None => {}
+        }
+    }
+    let Some(dir) = first else { return Ok(None) };
+    let charge = match read(dir.join("status"))?.as_str() {
+        "Charging" => Charge::Charging,
+        "Discharging" => Charge::Discharging,
+        "Not charging" => Charge::NotCharging,
+        "Full" => Charge::Full,
+        "Unknown" => Charge::Unknown,
+        other => bail!("{}: status {other:?}", dir.display()),
+    };
+    Ok(Some(Battery {
+        level: parse(&read(dir.join("capacity"))?, "capacity")?,
+        charge,
+        temp: parse_opt(dir.join("temp"), "temp")?,
+        health: read_opt(dir.join("health"))?,
+        cycles: parse_opt(dir.join("cycle_count"), "cycle_count")?,
+        design: parse_opt(dir.join("charge_full_design"), "charge_full_design")?,
+        full: parse_opt(dir.join("charge_full"), "charge_full")?,
+        voltage: parse_opt(dir.join("voltage_now"), "voltage_now")?,
+        // How quickly the charger charges: 0 normally, then fast, flash,
+        // turbo and super, which the stock SystemUI all counts quick.
+        quick: parse_opt::<u8>(root.with_file_name("qcom-battery").join("quick_charge_type"), "quick_charge_type")?.is_some_and(|k| (1..=4).contains(&k)),
+        plugged,
+    }))
+}
+
+/// Whether the power supply in `dir` says a charger or a computer is
+/// attached to it.
+fn online(dir: &Path) -> Result<bool> {
+    let path = dir.join("online");
+    said_online(fs::read_to_string(&path)).with_context(|| format!("read {}", path.display()))
+}
+
+/// What a power supply's `online` file says, as reading it went. A supply
+/// without one has no say, and one whose driver cannot tell yet, as
+/// Qualcomm's USB-C connector cannot early in a boot, answers "try again":
+/// either is taken as offline, and the next reading asks again.
+fn said_online(read: std::io::Result<String>) -> std::io::Result<bool> {
+    match read {
+        Ok(s) => Ok(s.trim() == "1"),
+        Err(e) if matches!(e.kind(), ErrorKind::NotFound | ErrorKind::WouldBlock) => Ok(false),
+        Err(e) => Err(e),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cpulist_ranges_and_singles() {
+        assert_eq!(cpulist("0-7").unwrap(), (0..8).collect::<Vec<_>>());
+        assert_eq!(cpulist("0-3,6,8-9").unwrap(), vec![0, 1, 2, 3, 6, 8, 9]);
+        assert_eq!(cpulist("0").unwrap(), vec![0]);
+        assert!(cpulist("3-1").is_err());
+        assert!(cpulist("").is_err());
+    }
+
+    #[test]
+    fn mem_total_from_meminfo() {
+        // Values reported by a Xiaomi 17 Ultra.
+        let text = "MemTotal:       15472464 kB\nMemFree:         2381608 kB\n";
+        assert_eq!(mem_total(text).unwrap(), 15_472_464);
+        assert!(mem_total("MemFree: 1 kB\n").is_err());
+    }
+
+    #[test]
+    fn patch_level_parses_dates_only() {
+        let p: PatchLevel = "2026-10-01".parse().unwrap();
+        assert_eq!(p, PatchLevel { year: 2026, month: 10, day: 1 });
+        assert!("2026-13-01".parse::<PatchLevel>().is_err());
+        assert!("2026-10".parse::<PatchLevel>().is_err());
+        assert!("October 2026".parse::<PatchLevel>().is_err());
+    }
+
+    #[test]
+    fn kernel_release_is_readable() {
+        assert!(!kernel_release().unwrap().is_empty());
+    }
+
+    #[test]
+    fn a_battery_charged_quickly_says_so_beside_the_power_supplies() {
+        // The 17 Ultra's in the recovery, on a charger it charges slowly on.
+        let class = tempfile::tempdir().unwrap();
+        let supplies = class.path().join("power_supply");
+        let bat = supplies.join("battery");
+        fs::create_dir_all(&bat).unwrap();
+        for (name, value) in [("type", "Battery"), ("status", "Charging"), ("capacity", "96"), ("temp", "377")] {
+            fs::write(bat.join(name), format!("{value}\n")).unwrap();
+        }
+        let b = battery(&supplies).unwrap().expect("a battery");
+        assert_eq!((b.level, b.temp, b.quick), (96, Some(377), false), "a phone that does not tell charges as it may");
+        let qcom = class.path().join("qcom-battery");
+        fs::create_dir_all(&qcom).unwrap();
+        fs::write(qcom.join("quick_charge_type"), "0\n").unwrap();
+        assert!(!battery(&supplies).unwrap().expect("a battery").quick);
+        fs::write(qcom.join("quick_charge_type"), "3\n").unwrap();
+        assert!(battery(&supplies).unwrap().expect("a battery").quick, "turbo charging is quick");
+    }
+
+    #[test]
+    fn the_phone_is_plugged_in_while_a_power_supply_besides_the_battery_is_online() {
+        // The 13 Ultra's power supplies in the recovery.
+        let class = tempfile::tempdir().unwrap();
+        let supplies = class.path().join("power_supply");
+        let supply = |name: &str, files: &[(&str, &str)]| {
+            let dir = supplies.join(name);
+            fs::create_dir_all(&dir).unwrap();
+            for (file, value) in files {
+                fs::write(dir.join(file), format!("{value}\n")).unwrap();
+            }
+        };
+        supply("battery", &[("type", "Battery"), ("status", "Discharging"), ("capacity", "80")]);
+        supply("usb", &[("type", "USB"), ("online", "0")]);
+        supply("wireless", &[("type", "Wireless"), ("online", "0")]);
+        supply("ucsi-source-psy-soc:qcom,pmic_glink:qcom,ucsi1", &[("type", "USB"), ("online", "0")]);
+        assert!(!battery(&supplies).unwrap().expect("a battery").plugged, "on its battery alone");
+        supply("usb", &[("type", "USB_PD"), ("online", "1")]);
+        supply("ucsi-source-psy-soc:qcom,pmic_glink:qcom,ucsi1", &[("online", "1")]);
+        assert!(battery(&supplies).unwrap().expect("a battery").plugged, "on a charger's cable");
+        supply("usb", &[("type", "USB"), ("online", "0")]);
+        supply("ucsi-source-psy-soc:qcom,pmic_glink:qcom,ucsi1", &[("online", "0")]);
+        supply("wireless", &[("online", "1")]);
+        assert!(battery(&supplies).unwrap().expect("a battery").plugged, "on a wireless charger");
+    }
+
+    #[test]
+    fn a_power_supply_that_cannot_tell_yet_is_taken_as_offline() {
+        use std::io::Error;
+        assert!(said_online(Ok("1\n".into())).unwrap());
+        assert!(!said_online(Ok("0\n".into())).unwrap());
+        assert!(!said_online(Err(Error::from(ErrorKind::WouldBlock))).unwrap(), "Qualcomm's USB-C connector early in a boot");
+        assert!(!said_online(Err(Error::from(ErrorKind::NotFound))).unwrap(), "a supply without the file");
+        assert!(said_online(Err(Error::from(ErrorKind::PermissionDenied))).is_err(), "anything else is an error");
+    }
+
+    #[test]
+    fn the_build_the_recovery_was_made_on_is_what_its_own_property_file_names() {
+        // The bixi recovery's prop.default, kept from the stock recovery.
+        let dir = tempfile::tempdir().unwrap();
+        let props = dir.path().join("prop.default");
+        fs::write(
+            &props,
+            "ro.build.id=CP2A.260605.016\nro.build.version.incremental=OS4.0.0.11.XOHCN\n\
+             ro.mi.os.version.incremental=OS4.0.0.11.XOHCN\nro.secure=0\n",
+        )
+        .unwrap();
+        let mi = "ro.mi.os.version.incremental";
+        let stock = Some("OS4.0.0.11.XOHCNXM");
+        // The stock recovery leaves the channel off; the package's name for
+        // the same build is what the page shows, as verify-release.py holds it.
+        assert_eq!(build_version(&props, mi, stock).as_deref(), Some("OS4.0.0.11.XOHCNXM"));
+        assert_eq!(build_version(&props, mi, None).as_deref(), Some("OS4.0.0.11.XOHCN"));
+        // A phone that names no version of its own is read by AOSP's name.
+        assert_eq!(build_version(&props, "ro.other.phone.version", None).as_deref(), Some("OS4.0.0.11.XOHCN"));
+        // Another build on the same phone line is not the one the package is.
+        assert_eq!(build_version(&props, mi, Some("OS4.0.3.0.XOHCNXM")).as_deref(), Some("OS4.0.0.11.XOHCN"));
+        // A system with no such file — Android's own, where the file is not there.
+        assert_eq!(build_version(&dir.path().join("absent"), mi, stock), None);
+        // A file with no such property, as a phone whose recovery says only AOSP's.
+        let aosp = dir.path().join("aosp.prop");
+        fs::write(&aosp, "ro.build.version.incremental=OS2.0.1.0.VNCCNXM\n").unwrap();
+        assert_eq!(build_version(&aosp, mi, None).as_deref(), Some("OS2.0.1.0.VNCCNXM"));
+    }
+}

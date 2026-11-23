@@ -1,0 +1,13 @@
+[package]
+name = "keel-vab"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+anyhow = { workspace = true }
+libc = { workspace = true }
+prost = "0.14.4"
+keel-binder = { path = "../keel-binder" }
+keel-block = { path = "../keel-block" }
+keel-lp = { path = "../keel-lp" }

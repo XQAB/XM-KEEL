@@ -1,6 +1,6 @@
 # 凭据加固评估（issue #2）
 
-> 对应 `crates/skyward/src/credential.rs` 与 `crates/skyward-crypto/src/credential.rs`。
+> 对应 `crates/keel/src/credential.rs` 与 `crates/keel-crypto/src/credential.rs`。
 > 本文是**评估与方案**，不含实现；动手前先在这一页上定稿。
 
 ## 0. 结论先行
@@ -10,17 +10,17 @@
   只能「拿 key 换 value」，**没有 write / seal / unseal**。
 - 值得做的是**「默认不再把锁屏密码落盘」**：开关默认关，打开时把风险写在脸上；升级到新版本后，
   第一次成功解开 `/data` 就把旧文件删掉。
-- 改动面：`skyward`（一处迁移、一处文案）、`skyward-ui`（设置页默认值与提示）、
-  `skyward-crypto`（顶部注释改写），约 80 行代码 + 三条文案；不动分区格式、不动 weaver / gatekeeper。
+- 改动面：`skyward`（一处迁移、一处文案）、`keel-ui`（设置页默认值与提示）、
+  `keel-crypto`（顶部注释改写），约 80 行代码 + 三条文案；不动分区格式、不动 weaver / gatekeeper。
 
 ## 1. 现状（可对照代码核对）
 
 | 事项 | 位置 | 事实 |
 | --- | --- | --- |
-| 文件 | `crates/skyward/src/credential.rs` | `/metadata/skyward/credential`（同目录的 `credential.new` 先写再改名）；`save` / `load` / `forget` / `present` / `saved_at` |
+| 文件 | `crates/keel/src/credential.rs` | `/metadata/skyward/credential`（同目录的 `credential.new` 先写再改名）；`save` / `load` / `forget` / `present` / `saved_at` |
 | 记什么 | 同上 | 打开 `/data` 的那个**锁屏密码原文** |
 | 什么时候写 | 设置页开关 | 只有「自动解密」开关打开才写；关掉即删 |
-| 密钥 | `crates/skyward-crypto/src/credential.rs::key_of` | `SHA-256("skyward credential v1|" + 序列号 + "|" + 每次随机的 salt)`，AES-256-GCM |
+| 密钥 | `crates/keel-crypto/src/credential.rs::key_of` | `SHA-256("skyward credential v1|" + 序列号 + "|" + 每次随机的 salt)`，AES-256-GCM |
 | 序列号从哪来 | `credential.rs::serial` | `ro.serialno`，取不到再 `ro.boot.serialno` |
 | 谁能打开 | — | 任何拿到这台机子、能读序列号的人。`getprop ro.serialno` 在 adb 与 fastboot 下都读得到 |
 
@@ -29,7 +29,7 @@
 
 ## 2. 为什么「weaver 密封」不成立（按接口说话）
 
-`crates/skyward-crypto/src/weaver.rs` 里只有两条调用：
+`crates/keel-crypto/src/weaver.rs` 里只有两条调用：
 
 - `GET_CONFIG = 1`：问槽位数、key 长度、value 长度；
 - `READ = 2`：`read(slot, key) -> (status, timeout, value)`，key 不对就 `INCORRECT_KEY`、
@@ -53,7 +53,7 @@
 - 从序列号来 = 现在这套（换汤不换药）；从 weaver 的另一个槽位来 = 又要读那个槽位，
   读它又要 key —— 循环。
 
-**结论**：`crates/skyward-crypto/src/credential.rs` 顶部那句「weaver 可以 seal and unseal
+**结论**：`crates/keel-crypto/src/credential.rs` 顶部那句「weaver 可以 seal and unseal
 without ever handing the key out」是错的，应当改写（替换文本见 §5）。
 
 ## 3. 四条路线对比

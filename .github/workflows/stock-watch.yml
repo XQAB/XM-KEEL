@@ -31,14 +31,14 @@ jobs:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup
       - name: Build the packer
-        run: cargo build --release --locked -p skyward-pack
+        run: cargo build --release --locked -p keel-pack
       - name: Read what each device's configuration names
         run: |
           mkdir now
           for config in devices/*.toml; do
             device=$(basename "$config" .toml)
             grep -q '^\[stock\]' "$config" || continue
-            if ! target/release/skyward-pack stock --config "$config" > "now/$device.txt"; then
+            if ! target/release/keel-pack stock --config "$config" > "now/$device.txt"; then
               echo "could not read $device" >&2
               rm -f "now/$device.txt"
               echo "$device" >> unread.txt
@@ -92,7 +92,7 @@ jobs:
             echo
             echo "Nothing is broken yet: the package named in the configuration is still on the server, so the current image still rebuilds. What this means is that the next porting session should start from the new package - the recovery partition, the vendor blobs and the property names are what a new stock build changes. Until the configuration names the new one, a rebuild produces the old layout."
             echo
-            echo "To take it: update `[stock]` in `devices/<codename>.toml`, take the recovery partition out of the new package with `skyward-pack stock --out`, and check the build still boots on the phone."
+            echo "To take it: update `[stock]` in `devices/<codename>.toml`, take the recovery partition out of the new package with `keel-pack stock --out`, and check the build still boots on the phone."
           } )
           if [ -n "$existing" ]; then
             gh issue comment "$existing" --body "$body"

@@ -24,9 +24,9 @@
 
 | 项 | 状态 | 关键点 |
 | --- | --- | --- |
-| 镜像测速，最快的那个自动选中 | ✅ 已实现（待真机验证） | 新 `crates/skyward-net/src/mirror.rs`：`rate()` 用一次 `Range: bytes=0-…` 只取 256 KiB 并计时，得到这个镜像在这个网络上的字节/秒；拒答、超时、什么都不发的镜像得到错误而不是「最慢」，因为它是没答上来。`quickest()` 是纯算术：零跳过、其余取最大、相等取先出现的；第一个位置是「不加速」（文件直接走 GitHub），所以 GitHub 自己最快时就选回它。更新页在「在线更新」下面多一行「测速选出最快的镜像」，只在 GitHub 已答出「有比本机新的一版」之后出现，量的是这一版真正要下的那个 `link`，量完直接写回 `state.mirror`——接着点「下载并更新」就走它，不用再手动切换；六个全没答上来时保留用户原本的选择 |
-| 本地挑镜像刷（第 4 项的另一半） | ✅ 已实现（待真机验证） | 更新页多一行「从内部存储刷入镜像」。data 分区没打开时照安装页的说法写「请先完成『解密』」并去解密页，已擦除写「data 分区已清除」。挑文件复用现成的 `Screen::Choose(Place::Storage)`，落点在 `App::install_file`：文件名是 XM KEEL 自己发布的那种（`skyward-…img` / `…zip`）就走 `write_skyward`——把 `skyward_job` 立起来、跳到更新页、交出 `Effect::WriteXM KEEL`；安装器那条路会把它当 boot 镜像、只写一个槽位，所以不能走。真正写盘的仍是 `updates::write`：先 `upgrade::check` 认这是不是本机的 XM KEEL 镜像，再写进下次启动那个槽位与另一个装有 XM KEEL 的槽位，写一段读回一段。`Task::Write` 不下载，也不删用户的文件 |
-| 两处新增断言 | ✅ 桌面跑过 | `the_quickest_mirror_is_the_one_the_next_update_goes_through`：交出去的是 build 自己的 `link`、量的时候不会被点第二次、六个数里最快的被选中、全零时保留原选择、没有新版本时这一行不出现。`a_skyward_build_kept_in_storage_goes_into_the_recovery_partitions`：`skyward-…img` 交 `Effect::WriteXM KEEL` 且跳更新页、第二次被挡住、之后 `rom.zip` 仍交 `Effect::InstallFile`。`mirror.rs` 自己四条（纯算术，与真 TCP 服务器的 206／404／空包） |
+| 镜像测速，最快的那个自动选中 | ✅ 已实现（待真机验证） | 新 `crates/keel-net/src/mirror.rs`：`rate()` 用一次 `Range: bytes=0-…` 只取 256 KiB 并计时，得到这个镜像在这个网络上的字节/秒；拒答、超时、什么都不发的镜像得到错误而不是「最慢」，因为它是没答上来。`quickest()` 是纯算术：零跳过、其余取最大、相等取先出现的；第一个位置是「不加速」（文件直接走 GitHub），所以 GitHub 自己最快时就选回它。更新页在「在线更新」下面多一行「测速选出最快的镜像」，只在 GitHub 已答出「有比本机新的一版」之后出现，量的是这一版真正要下的那个 `link`，量完直接写回 `state.mirror`——接着点「下载并更新」就走它，不用再手动切换；六个全没答上来时保留用户原本的选择 |
+| 本地挑镜像刷（第 4 项的另一半） | ✅ 已实现（待真机验证） | 更新页多一行「从内部存储刷入镜像」。data 分区没打开时照安装页的说法写「请先完成『解密』」并去解密页，已擦除写「data 分区已清除」。挑文件复用现成的 `Screen::Choose(Place::Storage)`，落点在 `App::install_file`：文件名是 XM KEEL 自己发布的那种（`skyward-…img` / `…zip`）就走 `write_skyward`——把 `skyward_job` 立起来、跳到更新页、交出 `Effect::WriteSkyward`；安装器那条路会把它当 boot 镜像、只写一个槽位，所以不能走。真正写盘的仍是 `updates::write`：先 `upgrade::check` 认这是不是本机的 XM KEEL 镜像，再写进下次启动那个槽位与另一个装有 XM KEEL 的槽位，写一段读回一段。`Task::Write` 不下载，也不删用户的文件 |
+| 两处新增断言 | ✅ 桌面跑过 | `the_quickest_mirror_is_the_one_the_next_update_goes_through`：交出去的是 build 自己的 `link`、量的时候不会被点第二次、六个数里最快的被选中、全零时保留原选择、没有新版本时这一行不出现。`a_skyward_build_kept_in_storage_goes_into_the_recovery_partitions`：`skyward-…img` 交 `Effect::WriteSkyward` 且跳更新页、第二次被挡住、之后 `rom.zip` 仍交 `Effect::InstallFile`。`mirror.rs` 自己四条（纯算术，与真 TCP 服务器的 206／404／空包） |
 
 `mirror.rs` 的四条与两条界面断言都由桌面 `cargo test --workspace` 真跑；`rate()` 与 `Task::Weigh`／`Task::Write` 的 Android 侧仍靠 `cargo ndk clippy` 看编译、靠真机看行为。
 
@@ -41,12 +41,12 @@
 | --- | --- | --- |
 | 点击是「嗒」，不是「嗡」 | ✅ 已实现（待真机验证） | 移植 haotian `b5ff5344`＋`45a1a155`＋`68afec53` 的思路，按本 fork 的路线重做：haotian 是把正弦当 `FF_SINE` 周期效果交给驱动、包络写在 `ff_envelope` 里；本 fork 是自己造采样走 `FF_CUSTOM`，所以包络直接乘在样本上。一次点击从固定的 3.5 摆（约 20 ms）改成**跟着滑条 12→26 ms**：起头 1 ms 升到设定强度，末尾按长度的五分之二收回去，驱动摆 2 → 刹车 1.5 的比例没动。摆完了收回去，才是一下，而不是一阵 |
 | 长度也带滑条 | ✅ 已实现（待真机验证） | 手指读的「多重」是拿到了多少摆动，所以 `click(position)` 现在同时给出强度与长度：`share()` 走 `click::share`（等步进），长度走 `click::length_of`（`LIGHT_CLICK_MS = 12` / `HEAVY_CLICK_MS = 26`）。`FF_CUSTOM` 的样本按每次点击的强度与长度现造，长度由样本数与采样率决定，`probe`、界面点击、设置页试听走的都是同一条 |
-| 滑条等步进 | ✅ 已改 | 原来的 `share()` 是每格同一个倍数（每格同样分贝），手指读不出深浅；改成 `lightest + (strongest - lightest) * at`，每十分之一滑条是同样一点摆幅。`skyward-config` 的 `Strength` 文档同步改过 |
-| 样本数学抽到桌面侧 | ✅ 已改 | 新 `crates/skyward-ui/src/click.rs`（`RATE`、`DRIVE_SWINGS`／`BRAKE_SWINGS`、`share`、`length_of`、`fade_of`、`made`、`envelope`），四条断言由桌面 `cargo test --workspace` 真跑：长度 12→26 单调、包络 8 样本升／56 样本落装得进 19 ms、驱动摆到满幅后翻向刹车、滑条等步进（每格 0.075）。这些原来全在 `crates/skyward/src/haptics.rs` 的 `#[cfg(test)]` 里，而 `haptics` 模块本身是 `#[cfg(target_os = "android")]`，桌面编不到——和 `creep.rs` 之前那次一样的假绿 |
+| 滑条等步进 | ✅ 已改 | 原来的 `share()` 是每格同一个倍数（每格同样分贝），手指读不出深浅；改成 `lightest + (strongest - lightest) * at`，每十分之一滑条是同样一点摆幅。`keel-config` 的 `Strength` 文档同步改过 |
+| 样本数学抽到桌面侧 | ✅ 已改 | 新 `crates/keel-ui/src/click.rs`（`RATE`、`DRIVE_SWINGS`／`BRAKE_SWINGS`、`share`、`length_of`、`fade_of`、`made`、`envelope`），四条断言由桌面 `cargo test --workspace` 真跑：长度 12→26 单调、包络 8 样本升／56 样本落装得进 19 ms、驱动摆到满幅后翻向刹车、滑条等步进（每格 0.075）。这些原来全在 `crates/keel/src/haptics.rs` 的 `#[cfg(test)]` 里，而 `haptics` 模块本身是 `#[cfg(target_os = "android")]`，桌面编不到——和 `creep.rs` 之前那次一样的假绿 |
 
 `bixi` 的强度上限这次**没有提高**，仍是 `devices/bixi.toml` 的 `strength = { lightest = 0.25, strongest = 0.75 }`。haotian 把它抬到 `0.4 ~ 1.0` 是因为他那台机器两端都嫌弱；bixi 是 `qcom-hv-haptics`，满幅会不会打颤没验过，等真机试完再决定抬不抬。
 
-`crates/skyward-ui` 的 `click.rs` 随桌面测试跑；`crates/skyward` 的 `haptics.rs` 改动仍靠 `cargo ndk clippy` 看编译、靠真机看手感——本机没有 Android 目标可编。
+`crates/keel-ui` 的 `click.rs` 随桌面测试跑；`crates/keel` 的 `haptics.rs` 改动仍靠 `cargo ndk clippy` 看编译、靠真机看手感——本机没有 Android 目标可编。
 
 ## 1.0.5
 
@@ -56,11 +56,11 @@
 | --- | --- | --- |
 | 开机自动连记住的 WLAN | ✅ 已实现（待真机验证） | 移植 haotian `c2879da6`。症结：`wpa_supplicant` 一启动就被交到记住那个网络的密码，于是它在页面说出是哪个网络之前自己连上了；而这边只认「页面点了网络」之后的加入，supplicant 自发的那一次被丢弃——没人要 DHCP，页面一直说没连上。现在 `joining()` 在 `joined == None` 时收到 `Told::Connected` 就 `adopt()`：用 `STATUS-NO_EVENTS` 读回 `wpa_state == COMPLETED` 与 `ssid`，按 SSID 字节匹配记住的网络，然后像页面选网一样要地址；一个都没接住时每 `POLL`（5 秒）再看一次；页面上正常选网先接上的不再自己接（`joined.is_some()` 时不计入）。本 fork 原本没有 `saved`，是从 `KEPT`（`/data/misc/wifi/skyward/joined`）读 `SET_NETWORK` 的 body 行，现在读成 `Remembered { bodies, ssid, name, security }`，`ssid`／`key_mgmt` 两行缺一即不认；离开网络时清掉记住的，连上新的时重读一遍 |
 | 文件页可搜索 | ✅ 已实现（待真机验证） | 底栏换成「搜索」与「排序」两个按钮。搜索打开后照搜索页的写法：输入框＋右侧取消圆钮，边输边筛（忽略大小写的子串匹配），行号跟着筛后的列表走，点哪行就开哪行；`Back` 在搜索开着时先关搜索；有结果时回车开第一条，没结果不动作。只在界面里，不碰底下 |
-| 文件页可按类型排序 | ✅ 已实现（待真机验证） | 新 `crates/skyward-ui/src/sort.rs`，三种键 `Name`／`Modified`／`Kind` 轮转，**任何键都文件夹在前**（和手机自带文件管理器一致）。`Kind` 的分组照 `FileType` 的列表：压缩包 → 分区镜像 → 图片 → 视频 → 音频 → 安装包 → 文档 → 表格 → 演示 → PDF → 文本 → 代码 → 其它，设备与管道排最后，同组按名。任何键都以忽略大小写的名收尾、再用原名兜底，所以 `IMG_1` 与 `img_1` 挨着却不会比较相等，两次读出来的顺序一样，没有条目会丢或画两遍。`Modified` 新的在前，同一秒按大小分开 |
+| 文件页可按类型排序 | ✅ 已实现（待真机验证） | 新 `crates/keel-ui/src/sort.rs`，三种键 `Name`／`Modified`／`Kind` 轮转，**任何键都文件夹在前**（和手机自带文件管理器一致）。`Kind` 的分组照 `FileType` 的列表：压缩包 → 分区镜像 → 图片 → 视频 → 音频 → 安装包 → 文档 → 表格 → 演示 → PDF → 文本 → 代码 → 其它，设备与管道排最后，同组按名。任何键都以忽略大小写的名收尾、再用原名兜底，所以 `IMG_1` 与 `img_1` 挨着却不会比较相等，两次读出来的顺序一样，没有条目会丢或画两遍。`Modified` 新的在前，同一秒按大小分开 |
 | 打 tag 先核对版本 | ✅ 已加 | `build.yml` 在 `check` 前插 `tag` job（`if: github.ref_type == 'tag'`）：`python3 -c` 读 `tomllib` 的 `["workspace"]["package"]["version"]`，与 `GITHUB_REF_NAME` 比对，不等就 `::error` 并 `exit 1`；`release` 的 `needs` 已是 `[tag, check, recovery]`，`tools` 里 `sed` 那步留作保险。流程不变：先 bump `Cargo.toml`、提交、再打 tag |
 | 工具链钉到 1.100.0 | ✅ 已改 | `rust-toolchain.toml` 从跟着 `stable` 漂改成 `channel = "1.100.0"`，本机与 CI 编的是同一个编译器（上游 0.3.1 也是这个版本） |
 
-`crates/skyward-ui` 的这两块随桌面测试跑（`sort.rs` 七条、文件页几条，含「列表按名称排序后第几条是哪一条」）；`crates/skyward` 的 WLAN 改动仍靠 `cargo ndk clippy` 看编译、靠真机看行为——本机没有 Android 目标可编。
+`crates/keel-ui` 的这两块随桌面测试跑（`sort.rs` 七条、文件页几条，含「列表按名称排序后第几条是哪一条」）；`crates/keel` 的 WLAN 改动仍靠 `cargo ndk clippy` 看编译、靠真机看行为——本机没有 Android 目标可编。
 
 `1.0.5` 的资产：`skyward-v1.0.5-bixi-OS4.0.0.11.XOHCNXM.img`（裸镜像，直写 recovery 分区）、
 同名 `.zip`（自更新可直接吃）、`SHA256SUMS`、`skyward-v1.0.5-bixi-OS4.0.0.11.XOHCNXM.verify.txt`（校验报告）。
@@ -79,7 +79,7 @@
 | 写回失败的机制 | ✅ 已订正 | RO 分区上 `open(O_RDWR)` 不被拒（`count=0` 的 `dd` 能过），拒绝发生在 `write()`；`blockdev --setrw` 用 `O_RDONLY` 就能清旗标，所以「先 open 再 `make_writable`」的顺序本身没问题，1.0.2 的 bug 是 `make_writable(...).unwrap_or(false)` 把 `BLKROGET` 的失败吞了 |
 | `make_writable` 三态 | ✅ 已合 | `Writable::{Already, Cleared, StillReadOnly}`：清完还是只读，不再被当成「本来就可写」 |
 | props 读失败 | ✅ 已合 | 只对 EIO/超时类错误做 200 ms 有界重试（erofs inode 坏是稳定错误，重试只是白等）；About 页一行 `Unreadable{partition,file,error}`，带分区名与文件名 |
-| 安装进度看得见 | ✅ 已实现（待真机验证） | 比例先取引擎的 `progress` 行，引擎还没说过话时取 fuse 已送字节；两者都经 `along(total, elapsed, counted)` 抬地板——**报过几个数之后再沉默，条子照样按已耗时往前爬**（60 s 时间常数向 90% 逼近并封顶），引擎给的真数字一旦更大就立刻接管，不会把真的 95% 压下去。函数在 `crates/skyward-install/src/creep.rs`，不设 `cfg(target_os = "android")` 门控，八条断言由桌面 `cargo test --workspace` 真跑（含「报过数后沉默不停」与「95% 不被压下」两条）。此前写在 `run.rs` 的 `#[cfg(test)]` 里，桌面测试永远编不到——那是假绿 |
+| 安装进度看得见 | ✅ 已实现（待真机验证） | 比例先取引擎的 `progress` 行，引擎还没说过话时取 fuse 已送字节；两者都经 `along(total, elapsed, counted)` 抬地板——**报过几个数之后再沉默，条子照样按已耗时往前爬**（60 s 时间常数向 90% 逼近并封顶），引擎给的真数字一旦更大就立刻接管，不会把真的 95% 压下去。函数在 `crates/keel-install/src/creep.rs`，不设 `cfg(target_os = "android")` 门控，八条断言由桌面 `cargo test --workspace` 真跑（含「报过数后沉默不停」与「95% 不被压下」两条）。此前写在 `run.rs` 的 `#[cfg(test)]` 里，桌面测试永远编不到——那是假绿 |
 | 整包会覆盖 `init_boot` | 📌 已知行为 | OTA 直写 boot/init_boot，不走快照；装完 KernelSU 的补丁就没了。重刷 `init_boot_a` / `init_boot_b` 即恢复（本次两槽各 8 MB，`fastboot flash` 均 `OKAY`，`su -v` = `3.3.1:KernelSU`） |
 
 `1.0.4` 的资产：`skyward-v1.0.4-bixi-OS4.0.0.11.XOHCNXM.img`（裸镜像，直写 recovery 分区）、
@@ -252,7 +252,7 @@ init: Service 'recovery' (pid 1438) exited with status 1
 
 ### 构建
 
-- 一个命令出整镜像：`skyward-pack recovery --stock recovery.img --binary … --system-init … --config devices/bixi.toml --font … --mono … --extra bixi_extra --out …`。
+- 一个命令出整镜像：`keel-pack recovery --stock recovery.img --binary … --system-init … --config devices/bixi.toml --font … --mono … --extra bixi_extra --out …`。
 - `bixi_extra` 里 8 个文件补的是 recovery 缺的 HAL 声明与脚本（`se_omapi`、两个 NDK so、`android.se.omapi-service.xml`、`weaver-nxp.xml`、`bixi-sockets.rc`、`ueventd.rc`、`bixi-sdcard.sh`）。
 
 ## 借鉴与来源
