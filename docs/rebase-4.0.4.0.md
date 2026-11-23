@@ -210,12 +210,12 @@ dmesg | grep -E 'partitions not mounted|devices not brought up|mounted'
 
 第三行只在 update_engine **退出码 0** 之后才打（`run.rs:629`）。所以：A 槽写进去了、recovery
 写回了 `[A]`（顺带说明 1.0.13 的 `make_writable`/`BLKROSET` 在 4.0.4.0 上真管用）、没有 wipe。
-没成的是**重启进 A 槽那一步：卡开机 logo**。
+没成的是**重启进 A 槽那一步：起来了又倒，倒了 5 次之后被回滚**（见下面的证据链）。
 
 现场：`/metadata/ota/state` 74 字节；`/metadata/ota/snapshots/` 下有 9 个分区的快照
 （`system_a`/`vendor_a`/`product_a`/`odm_a`/`system_ext_a`/`system_dlkm_a`/`vendor_dlkm_a`/
 `mi_ext_a`/`mi_product_a`）；`merge outstanding true`。**这是一次走了 Virtual A/B 快照的安装，
-第一次启动必须 merge；卡 logo 就发生在 merge 这一段。**
+第一次启动必须 merge。**
 
 ### 7.1 包大小这一条：只作上限记录，不是病因
 
@@ -244,6 +244,22 @@ dmesg | grep -E 'partitions not mounted|devices not brought up|mounted'
 3. **包里的 `boot`/`vbmeta` 内容本身能启动**：系统 OTA 写进去的 `boot_a`/`vbmeta_a`（同一份包的
    内容）起得来。于是「A 槽镜像 / AVB 起不来」排到最后。
 
+**证据链（2026-11-23，dropbox 里 8 条 `SYSTEM_BOOT`）**
+
+| 时间 | 系统 | 读法 |
+| --- | --- | --- |
+| 21:21:42 | OS4.0.0.11（内核 `g-c4127a25dcf3`，7-15 版） | 装包之前的系统 |
+| 21:38:28 | OS4.0.4.0（内核 `g-0908354dac1b`，8-20 版） | 4.0.4.0 第一次起来 |
+| 21:41:53 / 21:44:51 / 21:49:22 / 21:56:15 | OS4.0.4.0 | **同一晚共 5 次，间隔 3–7 分钟** |
+| 22:28:13 | OS4.0.0.11 | 回到旧系统（VAB 的失败回退） |
+| 22:52:23 | OS4.0.4.0 | 系统 OTA 装完，最终成功 |
+
+每条内容都是 `isPrevious: true` + Build + Hardware: sun + Radio + Kernel，这版 dropbox 不记
+`boot_reason`。关键在次数：**这 5 条每条都写成功，说明每次启动都到了 `system_server`。**所以
+「卡 logo」的说法要改：那次 rec 装进 A 槽的系统**不是起不来，是起来了又倒、倒了被拉起、5 次之后
+被引导器回滚到 B**（22:28 那条 4.0.0.11 就是回滚）。boot / 内核 / vbmeta / system 全过了 ——
+§7.2 的「镜像起不来」再被排除一次。
+
 **已排除（2026-11-23 逐条核到代码）**
 
 - **`reflash()` 不碰 `boot`/`vbmeta`**：`keep.rs:15` `const PARTITION = "recovery"`，`keep.rs:66-67`
@@ -259,9 +275,9 @@ dmesg | grep -E 'partitions not mounted|devices not brought up|mounted'
 
 | 排序 | 机制 | 为什么排这里 | 判据 |
 | --- | --- | --- | --- |
-| 1 | **我们交给首启的那份 COW / state，与首启的系统视图对不上**（属主、SELinux label、路径） | 唯一能解释「同包、同机、同槽，OTA 成、我们不成」的差异：OTA 的 COW 是 vold 解密后由引擎自己写在 `/data` 上；我们的 COW 是我们**自己的 ext4 挂载**写下去的 | 卡住后进 rec：state 仍是 `Snapshotted`/`Merging`、`snapshots/` 还在 |
+| 1 | **我们交给首启的那份 COW / state，与首启的系统视图对不上** —— 合并期出错或合不完，于是每次起来之后被拖倒 | 唯一能解释「同包、同机、同槽，OTA 成、我们不成」的差异：OTA 的 COW 是 vold 解密后由引擎自己写在 `/data` 上；我们的 COW 是我们**自己的 ext4 挂载**写下去的 | 每次起来后 3–7 分钟内倒、5 次后被回滚；**第一次倒就进 rec** 看 state 是否仍 `Snapshotted`/`Merging`、`snapshots/` 还在；`misc` 里的重试计数与成功标记 |
 | 2 | **`sync` 的边界与首启视图是否一致**（见下，第 1 条的一个具体成因） | `power()` 只写 `sys.powerctl`，落盘由 init 负责（`lib.rs:146` 注释：`init syncs and unmounts before it acts`）。能问的只是：那次 sync 覆不覆盖我们那份 COW 所在的挂载；以及 update_engine 自己 unmount `/metadata` 时是否已经把它的视图带走 | 与第 1 条同（都只表现成 merge 一动不动）；分开得看装完以后 `/proc/mounts` 里 `/data` 是谁挂的、dm 状态如何 |
-| 3 | **A 槽镜像 / AVB**（排末） | 已被反证：同 `boot_a`、同 `vbmeta_a` 的 OTA 起得来。只剩一种残留：我们那次写下的 `vbmeta` 与 OTA 写的不一致 | 卡住后进 rec：state 已 `None`、`snapshots/` 清空，而 bootstat 里那次没有 `boot_completed` |
+| 3 | **A 槽镜像 / AVB**（排末，基本可排除） | 被反证两次：同 `boot_a`、同 `vbmeta_a` 的 OTA 起得来；且 dropbox 证明那 5 次都到了 `system_server`。只剩一种残留：我们那次写下的 `vbmeta` 与 OTA 写的不一致 | state 已 `None`、`snapshots/` 清空，而系统仍起不来 |
 
 **关于第 2 条的措辞**：原来说「重启前没落盘」不准确 —— 落盘不是没人管，是 init 在 `sys.powerctl`
 之前 `sync` 并 unmount。所以收窄成「sync 的边界与首启视图是否一致」，而它的两个答案（sync 没覆盖
@@ -279,7 +295,7 @@ dmesg | grep -E 'partitions not mounted|devices not brought up|mounted'
 | B 组（`adb sideload`，无快照）的结果 | 读法 |
 | --- | --- |
 | 进得了系统 | 病因锁死在**快照线**（§7.2 第 1/2 条）。干净覆盖写能起 ⇒ 我们写进去的镜像与 AVB 都对，差别只在 COW 与 state |
-| 照样卡 logo | 连不带快照的干净 A 槽都起不来 ⇒ 问题不在快照，而在**我们写进去的东西**或**写完之后做的动作**。核两样：① `vbmeta_a` 与包内那段是否逐字节一致；② overwrite 分支下 `boot`/`vbmeta` 是 update_engine 直接写的，不是我们写的（`reflash` 只写 recovery，`installed_boot_set()` 在这台机是 no-op，两条已在 §7.2 排除） |
+| 照样起不来（起来又倒） | 连不带快照的干净 A 槽都起不来 ⇒ 问题不在快照，而在**我们写进去的东西**或**写完之后做的动作**。核两样：① `vbmeta_a` 与包内那段是否逐字节一致；② overwrite 分支下 `boot`/`vbmeta` 是 update_engine 直接写的，不是我们写的（`reflash` 只写 recovery，`installed_boot_set()` 在这台机是 no-op，两条已在 §7.2 排除） |
 
 步骤、前置、判据、记录表仍在 **`docs/exp-404-sideload.md`**，照抄即可跑。主判据一行：装完后
 `recovery.log` 的 `left for the next start` 从 `Snapshotted, merge outstanding true` 变成
@@ -295,7 +311,7 @@ B 的代价：直接覆盖写 A 槽，失败时 A 槽起不来（已有先例，
    也印证「失败的那次启动让 VAB 状态走了标准作废流程」——**这也是为什么现场必须在下一次重启之前
    拷走**（§7.5）。
 2. **`/sys/fs/pstore/` 是空目录**（`total 0`，只有 `.` 和 `..`）：这台机没有 pstore 后端在留东西，
-   卡 logo 那次的内核日志已经拿不到。**pstore 不再作为取证路线**，取证只用下面三处。
+   那次的内核日志已经拿不到。**pstore 不再作为取证路线**，取证只用下面这些实测过的源。
 3. **A 槽现在的 4.0.4.0 是好的**：`sys.boot_completed=1`、`ro.boot.slot_suffix=_a`、
    `bootreason=reboot,userrequested`、`veritymode=enforcing`（原样记录）。这套内容来自系统 OTA。
 4. **11-22 那次安装确实写到了 `init_boot_a`**：装完当场读到原厂 `6e636c81…`，现在是 `7c1453fa…`
@@ -313,17 +329,34 @@ B 的代价：直接覆盖写 A 槽，失败时 A 槽起不来（已有先例，
 | dtbo | `f690924dda49e37c` | `6e60d8d4b952d732` |
 | vendor_boot | `42fd42055df23e36` | `0d3b89fbd9fbbf1a` |
 
-**三处证据源（框架侧）**
+**证据源实测（2026-11-23）**
 
-1. `/data/system/dropbox/`（要 root：`adb shell "su -c 'ls -l /data/system/dropbox'"`）：找
-   `system_boot` / `system_restart` / `last_kmsg` / `watchdog` 命名的条目。`SYSTEM_BOOT` 说明那次
-   确实到了 framework；`SYSTEM_LAST_KMSG` 是 system_server 采的上一次内核日志，而它的上游就是
-   pstore（空），别指望有内容。这些文件带 DropBox 自己的头 + gzip，别直接 `zcat`，拷出来解析。
-2. `/data/misc/bootstat/`：一事件一文件，**看文件名和 mtime**。卡 logo 那次若没到 framework，
-   就没有那次的 `boot_completed`；`boot_reason_*` / `boot_subsystem_*` 里有异常码也记下来。
-3. `adb shell 'logcat -b all -d | grep -iE "snapshot|merge|update_engine|snapuserd"'`：这是**当前
-   boot** 的日志。系统 OTA 走的是引擎，正常情况下能翻到它的痕迹 —— 反过来，一条都没有就说明
-   「OTA 一类」这个说法要再核。
+1. **`/data/system/dropbox/` —— 唯一硬证据**：8 条 `SYSTEM_BOOT`，时间线见 §7.2。条目内容都是
+   `isPrevious: true` + Build + Hardware: sun + Radio + Kernel，这版**不记 `boot_reason`**。
+   `SYSTEM_LAST_KMSG` 的上游是 pstore（空），别指望有内容。这些文件带 DropBox 自己的头 + gzip，
+   别直接 `zcat`，拷出来解析。
+2. **`/data/misc/bootstat/` —— 实测废**：30 来个文件全是 0 字节，mtime 大多是 1970/198x 的纪元
+   垃圾，略有用只有两个 mtime（`boot_complete` 1970-01-01 22:37、`build_date` 2026-11-13 00:46）。
+   只当空标记看，不作证据源。
+3. **`logcat -b all -d` —— 只覆盖当前这次启动**：228,822 行里 `snapuserd` / `update_engine` /
+   `vabc` / `virtual a/b` / `COW` / `skyward` / `metadata-ota` **全部 0 命中**，环形缓冲只到
+   11-23 11:21 之后，11-22 晚上已经滚没了。不作证据源。
+4. **`/data/misc/update_engine/prefs/` —— 比 dropbox 更值钱的账本**。系统 OTA 那次留下的原文：
+
+```
+previous-version = Xiaomi/bixi/bixi:17/CP2A.260605.016/OS4.0.4.0.XOHCNXM:user/release-keys
+update-state-next-operation = -1          Idle，没有挂起的操作
+metrics-merge-start-duration = 78
+metrics-boot-complete-timestamp = 53388
+delta-update-failures = 0
+current-bytes-downloaded = 0 / total-bytes-downloaded = 0
+manifest-bytes = 339672
+```
+
+   时间戳：`manifest` 与 `update-check-response-hash` 22:16 → `delta-update-failures` 22:21 →
+   merge 相关三件 22:27 → `boot-id` 22:51 → `boot-complete` 22:52。**`merge-start-duration=78`
+   加 `next-operation=-1` 就是 merge 走完的实证**，与 §7.2 的定案对得上。rec 内装包时引擎会把同一套
+   记账写进同一个目录（`/data` 开着时），所以下次复现要连着这个目录一起拷（§7.5）。
 
 ### 7.5 下次复现的现场保全清单
 
@@ -355,7 +388,13 @@ dmesg > $OUT/dmesg.txt
 cp /proc/mounts $OUT/mounts.txt
 ls -l /dev/block/mapper > $OUT/mapper.ls 2>/dev/null
 dmsetup ls --tree > $OUT/dm.txt 2>/dev/null
-# 7 刚写进去的分区哈希
+# 7 引导器的槽元数据（重试计数 / 成功标记 / 回滚都在这里）
+dd if=/dev/block/by-name/misc of=$OUT/misc.bin 2>/dev/null
+od -An -tx1 $OUT/misc.bin > $OUT/misc.hex 2>/dev/null
+# 8 引擎在 /data 上的记账（/data 开着时才有）
+cp -a /data/misc/update_engine      $OUT/update_engine-data 2>/dev/null
+cp -a /data/misc/update_engine_log  $OUT/update_engine-logs 2>/dev/null
+# 9 刚写进去的分区哈希
 for p in boot_a init_boot_a vbmeta_a dtbo_a vendor_boot_a recovery_a ; do
   printf '%-14s ' $p ; sha256sum /dev/block/by-name/$p | cut -c1-16
 done > $OUT/partitions.txt
@@ -372,7 +411,13 @@ adb pull /data/local/tmp/skyward-ota-XXXX ./
   `/sdcard`，然后在 Windows 侧用 Shell COM（`Shell.Application` 的 `NameSpace`）直接从手机拷出来
    —— 不在手机上折腾文件。**不要因为 pull 不顺就把手机重启掉。**
 - 「拷全」的判据：`manifest.txt` 里每一项都有大小；`state.hex` 不是空文件；`update_engine.log`
-  不是 0 字节；`partitions.txt` 六行齐。
+  不是 0 字节；`misc.bin` 非 0 且 `misc.hex` 有内容；`partitions.txt` 六行齐；`/data` 开着的话
+  `update_engine-data/` 里有文件。
 
-拷完之后才允许重启；重启后才看首启。若卡住，再进 rec 按 §7.4 的三处取证。
+**第一次倒之后就拷，不必等回滚。** dropbox 已经证明那次安装的系统每次都能跑到 `system_server`
+（§7.2 证据链），所以「起来 → 倒了」这个瞬间之后进 rec，`/metadata/ota` 里的 state 很可能还是活的；
+等 5 次重试耗尽、被回滚到 B 槽，那条作废流程就把现场清掉了。
+
+拷完之后才允许重启；重启后才看首启。若起来又倒，再进 rec 按 §7.4 的证据源取证。
+
 

@@ -9,7 +9,7 @@ A 槽，不带快照，能不能起。**
 | B 组（sideload）的结果 | 结论 |
 | --- | --- |
 | 首启进得了系统 | 病因锁死在**快照线**（§7.2 第 1/2 条）：干净覆盖写能起，说明我们写进去的镜像与 AVB 都对，差别只在 COW 与 state |
-| 首启照样卡 logo | 连不带快照的干净 A 槽都起不来：问题不在快照，而在写进去的东西。核 `vbmeta_a` 与包内那段是否逐字节一致（§7.3 第二行；`reflash`/`installed_boot_set()` 两条已在 §7.2 排除） |
+| 首启照样起不来（起来又倒） | 连不带快照的干净 A 槽都起不来：问题不在快照，而在写进去的东西。核 `vbmeta_a` 与包内那段是否逐字节一致（§7.3 第二行；`reflash`/`installed_boot_set()` 两条已在 §7.2 排除） |
 | 根本没装进去（引擎拒 / 我们拒 / 断链） | 两个假设都还没验到。按 §6 记下拒在哪一步再回来 |
 
 ## 1. 为什么换来源就能换掉 `/data` 的状态
@@ -119,8 +119,9 @@ done > $OUT/partitions.txt
 ls -lR $OUT > $OUT/manifest.txt
 ```
 
-   然后重启（不要进 fastboot），看首启 —— 进得去 / 卡 logo。卡的话不进系统、先进 rec，按
-   `docs/rebase-4.0.4.0.md` §7.4 的三处取证（**pstore 在这台机上已确认空，别再去翻**）。
+   然后重启（不要进 fastboot），看首启 —— 进得去 / 起来又倒。**第一次倒之后就进 rec 拷现场**
+   （清单在 `docs/rebase-4.0.4.0.md` §7.5），不必等它回滚；再按 §7.4 的证据源取证（**pstore 在这台
+   机上已确认空，别再去翻**）。
 
 ## 6. 失败分支怎么判
 
@@ -130,13 +131,13 @@ ls -lR $OUT > $OUT/manifest.txt
 | 手机上拒：「电量仅剩…」 | < 15% | 充电后重来 |
 | PC 侧 `adb sideload` 报 `failed to read command` / `protocol fault` | 传到一半断链 | 贴 PC 输出 + `tail /skyward/run/recovery.log` |
 | 引擎在 Prepare 阶段直接报错（不是 overwrite） | `" /data 关着"` 这条路引擎不接受 | 也是一个有效结论，贴 `update_engine.log` 最后 40 行 |
-| 首启卡 logo | 见 §0 第二行 | 先进 rec 看 `/metadata/ota` 的 state（§7.2 的两条判据），再按 §7.4 的三处 |
+| 首启起来又倒 | 见 §0 第二行 | 第一次倒就进 rec：先看 `/metadata/ota` 的 state（§7.2 判据），再把 §7.5 的清单拷走 |
 
 ## 7. 收尾
 
 - **进得了系统**：A 槽是干净的 4.0.4.0；重刷 KSU 补丁（`init_boot_a` 已被原厂镜覆盖）；
   核对 `recovery_a` 回到 `3676c676…4aa06`（`written back` 那行是它的证据）。
-- **卡 logo**：先进 rec 看 `/metadata/ota` 的 state 与 `snapshots/`（两条判据在 §7.2），再重刷 A 槽
+- **起来又倒**：先进 rec 看 `/metadata/ota` 的 state 与 `snapshots/`（两条判据在 §7.2），再重刷 A 槽
   （有先例）。卡住那段的内核日志不会被 pstore 留下，别等它。
 - 把 §8 的表填了贴我。
 
@@ -153,4 +154,4 @@ ls -lR $OUT > $OUT/manifest.txt
 | `recovery.log` 的 `left for the next start` 行 | | |
 | `update_engine.log` 有没有 `Will overwrite` | | |
 | 引擎退出码 / `Installed` 行 | | |
-| 首启结果（进系统 / 卡 logo 多久） | | |
+| 首启结果（进系统 / 起来又倒，几次、每次多久） | | |
