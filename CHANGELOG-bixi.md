@@ -154,7 +154,7 @@ init: Service 'recovery' (pid 1438) exited with status 1
 | --- | --- | --- |
 | 外屏显示与触摸 | ✅ 真机验过 | 只驱动一块面板；按折叠状态切换；触摸坐标按面板重算 |
 | 双击亮屏 | ✅ 真机验过（0.64） | 用面板 doze 而非关屏，触摸控制器保持工作 |
-| 自动解密 / 记住密码 | ✅ 真机验过（0.65） | AES-GCM 密文存 `/metadata/skyward/credential`，密钥由序列号派生 |
+| 自动解密 / 记住密码 | ✅ 真机验过（0.65） | AES-GCM 密文存 `/metadata/keel/credential`，密钥由序列号派生 |
 | WAL 合并后读 `sp-handle` | ✅ 真机验过（0.66） | 复制 `locksettings.db` 到临时目录再打开，让 `-wal` 真的重放 |
 | `/data`、`/sdcard`、MTP | ✅ | 开机后台打开 `/data` 并绑定 `/sdcard`；先解锁再开文件传输 |
 | 分区镜像 | ✅ | 全备（LZ4 + `.img.lz4` + sidecar）、关键分区、最小可开机集；可存内部存储或 U 盘 |
@@ -202,7 +202,7 @@ init: Service 'recovery' (pid 1438) exited with status 1
 
 ### 解密与锁定
 
-- 记住密码：成功解开 `/data` 时输入的密码被 AES-GCM 加密保存到 `/metadata/skyward/credential`，密钥由本机序列号派生，不写进设置文件；换手机解不开，关开关即删。之所以不用 TEE：recovery 无法让安全世界封装一个它没见过的密钥。
+- 记住密码：成功解开 `/data` 时输入的密码被 AES-GCM 加密保存到 `/metadata/keel/credential`，密钥由本机序列号派生，不写进设置文件；换手机解不开，关开关即删。之所以不用 TEE：recovery 无法让安全世界封装一个它没见过的密钥。
 - WAL 合并：旧实现用 `file:…?immutable=1` 打开 `locksettings.db`，会忽略 `-wal`，读到的 `sp-handle` 是旧的。现在先把 `locksettings.db`（连同 `-wal`/`-shm`）复制到 `/data/local/tmp/skyward-locksettings-<pid>/` 再打开，让 SQLite 真的重放日志，实测读到了当前值。
 - 解密页可以单独「删除已保存的密文」，并显示「保存于 年/月/日 时:分」。
 - `user 999` 仍打不开：recovery 里 gatekeeper 起不来，这是老限制，不影响 user 0。

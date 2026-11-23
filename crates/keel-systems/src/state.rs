@@ -12,7 +12,7 @@ use std::os::unix::fs::OpenOptionsExt;
 use std::path::Path;
 
 /// Where the state is kept.
-pub const PATH: &str = "/metadata/skyward/systems.toml";
+pub const PATH: &str = "/metadata/keel/systems.toml";
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct State {

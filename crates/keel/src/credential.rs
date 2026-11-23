@@ -11,10 +11,10 @@ use std::io::{ErrorKind, Write};
 use std::path::Path;
 
 const METADATA: &str = "/metadata";
-const FOLDER: &str = "/metadata/skyward";
-const FILE: &str = "/metadata/skyward/credential";
+const FOLDER: &str = "/metadata/keel";
+const FILE: &str = "/metadata/keel/credential";
 /// What a write goes into first, to be moved over the file whole.
-const WRITING: &str = "/metadata/skyward/credential.new";
+const WRITING: &str = "/metadata/keel/credential.new";
 
 /// This phone's serial number, which the key is derived from: a file copied
 /// to another phone does not open there.

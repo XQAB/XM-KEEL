@@ -37,7 +37,7 @@
 
 - `recovery_a` / `recovery_b` = `3676c676ebdd82c68fc4fe914d65a317426e518d090b537eaae4a8522354aa06`（v1.0.13 保留，未被原厂覆盖）。
 - `init_boot_a` = `7c1453fa…`（KernelSU 补丁）；`boot_a`/`vbmeta_a`/`dtbo_a`/`vendor_boot_a` 均为 4.0.4.0。
-- `/metadata/skyward/settings.json` 完好：`keep_recovery=true`、`remember_credential=true`。
+- `/metadata/keel/settings.json` 完好：`keep_recovery=true`、`remember_credential=true`。
 - recovery 可进，v1.0.13 起得来。
 
 第一条要改读法（2026-11-22 修正）。**这次升级不是走 rec 装整包完成的**：进 XM KEEL rec
@@ -305,7 +305,7 @@ sha256sum /dev/block/by-name/boot_a /dev/block/by-name/init_boot_a \
 ### recovery 侧（进 rec 后，`adb shell` 直接可用）
 
 ```sh
-head -40 /skyward/run/recovery.log
+head -40 /keel/run/recovery.log
 cat /proc/mounts | grep -E 'vendor_dlkm|system_dlkm|/vendor |/odm |/mnt/system'
 cat /proc/modules | grep -E 'synaptics|xiaomi_touch|mitee|nxp|goodix|rfkill|qca_cld'
 # recovery 里没有 service / ip 命令（which 皆空），判服务与网络要靠下面这几条
@@ -350,7 +350,7 @@ dmesg | grep -E 'partitions not mounted|devices not brought up|mounted'
 ## 7. rec 内装 4.0.4.0 完整包：装完了，是 A 槽第一次启动没起来（另案，未结案）
 
 **前提已纠正（2026-11-23）**：失败不在安装流程里——安装流程走完了。11-22 那次装包的
-`/skyward/run/recovery.log` 自己留下三行：
+`/keel/run/recovery.log` 自己留下三行：
 
     install: left for the next start: snapshots Snapshotted, merge outstanding true
     install: this recovery written back to [A]: Ok(())
@@ -520,7 +520,7 @@ manifest-bytes = 339672
 ### 7.5 下次复现的现场保全清单
 
 **红线：装完 → 拷现场 → 确认拷全 → 才允许重启。** 失败的那次启动一结束，VAB 的作废流程就把
-`/metadata/ota` 清成现在的样子（已实测）；重启同时会带走 `/skyward/run` 里的两份日志（tmpfs）。
+`/metadata/ota` 清成现在的样子（已实测）；重启同时会带走 `/keel/run` 里的两份日志（tmpfs）。
 顺序反了，这一轮就等于白跑。
 
 **一次性脚本**（在 rec 的终端里跑，或 `adb shell` 进去跑）：
@@ -538,9 +538,9 @@ cp -a /metadata/ota/snapshots $OUT/ 2>/dev/null
 ls -laR /metadata/ota/update_engine > $OUT/update_engine.ls 2>/dev/null
 cp -a /metadata/ota/update_engine $OUT/ 2>/dev/null
 # 4 两份 tmpfs 日志
-cp /skyward/run/update_engine.log $OUT/ 2>/dev/null
-cp /skyward/run/recovery.log $OUT/ 2>/dev/null
-cp /skyward/run/install-script.log $OUT/ 2>/dev/null
+cp /keel/run/update_engine.log $OUT/ 2>/dev/null
+cp /keel/run/recovery.log $OUT/ 2>/dev/null
+cp /keel/run/install-script.log $OUT/ 2>/dev/null
 # 5 内核侧（dmesg 这会儿还在，重启就没）
 dmesg > $OUT/dmesg.txt
 # 6 挂载与 dm 状态

@@ -7,20 +7,20 @@ use std::path::Path;
 /// (they sit under `/` once the kernel unpacks the ramdisk).
 pub mod ramdisk {
     /// The device configuration, copied from `devices/<codename>.toml`.
-    pub const CONFIG: &str = "skyward/device.toml";
+    pub const CONFIG: &str = "keel/device.toml";
     /// The UI typeface.
-    pub const FONT: &str = "skyward/MiSansVF.ttf";
+    pub const FONT: &str = "keel/MiSansVF.ttf";
     /// The terminal's monospaced typeface.
-    pub const MONO: &str = "skyward/KirkMono-Regular.ttf";
+    pub const MONO: &str = "keel/KirkMono-Regular.ttf";
     /// The monospaced typeface's licence, which travels with every copy of
     /// it.
-    pub const MONO_LICENSE: &str = "skyward/KirkMono-OFL.txt";
+    pub const MONO_LICENSE: &str = "keel/KirkMono-OFL.txt";
     /// The recovery service binary init starts.
     pub const RECOVERY: &str = "system/bin/recovery";
     /// The first program of a system installed beside the installed one,
     /// which XM KEEL puts in that system's init_boot image: linked
     /// statically, since it runs before any system's libraries are there.
-    pub const SYSTEM_INIT: &str = "skyward/system-init";
+    pub const SYSTEM_INIT: &str = "keel/system-init";
     /// The commands install scripts written for other recoveries run that
     /// XM KEEL answers itself: 7za, avbctl, resetprop and zstd, which a
     /// stock recovery does not carry, and unzip, whose stock version holds
@@ -33,11 +33,23 @@ pub mod ramdisk {
     /// The scheduling profiles libprocessgroup reads.
     pub const TASK_PROFILES: &str = "system/etc/task_profiles.json";
     /// The init rules that set up file transfer's USB function.
-    pub const MTP_RC: &str = "system/etc/init/skyward-mtp.rc";
+    pub const MTP_RC: &str = "system/etc/init/keel-mtp.rc";
+
+    /// The device configuration of a recovery packed before the rename, and
+    /// of a second system installed from one: its ramdisk carries the same
+    /// file under the name the project had then. Such an image is XM KEEL's
+    /// own all the same, and must not be taken for a stranger's.
+    pub const OLD_CONFIG: &str = "skyward/device.toml";
+
+    /// The device configuration among `root`'s files: this build's own, or
+    /// the one a build before the rename wrote.
+    pub fn config_at(root: &std::path::Path) -> Option<std::path::PathBuf> {
+        [CONFIG, OLD_CONFIG].into_iter().map(|name| root.join(name)).find(|path| path.exists())
+    }
 
     /// Whether the running root is XM KEEL's recovery ramdisk.
     pub fn in_recovery() -> bool {
-        std::path::Path::new("/").join(CONFIG).exists()
+        config_at(std::path::Path::new("/")).is_some()
     }
 }
 

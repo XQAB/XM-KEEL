@@ -58,12 +58,12 @@ PROP_DEFAULT = "prop.default"
 # program of the system installed beside this one, the phone's configuration,
 # the two typefaces, logd's scheduling profiles and file transfer's init rules.
 PACKED = [
-    "skyward/system-init",
-    "skyward/device.toml",
-    "skyward/MiSansVF.ttf",
-    "skyward/KirkMono-Regular.ttf",
+    "keel/system-init",
+    "keel/device.toml",
+    "keel/MiSansVF.ttf",
+    "keel/KirkMono-Regular.ttf",
     "system/etc/task_profiles.json",
-    "system/etc/init/skyward-mtp.rc",
+    "system/etc/init/keel-mtp.rc",
 ]
 # Every command a stock recovery lacks, as links to the recovery binary, each
 # started as the name it is linked under (crates/keel-config/src/lib.rs,
@@ -438,19 +438,19 @@ def verify(image, config, extra, version, manifest):
                 report.warn("requested library", f"{name} asks for {library}, which is not in the ramdisk")
 
     # The phone's configuration travels with the image, and has to be its own.
-    config_file = by_name.get("skyward/device.toml")
+    config_file = by_name.get("keel/device.toml")
     if config_file is not None:
         try:
             inside = tomllib.loads(config_file.data.decode("utf-8"))
             name = inside.get("device", {}).get("codename")
         except (UnicodeDecodeError, tomllib.TOMLDecodeError) as e:
             name = None
-            report.fail("device config", f"skyward/device.toml does not parse: {e}")
+            report.fail("device config", f"keel/device.toml does not parse: {e}")
         if name is not None:
             if name == codename:
                 report.ok("device config", f"{codename}, as devices/{device}.toml names it")
             else:
-                report.fail("device config", f"skyward/device.toml is for {name}, the image was built for {codename}")
+                report.fail("device config", f"keel/device.toml is for {name}, the image was built for {codename}")
 
     # Which version the binary says it is, as About shows it and as the phone
     # names the release it asks for next.

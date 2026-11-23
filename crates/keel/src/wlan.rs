@@ -28,12 +28,12 @@ use std::time::{Duration, Instant};
 const FIRMWARE: &str = "/etc/firmware";
 
 /// Where a partition a firmware file is read from is mounted meanwhile.
-const PARTITIONS: &str = "/skyward/wlan";
+const PARTITIONS: &str = "/keel/wlan";
 
 /// The supplicant's settings, and the folder of its control socket, in the
 /// recovery service's own folder, for as long as the data partition stays
 /// closed: what it keeps there is gone when the phone is turned off.
-const HOME: &str = "/skyward/run/supplicant";
+const HOME: &str = "/keel/run/supplicant";
 
 /// Where the networks joined once are kept: on the data partition, which
 /// opens only once its password is entered. A recovery that has got that

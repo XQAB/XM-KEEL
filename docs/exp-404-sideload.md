@@ -30,7 +30,7 @@ A 槽，不带快照，能不能起。**
 
 ## 2. 前置（有一条不满足就别开跑）
 
-1. rec 是 v1.0.13：`grep -m1 'recovery up' /skyward/run/recovery.log` 应带 `1.0.13`。
+1. rec 是 v1.0.13：`grep -m1 'recovery up' /keel/run/recovery.log` 应带 `1.0.13`。
 2. 电量 ≥ 15%（`short_of_charge` 会拒；系统请求的 retry 例外）。
 3. `/metadata/ota/state` 不存在，或里面是 `None`（11-23 已核：这台机现在是干净的——`state` 0
    字节、`snapshots/` 空、`update_engine/` 不存在）。**若又出现残留的 `Snapshotted`，停在这里报我**
@@ -54,7 +54,7 @@ ls -l /metadata/ota ; echo ---
 cat /metadata/ota/state 2>/dev/null | od -An -tx1 | head -6 ; echo ---
 ls -l /metadata/ota/snapshots 2>/dev/null ; echo ---
 getprop ro.boot.slot_suffix
-grep -m1 'recovery up' /skyward/run/recovery.log ; echo ---
+grep -m1 'recovery up' /keel/run/recovery.log ; echo ---
 for p in boot_a init_boot_a vbmeta_a dtbo_a vendor_boot_a recovery_a recovery_b ; do
   printf '%-14s ' $p ; sha256sum /dev/block/by-name/$p | cut -c1-16
 done
@@ -86,7 +86,7 @@ adb sideload "D:\桌面\玩机\mix flip 2\bao\bixi-ota_full-OS4.0.4.0.XOHCNXM-us
 
 ## 5. 装完看这五处（判据）
 
-1. `tail -20 /skyward/run/recovery.log`，期望四行（顺序固定）：
+1. `tail -20 /keel/run/recovery.log`，期望四行（顺序固定）：
 
 ```
 install: an update to 17OS4.0.261113.004012506.QCPECN.S
@@ -98,10 +98,10 @@ install: Installed { slot: A, wipe: false }
    **主判据是第二行**：`snapshots None, merge outstanding false`。A 组（11-22）那一行是
    `Snapshotted, merge outstanding true`。
 
-2. `grep -n 'Will overwrite existing partitions' /skyward/run/update_engine.log` —— 应有命中。
+2. `grep -n 'Will overwrite existing partitions' /keel/run/update_engine.log` —— 应有命中。
 3. `ls -l /metadata/ota ; cat /metadata/ota/state` —— 装完应**没有** state 文件、也没有
    `snapshots/` 目录（对照 A 组：74 字节 state + 9 个目录）。
-4. `grep -E 'Hashing partition|Error applying update' /skyward/run/update_engine.log | tail` ——
+4. `grep -E 'Hashing partition|Error applying update' /keel/run/update_engine.log | tail` ——
    回读校验有走到、没有错误码。
 5. **重启之前先拷现场**（红线：拷完、核对拷全，才允许重启）。完整脚本在
    `docs/rebase-4.0.4.0.md` §7.5，这里至少把这几样弄走：
@@ -109,7 +109,7 @@ install: Installed { slot: A, wipe: false }
 ```sh
 OUT=/data/local/tmp/skyward-B
 mkdir -p $OUT
-cp /skyward/run/recovery.log $OUT/ ; cp /skyward/run/update_engine.log $OUT/
+cp /keel/run/recovery.log $OUT/ ; cp /keel/run/update_engine.log $OUT/
 cp /metadata/ota/state $OUT/ 2>/dev/null ; od -An -tx1 /metadata/ota/state > $OUT/state.hex 2>/dev/null
 ls -laR /metadata/ota/snapshots > $OUT/snapshots.ls 2>/dev/null
 dmesg > $OUT/dmesg.txt ; cp /proc/mounts $OUT/mounts.txt
@@ -129,7 +129,7 @@ ls -lR $OUT > $OUT/manifest.txt
 | --- | --- | --- |
 | 手机上直接拒：「更新已写入，等待合并…」 | `/metadata/ota/state` 有残留（`Refusal::Pending`） | 停，报我，先解决残留 |
 | 手机上拒：「电量仅剩…」 | < 15% | 充电后重来 |
-| PC 侧 `adb sideload` 报 `failed to read command` / `protocol fault` | 传到一半断链 | 贴 PC 输出 + `tail /skyward/run/recovery.log` |
+| PC 侧 `adb sideload` 报 `failed to read command` / `protocol fault` | 传到一半断链 | 贴 PC 输出 + `tail /keel/run/recovery.log` |
 | 引擎在 Prepare 阶段直接报错（不是 overwrite） | `" /data 关着"` 这条路引擎不接受 | 也是一个有效结论，贴 `update_engine.log` 最后 40 行 |
 | 首启起来又倒 | 见 §0 第二行 | 第一次倒就进 rec：先看 `/metadata/ota` 的 state（§7.2 判据），再把 §7.5 的清单拷走 |
 

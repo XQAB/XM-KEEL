@@ -17,7 +17,7 @@
 
 | 事项 | 位置 | 事实 |
 | --- | --- | --- |
-| 文件 | `crates/keel/src/credential.rs` | `/metadata/skyward/credential`（同目录的 `credential.new` 先写再改名）；`save` / `load` / `forget` / `present` / `saved_at` |
+| 文件 | `crates/keel/src/credential.rs` | `/metadata/keel/credential`（同目录的 `credential.new` 先写再改名）；`save` / `load` / `forget` / `present` / `saved_at` |
 | 记什么 | 同上 | 打开 `/data` 的那个**锁屏密码原文** |
 | 什么时候写 | 设置页开关 | 只有「自动解密」开关打开才写；关掉即删 |
 | 密钥 | `crates/keel-crypto/src/credential.rs::key_of` | `SHA-256("skyward credential v1|" + 序列号 + "|" + 每次随机的 salt)`，AES-256-GCM |
@@ -105,7 +105,7 @@ C 值得记下来，但它的收益和 A 几乎重合：两者都要求「每次
   - 新增一条：不存在的文件 `load()` 报的是「没有保存」而不是解密失败（现在走的是 `fs::read` 的
     `read {FILE}` 上下文，要在 `skyward/src` 侧加一个 `present()` 前置判断的断言）。
 - 真机（bixi，B 槽 `OS4.0.0.11.XOHCNXM`）：
-  1. 开关关 → 进 rec → 必须输密码 → `/metadata/skyward/credential` 不存在；
+  1. 开关关 → 进 rec → 必须输密码 → `/metadata/keel/credential` 不存在；
   2. 开关开 → 存一次 → 重启进 rec 不再问密码；
   3. 关闭开关 → 文件立即消失（`forget()` 返回 true）；
   4. 升级路径：开关关着但文件在（模拟旧版本遗留）→ 第一次解开 `/data` 后文件消失。

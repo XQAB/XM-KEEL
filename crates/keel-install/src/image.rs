@@ -171,7 +171,14 @@ pub fn device_config<R: Read + Seek>(file: &mut R) -> Result<Option<Vec<u8>>> {
         entry.read_to_end(&mut config).context("read the device configuration")?;
         Ok(config)
     };
-    find(ramdisk, |name| name == keel_config::ramdisk::CONFIG, read).context("read the ramdisk")
+    // A recovery installed before the rename carries the configuration under
+    // the old name. It is still XM KEEL's: recognising it is what keeps an
+    // installed second system's boot set from being overwritten as a
+    // stranger's image would be.
+    let ours = |name: &str| {
+        name == keel_config::ramdisk::CONFIG || name == keel_config::ramdisk::OLD_CONFIG
+    };
+    find(ramdisk, ours, read).context("read the ramdisk")
 }
 
 /// The partition `name` of `slot` among the links in `dir`.
@@ -385,7 +392,7 @@ pub(crate) mod samples {
     pub fn recovery(skyward: bool) -> Vec<u8> {
         let mut names = vec!["init", "system/bin/recovery", "prop.default"];
         if skyward {
-            names.extend(["skyward", "skyward/device.toml", "skyward/MiSansVF.ttf"]);
+            names.extend(["keel", "keel/device.toml", "keel/MiSansVF.ttf"]);
         }
         boot_image(0, &lz4_legacy(&archive(&names)))
     }
@@ -395,7 +402,7 @@ pub(crate) mod samples {
     pub fn skyward_for(codename: &str) -> Vec<u8> {
         let config = format!("[device]\ncodename = \"{codename}\"\n");
         let mut out = Vec::new();
-        for (name, data) in [("init", &b""[..]), ("system/bin/recovery", b""), ("skyward/device.toml", config.as_bytes())] {
+        for (name, data) in [("init", &b""[..]), ("system/bin/recovery", b""), ("keel/device.toml", config.as_bytes())] {
             let mut entry = cpio::NewcBuilder::new(name).mode(0o100644).write(out, data.len() as u32);
             entry.write_all(data).unwrap();
             out = entry.finish().unwrap();
@@ -451,6 +458,17 @@ mod tests {
         assert!(!is_skyward(&mut Cursor::new(boot_image(5000, &[]))).unwrap(), "a boot image with no ramdisk");
         assert!(!is_skyward(&mut Cursor::new(boot_image(0, b"\xfd7zXZ\0"))).unwrap(), "a ramdisk packed as XM KEEL never packs it");
         assert!(!is_skyward(&mut Cursor::new(vec![0u8; 8192])).unwrap(), "an erased partition");
+    }
+
+    #[test]
+    fn a_recovery_packed_before_the_rename_is_still_ours() {
+        // The image an installed phone carries keeps the file under the name
+        // the project had then; taking it for a stranger's would let its boot
+        // set be overwritten.
+        let names = ["init", "system/bin/recovery", "skyward", "skyward/device.toml", "skyward/MiSansVF.ttf"];
+        let before = boot_image(0, &lz4_legacy(&archive(&names)));
+        assert!(is_skyward(&mut Cursor::new(&before)).unwrap());
+        assert!(device_config(&mut Cursor::new(&before)).unwrap().is_some(), "read without its codename");
     }
 
     #[test]

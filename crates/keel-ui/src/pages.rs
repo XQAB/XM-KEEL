@@ -2429,9 +2429,9 @@ const CREDENTIAL_DROP: Text = ["删除已保存的密文", "刪除已儲存的�
 const CREDENTIAL_SAVED: Text = ["保存于", "儲存於", "sealed"];
 const CREDENTIAL_SAVED_UNKNOWN: Text = ["保存时间不明", "儲存時間不明", "sealed at an unknown time"];
 const REMEMBER_NOTE: Text = [
-    "开启后，成功解开 data 分区时输入的那个密码会被加密保存，下次进入 recovery 自动尝试。它用 AES-GCM 加密，密钥由本机序列号派生，存在 /metadata/skyward/credential，不写进设置文件：把文件拷到别的手机解不开，关掉开关就删除。\n\n但密钥不在 TEE 里（recovery 没法让安全世界封装一个它没见过的密钥），所以它防得住「把文件拷走」，防不住拿着这台手机的人——对方可以运行同样的代码。这也是它默认关闭的原因。",
-    "開啟後，成功解開 data 分割區時輸入的那個密碼會被加密保存，下次進入 recovery 自動嘗試。它用 AES-GCM 加密，金鑰由本機序號衍生，存在 /metadata/skyward/credential，不寫進設定檔：把檔案拷到別的手機解不開，關掉開關就刪除。\n\n但金鑰不在 TEE 裡（recovery 沒辦法讓安全世界封裝一個它沒見過的金鑰），所以它防得住「把檔案拷走」，防不住拿著這台手機的人——對方可以執行同樣的程式。這也是它預設關閉的原因。",
-    "When on, the password that opened the data partition is kept sealed, and tried again at the next start. It is sealed with AES-GCM under a key derived from this phone's serial number, kept at /metadata/skyward/credential and never in the settings file: copied to another phone it does not open, and turning the switch off deletes it.\n\nThe key is not in the TEE, though — a recovery cannot have the secure world wrap a key it has never seen — so it keeps the file from being carried off, not the phone out of someone's hands, who can run the same code. That is why it ships off.",
+    "开启后，成功解开 data 分区时输入的那个密码会被加密保存，下次进入 recovery 自动尝试。它用 AES-GCM 加密，密钥由本机序列号派生，存在 /metadata/keel/credential，不写进设置文件：把文件拷到别的手机解不开，关掉开关就删除。\n\n但密钥不在 TEE 里（recovery 没法让安全世界封装一个它没见过的密钥），所以它防得住「把文件拷走」，防不住拿着这台手机的人——对方可以运行同样的代码。这也是它默认关闭的原因。",
+    "開啟後，成功解開 data 分割區時輸入的那個密碼會被加密保存，下次進入 recovery 自動嘗試。它用 AES-GCM 加密，金鑰由本機序號衍生，存在 /metadata/keel/credential，不寫進設定檔：把檔案拷到別的手機解不開，關掉開關就刪除。\n\n但金鑰不在 TEE 裡（recovery 沒辦法讓安全世界封裝一個它沒見過的金鑰），所以它防得住「把檔案拷走」，防不住拿著這台手機的人——對方可以執行同樣的程式。這也是它預設關閉的原因。",
+    "When on, the password that opened the data partition is kept sealed, and tried again at the next start. It is sealed with AES-GCM under a key derived from this phone's serial number, kept at /metadata/keel/credential and never in the settings file: copied to another phone it does not open, and turning the switch off deletes it.\n\nThe key is not in the TEE, though — a recovery cannot have the secure world wrap a key it has never seen — so it keeps the file from being carried off, not the phone out of someone's hands, who can run the same code. That is why it ships off.",
 ];
 const IMAGES: Text = ["分区镜像", "分割區鏡像", "Partition images"];
 const WAKE_BY_TAP: Text = ["双击亮屏", "雙擊亮屏", "Wake on two taps"];
@@ -4995,7 +4995,7 @@ pub fn logs(cx: &Ctx) -> Frame {
     });
     let places = widgets::list(&mut c, t, f, y, &[
         Row::new(l.pick(["临时文件夹", "暫存資料夾", "Temporary folder"]))
-            .subtitle(l.pick(["/skyward/run/logs，可通过 adb pull 导出到电脑", "/skyward/run/logs，可透過 adb pull 匯出到電腦", "/skyward/run/logs, which adb pull copies to a computer"]))
+            .subtitle(l.pick(["/keel/run/logs，可通过 adb pull 导出到电脑", "/keel/run/logs，可透過 adb pull 匯出到電腦", "/keel/run/logs, which adb pull copies to a computer"]))
             .trail(Trail::Check(s.logs_to == 0)),
         Row::new(place_name(l, Place::Storage)).subtitle(storage).trail(Trail::Check(s.logs_to == 1)),
     ]);
@@ -5081,9 +5081,9 @@ pub fn font_license(cx: &Ctx) -> Frame {
         (l.pick(LICENSE_TERMS), l.pick(["SIL 开源字体许可证 1.1 版（OFL-1.1）", "SIL 開放字型授權條款 1.1 版（OFL-1.1）", "SIL Open Font License, version 1.1 (OFL-1.1)"]).to_string()),
     ]);
     let mono = l.pick([
-        "终端文字使用 Kirk Mono 等宽字体。该许可证允许自由使用、修改和再发布字体，但不允许单独出售字体。\n\n许可证全文位于 /skyward/KirkMono-OFL.txt，也可在 openfontlicense.org 查看。",
-        "終端機文字使用 Kirk Mono 等寬字型。這份授權條款允許自由使用、修改和再散布字型，但不允許單獨出售字型。\n\n授權條款全文位於 /skyward/KirkMono-OFL.txt，也可在 openfontlicense.org 查看。",
-        "The terminal text is set in the monospaced Kirk Mono. Its license lets the font be used, changed and passed on freely, but not sold on its own.\n\nThe license in full is at /skyward/KirkMono-OFL.txt, and on openfontlicense.org.",
+        "终端文字使用 Kirk Mono 等宽字体。该许可证允许自由使用、修改和再发布字体，但不允许单独出售字体。\n\n许可证全文位于 /keel/KirkMono-OFL.txt，也可在 openfontlicense.org 查看。",
+        "終端機文字使用 Kirk Mono 等寬字型。這份授權條款允許自由使用、修改和再散布字型，但不允許單獨出售字型。\n\n授權條款全文位於 /keel/KirkMono-OFL.txt，也可在 openfontlicense.org 查看。",
+        "The terminal text is set in the monospaced Kirk Mono. Its license lets the font be used, changed and passed on freely, but not sold on its own.\n\nThe license in full is at /keel/KirkMono-OFL.txt, and on openfontlicense.org.",
     ]);
     let bottom = widgets::paragraph(&mut c, t, f, y + t.m.dp(4.0), mono);
     Frame::new(t, fit(c, t, bottom), Vec::new(), l.pick(FONTS), top)

@@ -21,6 +21,7 @@ mod haptics;
 mod input;
 #[cfg(target_os = "android")]
 mod merge;
+mod migrate;
 #[cfg(target_os = "android")]
 mod orientation;
 #[cfg(target_os = "android")]
@@ -74,7 +75,7 @@ enum Cmd {
     /// Load kernel modules and their dependencies from the configured
     /// sources; with no names, the configuration's own list.
     Load {
-        #[arg(long, default_value = "/skyward/device.toml")]
+        #[arg(long, default_value = "/keel/device.toml")]
         config: String,
         names: Vec<String>,
     },
@@ -120,7 +121,7 @@ enum Cmd {
     /// stopped.
     #[cfg(target_os = "android")]
     Services {
-        #[arg(long, default_value = "/skyward/device.toml")]
+        #[arg(long, default_value = "/keel/device.toml")]
         config: String,
     },
     /// List the display connectors, their modes, CRTCs and planes.
@@ -133,7 +134,7 @@ enum Cmd {
     /// going off by the power key, saying how strongly and for how long.
     #[cfg(target_os = "android")]
     Haptic {
-        #[arg(long, default_value = "/skyward/device.toml")]
+        #[arg(long, default_value = "/keel/device.toml")]
         config: String,
         /// Where on the strength slider, from 0 at its left end to 1 at its
         /// right.
@@ -201,12 +202,12 @@ enum Cmd {
     /// Drive the panel and touchscreen with the recovery UI.
     #[cfg(target_os = "android")]
     Ui {
-        #[arg(long, default_value = "/skyward/device.toml")]
+        #[arg(long, default_value = "/keel/device.toml")]
         config: std::path::PathBuf,
-        #[arg(long, default_value = "/skyward/MiSansVF.ttf")]
+        #[arg(long, default_value = "/keel/MiSansVF.ttf")]
         font: std::path::PathBuf,
         /// The terminal's monospaced typeface.
-        #[arg(long, default_value = "/skyward/KirkMono-Regular.ttf")]
+        #[arg(long, default_value = "/keel/KirkMono-Regular.ttf")]
         mono: std::path::PathBuf,
         /// Open on the unlock page instead of the home page.
         #[arg(long)]
@@ -689,6 +690,16 @@ fn recovery() -> Result<()> {
         std::fs::set_permissions(keel_sys::RUN, std::fs::Permissions::from_mode(0o755))
             .with_context(|| format!("open {} to the recovery's other users", keel_sys::RUN))?;
         keel_sys::keep_log(Path::new(keel_sys::LOG))?;
+        // The settings and the sealed credential of a phone that carried this
+        // recovery before the rename sit in a folder named after the old one.
+        // They are moved to the new name before anything reads them, so the
+        // data partition still opens without the password being typed again.
+        // Where that cannot be done the recovery works as on a fresh phone
+        // and says why in the kernel log.
+        #[cfg(target_os = "android")]
+        if let Err(e) = migrate::metadata() {
+            keel_sys::kmsg(&format!("the folder /metadata/skyward was not moved to /metadata/keel: {e:#}"))?;
+        }
         // A recovery that ended with a function of its own in the port took
         // the port with it; going through "none" takes that function off.
         if keel_sys::prop("sys.usb.state").is_some_and(|s| s != "adb") {
@@ -701,7 +712,10 @@ fn recovery() -> Result<()> {
         if !request.work.lasts() {
             bcb::clear(&misc)?;
         }
-        let cfg = DeviceConfig::load(Path::new("/").join(ramdisk::CONFIG))?;
+        let config = ramdisk::config_at(Path::new("/")).context(
+            "the ramdisk carries no device configuration, neither keel/device.toml nor its name before the rename",
+        )?;
+        let cfg = DeviceConfig::load(&config)?;
         keel_sys::kmsg(&format!(
             "{} {} recovery up, misc command {:?} args {:?}, asking for {:?}",
             cfg.device.codename,

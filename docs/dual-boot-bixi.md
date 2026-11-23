@@ -11,7 +11,7 @@
 | 启动镜像集 | `boot` + `init_boot` 整套存在**另一块** area（store，3 个 entry 滚动保存） | `store.rs::ENTRIES = 3`、`OTHER = 2` |
 | 切换改哪两个分区 | 只改「下次启动槽位」的 `boot` 与 `init_boot`，别的一个都不碰 | `switch.rs::restore` |
 | 第二系统怎么起 | 用**主系统的 `vendor_boot` 和 `dtbo`**；它自己的 `init_boot` 里被塞进 XM KEEL 的程序，first stage 由 XM KEEL 接 | `store::restore(..., init_boot)`、`boot::with_program` |
-| 状态 | `/metadata/skyward/systems.toml`，切换每一步先落盘，断电后下次启动 `resume` 补完 | `state.rs::PATH`、`switch.rs::resume` |
+| 状态 | `/metadata/keel/systems.toml`，切换每一步先落盘，断电后下次启动 `resume` 补完 | `state.rs::PATH`、`switch.rs::resume` |
 | 主系统启动集会不会丢 | 覆盖之前先把它存进 store 的另一个 entry，存完才算数 | `finish()` 里的 `store::save` |
 | 空间怎么算 | `room() = data 空闲 − store − 一份 super − area 头`，root 可选 8/16/32/64/128/256 GB | `install.rs::room` / `sizes` |
 
@@ -50,7 +50,7 @@ init_boot.img   可选：系统自带 first-stage ramdisk 时才有
 `crates/keel-systems/src/switch.rs` 里没有 `bootctl`、没有
 `bootloader_control`、没有 `set_active`、也没有 `misc`。切换的做法是：把目标
 系统的启动集**直接写进那个槽的 `boot` / `init_boot` 分区**（`store::restore` 按
-`places.by_name` 里的链接写），进度写在 `/metadata/skyward/systems.toml`，断电
+`places.by_name` 里的链接写），进度写在 `/metadata/keel/systems.toml`，断电
 之后下次启动由 `resume()` 接着补完。**recovery 自己就是权威，不问 bootloader。**
 
 boot control 在库里用在别的地方：读两槽的状态与「下次启动是哪个槽」
@@ -202,7 +202,7 @@ occupied 槽的另一槽），`saved` 作废，并把**第二系统的记录**�
 2. 装第二系统（最小 8 GB），确认 `/data` 剩余与界面显示一致；
 3. 切过去：第二系统 init 起得来、外屏行为符合预期（黑屏也算结论，记下来）；
 4. 切回主系统：`sys.boot_completed=1`、两槽 `boot` / `init_boot` 哈希回到安装前；
-5. 断电演练：切换中途强制断电，再启动应自动补完（看 `/metadata/skyward/systems.toml` 里 `switching` 字段是否消化）；
+5. 断电演练：切换中途强制断电，再启动应自动补完（看 `/metadata/keel/systems.toml` 里 `switching` 字段是否消化）；
 6. 卸载第二系统：area 消失、`systems.toml` 清空、主系统仍能起机。
 
 ## 7. 明确不做

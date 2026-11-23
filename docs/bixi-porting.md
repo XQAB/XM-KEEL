@@ -25,7 +25,7 @@
 | --- | --- | --- |
 | 外屏显示与触摸 | ✅ 真机验证 | 一次只驱动一个面板；两屏同时驱动会重启 |
 | 双击唤醒 / 外屏手势 | ✅ | 副屏 doze 到亮度 0 而非 blank，保留触摸 |
-| 自动解密 / 记住密码 | ✅（0.65+） | AES-GCM 存 `/metadata/skyward/credential` |
+| 自动解密 / 记住密码 | ✅（0.65+） | AES-GCM 存 `/metadata/keel/credential` |
 | WLAN 合屏后读取 `sp-handle` | ✅（0.66+） | 复制 `locksettings.db` 再打开，让 SQLite 重放 WAL |
 | /data、/sdcard、MTP | ✅ | MTP 要先开「文件传输」再解锁 /data：顺序是解密在前、插线在后，未解锁时页面会说明电脑为什么看不到东西 |
 | 分区备份（全备份/关联备份/最小可开机集） | ✅ | LZ4 + `.img.lz4` + sidecar；可存内部或 U 盘 |
@@ -121,7 +121,7 @@
 
 ## 6. 安全：凭据存储与密钥派生（⚠️ 待加固）
 
-- 打开 `/data` 的密码被 **AES-GCM 加密**后存于 `/metadata/skyward/credential`，密钥**从手机序列号派生**
+- 打开 `/data` 的密码被 **AES-GCM 加密**后存于 `/metadata/keel/credential`，密钥**从手机序列号派生**
   （`SHA-256("skyward credential v1|" + ro.serialno + "|" + salt)`）。序列号在 adb 与 fastboot 下都能读，
   所以换一台手机打不开，但**拿到这台手机的人能打开**——它是标记，不是边界。
 - 「改用已拉通的 **weaver** 做 hardware-bound」这条**不成立**：本 fork 的 weaver 客户端只有
