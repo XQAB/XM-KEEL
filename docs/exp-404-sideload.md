@@ -1,14 +1,15 @@
 # 实验：同一份 4.0.4.0 整包走 `adb sideload`（`/data` 关着）
 
-配套 `docs/rebase-4.0.4.0.md` §7.3。目的只有一个：把「**快照 → 首启 merge 没走完**」和
-「**A 槽内容本身起不来**」这两件事分开，一次实验二选一。
+配套 `docs/rebase-4.0.4.0.md` §7.3。**merge 链在这台机上已经证明是通的**（系统 OTA 走通了同样的
+快照 + 首启 merge），所以这个实验不再回答「merge 通不通」，只回答一件事：**我们这条路径写出来的
+A 槽，不带快照，能不能起。**
 
 ## 0. 读到什么算什么
 
 | B 组（sideload）的结果 | 结论 |
 | --- | --- |
-| 首启进得了系统 | merge 是分水岭。11-22 那次卡 logo 的病因在快照那条线（§7.2 第 1 条），A 槽镜像本身没问题 |
-| 首启照样卡 logo | 与 merge 无关，A 槽内容或 AVB 那一端有问题（§7.2 第 2 条）。rec 装整包失败的真因不在快照 |
+| 首启进得了系统 | 病因锁死在**快照线**（§7.2 第 1/2 条）：干净覆盖写能起，说明我们写进去的镜像与 AVB 都对，差别只在 COW 与 state |
+| 首启照样卡 logo | 连不带快照的干净 A 槽都起不来：问题不在快照，而在写进去的东西或写完之后做的动作 —— 核 `vbmeta_a`、`installed_boot_set()`、以及 overwrite 分支是引擎直接写 boot/vbmeta（§7.3 第二行） |
 | 根本没装进去（引擎拒 / 我们拒 / 断链） | 两个假设都还没验到。按 §6 记下拒在哪一步再回来 |
 
 ## 1. 为什么换来源就能换掉 `/data` 的状态
@@ -102,15 +103,24 @@ install: Installed { slot: A, wipe: false }
    `snapshots/` 目录（对照 A 组：74 字节 state + 9 个目录）。
 4. `grep -E 'Hashing partition|Error applying update' /skyward/run/update_engine.log | tail` ——
    回读校验有走到、没有错误码。
-5. 重启到系统之前，先把 tmpfs 里的日志取走（重启即失）：
+5. **重启之前先拷现场**（红线：拷完、核对拷全，才允许重启）。完整脚本在
+   `docs/rebase-4.0.4.0.md` §7.5，这里至少把这几样弄走：
 
 ```sh
-adb pull /skyward/run/recovery.log      ./recovery-B.log
-adb pull /skyward/run/update_engine.log ./update_engine-B.log
+OUT=/data/local/tmp/skyward-B
+mkdir -p $OUT
+cp /skyward/run/recovery.log $OUT/ ; cp /skyward/run/update_engine.log $OUT/
+cp /metadata/ota/state $OUT/ 2>/dev/null ; od -An -tx1 /metadata/ota/state > $OUT/state.hex 2>/dev/null
+ls -laR /metadata/ota/snapshots > $OUT/snapshots.ls 2>/dev/null
+dmesg > $OUT/dmesg.txt ; cp /proc/mounts $OUT/mounts.txt
+for p in boot_a init_boot_a vbmeta_a dtbo_a vendor_boot_a recovery_a ; do
+  printf '%-14s ' $p ; sha256sum /dev/block/by-name/$p | cut -c1-16
+done > $OUT/partitions.txt
+ls -lR $OUT > $OUT/manifest.txt
 ```
 
    然后重启（不要进 fastboot），看首启 —— 进得去 / 卡 logo。卡的话不进系统、先进 rec，按
-   `docs/rebase-4.0.4.0.md` §7.5 取证（**pstore 在这台机上已确认不可用**，别再去翻）。
+   `docs/rebase-4.0.4.0.md` §7.4 的三处取证（**pstore 在这台机上已确认空，别再去翻**）。
 
 ## 6. 失败分支怎么判
 
@@ -120,7 +130,7 @@ adb pull /skyward/run/update_engine.log ./update_engine-B.log
 | 手机上拒：「电量仅剩…」 | < 15% | 充电后重来 |
 | PC 侧 `adb sideload` 报 `failed to read command` / `protocol fault` | 传到一半断链 | 贴 PC 输出 + `tail /skyward/run/recovery.log` |
 | 引擎在 Prepare 阶段直接报错（不是 overwrite） | `" /data 关着"` 这条路引擎不接受 | 也是一个有效结论，贴 `update_engine.log` 最后 40 行 |
-| 首启卡 logo | 见 §0 第二行 | 先进 rec 看 `/metadata/ota` 的 state（§7.2 的两条判据），再按 §7.5 |
+| 首启卡 logo | 见 §0 第二行 | 先进 rec 看 `/metadata/ota` 的 state（§7.2 的两条判据），再按 §7.4 的三处 |
 
 ## 7. 收尾
 

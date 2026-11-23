@@ -232,26 +232,41 @@ dmesg | grep -E 'partitions not mounted|devices not brought up|mounted'
 
 安装既然走完，这四条就只是「这个包在我们这儿不会撞上限」的记录，与本次失败无关。
 
-### 7.2 首启为什么没起来（待证，收敛成两条）
+### 7.2 首启为什么没起来（定案后的排序）
 
-与「安装阶段」有关的那几条可能性，随 `Installed { slot: A }` 一起作废。剩下的两条，判据都写在
-§7.5 —— 因为原来打算用的内核侧证据（pstore）在这台机上已经确认拿不到（§7.4 第 2 条）。
+**定案（2026-11-23）**：「别的办法」是系统 OTA 一类。这一条把三件事同时定了：
 
-| # | 机制 | 判据 |
-| --- | --- | --- |
-| 1 | **merge 段本身卡住**：COW 在重启前没落盘、或 COW 在首启的系统视图里打不开、或 `snapuserd` 没起来。这三条现在**无法互相区分**（都只表现成 merge 不动），要分开得靠内核日志，而这台机没有 | 卡住后进 rec：`/metadata/ota/state` 仍为 `Snapshotted`/`Merging`，`snapshots/` 目录还在 |
-| 2 | **merge 走完了，卡在更后面**：A 槽镜像自己起不来（vbmeta/AVB 与写入内容不合、`init_boot` 被换成原厂后与残留的 KSU 冲突等） | 卡住后进 rec：state 已是 `None`、`snapshots/` 清空，但 `/data/misc/bootstat` 里那一次启动没有 `boot_completed` |
+1. **merge 链在这台机、这个包上是通的**。系统 OTA 一样是 `/data` 开着、引擎建 COW、写下
+   `Snapshotted` + `merge outstanding true`，然后首启 merge 走完、进了系统（现在
+   `sys.boot_completed=1`、`veritymode=enforcing`）。
+2. **merge 的执行者是同一套**：首启的 `init` + `snapuserd`。它那一次合并完了，所以「执行者本身
+   不行」也要降级 —— 差别只可能在**交给它的那份 state / COW**。
+3. **包里的 `boot`/`vbmeta` 内容本身能启动**：系统 OTA 写进去的 `boot_a`/`vbmeta_a`（同一份包的
+   内容）起得来。于是「A 槽镜像 / AVB 起不来」排到最后。
 
-### 7.3 一个能二选一的判别实验（下次复现先做这个）
-
-| | 路径 | 引擎行为 | 预期 |
+| 排序 | 机制 | 为什么排这里 | 判据 |
 | --- | --- | --- | --- |
-| A | 内部存储（本次路径） | `/data` 开着 → 建快照 → 首启要 merge | 仍卡 logo（则病因在 §7.2 第 1 条） |
-| B | 同一份包，`adb sideload` | `/data` 关着 → 只能 `Will overwrite existing partitions`（`Log::Overwriting`），首启**不需要 merge** | 能进系统，就证明病因是「快照 → 首启 merge」，与包无关 |
+| 1 | **我们写下的 COW / state 在首启的系统视图里对不上**（属主、SELinux label、路径） | 唯一能解释「同包、同机、同槽，OTA 成、我们不成」的差异：OTA 的 COW 是 vold 解密后由引擎自己写在 `/data` 上；我们的 COW 是我们**自己的 ext4 挂载**写下去的 | 卡住后进 rec：state 仍是 `Snapshotted`/`Merging`、`snapshots/` 还在 |
+| 2 | **重启前 state / COW 没落盘** | OTA 的重启走 Android 关机流程；我们是 `sys.powerctl`（`skyward_sys::power`）直接重启，`power()` 自己不 `sync`，落盘全靠 init 的 reboot 路径 | 同上（两者都只表现成 merge 一动不动） |
+| 3 | **我们多出来的动作**：`installed_boot_set()`（`run.rs:608`，装过第二系统时才动作，且会 `switch_to` 改启动槽）、`reflash()` 写回 recovery | OTA 没有这两步。`reflash` 可以**排除**：它只对 `recovery` 分区调 `image::flash`（`keep.rs:66-74`），不碰 `boot`/`vbmeta` | `/metadata/skyward/settings.json`、第二系统的 `state`；`recovery_a` 是否仍是 1.0.13 |
+| 4 | **A 槽镜像 / AVB 起不来** | 已被反证（同 `boot_a`、同 `vbmeta_a`，OTA 起得来）。唯一残留：我们那次写下的 `vbmeta` 与 OTA 写的不一致 | 卡住后进 rec：state 已 `None`、`snapshots/` 清空，而 bootstat 里那次没有 `boot_completed` |
 
-可执行的步骤、前置、判据表和记录表在 **`docs/exp-404-sideload.md`**，照抄即可跑。主判据只有
-一行：装完后 `recovery.log` 的 `left for the next start` 从 `Snapshotted, merge outstanding
-true` 变成 `snapshots None, merge outstanding false`。
+内核侧证据（pstore）在这台机上已确认拿不到（§7.4 第 2 条），所以排序只能靠「state 有没有被动过」
+加框架侧痕迹来判，别指望逐条区分 1 与 2。
+
+### 7.3 判别实验的定位（已改）
+
+它不再用来「证明 merge 链通不通」——那条已经由系统 OTA 证明。现在它只回答一件事：
+**我们这条路径写出来的 A 槽，不带快照，能不能起。**
+
+| B 组（`adb sideload`，无快照）的结果 | 读法 |
+| --- | --- |
+| 进得了系统 | 病因锁死在**快照线**（§7.2 第 1/2 条）。干净覆盖写能起 ⇒ 我们写进去的镜像与 AVB 都对，差别只在 COW 与 state |
+| 照样卡 logo | 连不带快照的干净 A 槽都起不来 ⇒ 问题不在快照，而在我们写进去的东西或写完之后做的动作。回头核三样：① `vbmeta_a` 与包内是否一致；② `installed_boot_set()` 那次有没有动作（看双系统 `state`）；③ overwrite 分支下 `boot`/`vbmeta` 是 update_engine 直接写的，**不是**我们 `reflash` 写的（`keep.rs` 只写 recovery 分区） |
+
+步骤、前置、判据、记录表仍在 **`docs/exp-404-sideload.md`**，照抄即可跑。主判据一行：装完后
+`recovery.log` 的 `left for the next start` 从 `Snapshotted, merge outstanding true` 变成
+`snapshots None, merge outstanding false`。
 
 B 的代价：直接覆盖写 A 槽，失败时 A 槽起不来（已有先例，重刷可回）；`init_boot_a` 被包内原厂
 镜像覆盖，**A 槽的 KernelSU 会没**，实验后要重刷补丁。
@@ -260,16 +275,15 @@ B 的代价：直接覆盖写 A 槽，失败时 A 槽起不来（已有先例，
 
 1. **`/metadata/ota` 干净**：`state` 0 字节、`snapshots/` 空、`update_engine/` 子目录不存在。
    ⇒ 开头担心的 `Refusal::Pending` 不存在，下次装包不会被「更新已写入，等待合并」当场拒；
-   也吻合「失败的那次启动让 VAB 状态走了标准作废流程」。
-2. **`/sys/fs/pstore/` 是空目录**（`total 0`，只有 `.` 和 `..`）：这台机没有任何 pstore 后端在
-   留东西，**卡 logo 那次的内核日志已经拿不到了**，原来那条路线作废。要确认是不是内核压根没
-   注册：`dmesg | grep -iE 'pstore|ramoops'`、`ls /sys/fs/pstore`。
+   也印证「失败的那次启动让 VAB 状态走了标准作废流程」——**这也是为什么现场必须在下一次重启之前
+   拷走**（§7.5）。
+2. **`/sys/fs/pstore/` 是空目录**（`total 0`，只有 `.` 和 `..`）：这台机没有 pstore 后端在留东西，
+   卡 logo 那次的内核日志已经拿不到。**pstore 不再作为取证路线**，取证只用下面三处。
 3. **A 槽现在的 4.0.4.0 是好的**：`sys.boot_completed=1`、`ro.boot.slot_suffix=_a`、
-   `bootreason=reboot,userrequested`、`veritymode=enforcing`（原样记录）。这套内容来自「别的办法」，
-   不是 rec 装的那一份。
+   `bootreason=reboot,userrequested`、`veritymode=enforcing`（原样记录）。这套内容来自系统 OTA。
 4. **11-22 那次安装确实写到了 `init_boot_a`**：装完当场读到原厂 `6e636c81…`，现在是 `7c1453fa…`
    的 KSU 补丁。⇒ 写入路径（`image::flash` + `make_writable`）在 4.0.4.0 上是对的，病因不在
-   「写错内容」，而在「这套内容首启能不能起来」。
+   「写错内容」。
 
 分区读回（11-23，sha256 前 16 位）：
 
@@ -282,50 +296,65 @@ B 的代价：直接覆盖写 A 槽，失败时 A 槽起不来（已有先例，
 | dtbo | `f690924dda49e37c` | `6e60d8d4b952d732` |
 | vendor_boot | `42fd42055df23e36` | `0d3b89fbd9fbbf1a` |
 
-### 7.5 取证（pstore 不可用了，改这三处 + 两个前置动作）
+**三处证据源（框架侧）**
 
-先把结论说清：卡 logo 那次的「内核那一侧」证据，这台机**拿不到**（pstore 空、生产版没有 adbd）。
-所以下一次复现的价值全在两个前置动作，其次是卡住后进 rec 看 state，再其次是框架侧三处。
+1. `/data/system/dropbox/`（要 root：`adb shell "su -c 'ls -l /data/system/dropbox'"`）：找
+   `system_boot` / `system_restart` / `last_kmsg` / `watchdog` 命名的条目。`SYSTEM_BOOT` 说明那次
+   确实到了 framework；`SYSTEM_LAST_KMSG` 是 system_server 采的上一次内核日志，而它的上游就是
+   pstore（空），别指望有内容。这些文件带 DropBox 自己的头 + gzip，别直接 `zcat`，拷出来解析。
+2. `/data/misc/bootstat/`：一事件一文件，**看文件名和 mtime**。卡 logo 那次若没到 framework，
+   就没有那次的 `boot_completed`；`boot_reason_*` / `boot_subsystem_*` 里有异常码也记下来。
+3. `adb shell 'logcat -b all -d | grep -iE "snapshot|merge|update_engine|snapuserd"'`：这是**当前
+   boot** 的日志。系统 OTA 走的是引擎，正常情况下能翻到它的痕迹 —— 反过来，一条都没有就说明
+   「OTA 一类」这个说法要再核。
 
-**前置（这次没做，下次必须做）**
+### 7.5 下次复现的现场保全清单
+
+**红线：装完 → 拷现场 → 确认拷全 → 才允许重启。** 失败的那次启动一结束，VAB 的作废流程就把
+`/metadata/ota` 清成现在的样子（已实测）；重启同时会带走 `/skyward/run` 里的两份日志（tmpfs）。
+顺序反了，这一轮就等于白跑。
+
+**一次性脚本**（在 rec 的终端里跑，或 `adb shell` 进去跑）：
 
 ```sh
-# 1) 装完、重启之前，把 tmpfs 里的日志取走（重启即失）
-adb pull /skyward/run/recovery.log       ./recovery.log
-adb pull /skyward/run/update_engine.log  ./update_engine.log
-adb pull /skyward/run/install-script.log ./install-script.log 2>/dev/null
-# 2) 重启之前在 rec 里读回刚写进去的 A 槽内容（证明写的是什么）
+OUT=/data/local/tmp/skyward-ota-$(date +%m%d%H%M)
+mkdir -p $OUT
+# 1 快照状态：原样 + 十六进制（0 字节与 None 是两件事，都要留）
+cp /metadata/ota/state $OUT/state 2>/dev/null
+od -An -tx1 /metadata/ota/state > $OUT/state.hex 2>/dev/null
+# 2 快照目录：清单 + 整份
+ls -laR /metadata/ota/snapshots > $OUT/snapshots.ls 2>/dev/null
+cp -a /metadata/ota/snapshots $OUT/ 2>/dev/null
+# 3 update_engine 子目录（有才有）
+ls -laR /metadata/ota/update_engine > $OUT/update_engine.ls 2>/dev/null
+cp -a /metadata/ota/update_engine $OUT/ 2>/dev/null
+# 4 两份 tmpfs 日志
+cp /skyward/run/update_engine.log $OUT/ 2>/dev/null
+cp /skyward/run/recovery.log $OUT/ 2>/dev/null
+cp /skyward/run/install-script.log $OUT/ 2>/dev/null
+# 5 内核侧（dmesg 这会儿还在，重启就没）
+dmesg > $OUT/dmesg.txt
+# 6 挂载与 dm 状态
+cp /proc/mounts $OUT/mounts.txt
+ls -l /dev/block/mapper > $OUT/mapper.ls 2>/dev/null
+dmsetup ls --tree > $OUT/dm.txt 2>/dev/null
+# 7 刚写进去的分区哈希
 for p in boot_a init_boot_a vbmeta_a dtbo_a vendor_boot_a recovery_a ; do
   printf '%-14s ' $p ; sha256sum /dev/block/by-name/$p | cut -c1-16
-done
+done > $OUT/partitions.txt
+ls -lR $OUT > $OUT/manifest.txt
 ```
 
-**卡住之后，不进系统、先进 rec —— 这是唯一还能拿的一手判据**
+取走：
 
-```sh
-cat /metadata/ota/state | od -An -tx1 | head -4
-ls -l /metadata/ota/snapshots
+```powershell
+adb pull /data/local/tmp/skyward-ota-XXXX ./
 ```
 
-- state 仍为 `Snapshotted`(2)/`Merging`(3)、`snapshots/` 还在 ⇒ merge 没走完（§7.2 第 1 条）；
-- state 已是 `None`(0)、`snapshots/` 清空 ⇒ merge 走完了，卡在更后面（§7.2 第 2 条）。
+- 这台 rec 的 adb 若没实现 `pull`（报 `unknown service`），改走 MTP（`/data` 开着时落点换
+  `/sdcard`）。**不要因为 pull 不顺就把手机重启掉。**
+- 「拷全」的判据：`manifest.txt` 里每一项都有大小；`state.hex` 不是空文件；`update_engine.log`
+  不是 0 字节；`partitions.txt` 六行齐。
 
-顺手再试一行：`cat /proc/last_kmsg 2>/dev/null | tail -40`。pstore 空时它通常也空，但有些内核仍
-留着这一份；**在 rec 里读到的是上一次启动的日志**，若真有内容就是白捡的内核证据。
-
-**框架侧三处（现在就能抓，回答的是「后来那次为什么能起来」）**
-
-1. `/data/system/dropbox/`（要 root：`adb shell "su -c 'ls -l /data/system/dropbox'"`）：
-   找 `last_kmsg` / `system_boot` / `system_restart` / `watchdog` 命名的条目。
-   `SYSTEM_LAST_KMSG` 是 system_server 启动时采的上一次内核日志，`SYSTEM_BOOT` 说明那次确实到了
-   framework。**只覆盖「到了 system_server 的启动」**，卡 logo 那次大概率没有。这些文件带 DropBox
-   自己的头 + gzip，别直接 `zcat`（会报错），拷出来解析。
-2. `/data/misc/bootstat/`：一事件一文件。看两件事：卡住那次有没有 `boot_completed`；
-   `boot_reason_*` / `boot_subsystem_*` 系列里有没有异常码。同样只覆盖到 framework 的启动。
-3. `adb shell 'logcat -b all -d | grep -iE "snapshot|merge|update_engine|snapuserd"'`：这是**当前
-   boot** 的日志。若「别的办法」是系统内 OTA，会看到 `update_engine` 的痕迹；若是 fastboot 直接
-   刷分区，一条都没有 —— **这本身就是「别的办法是哪一种」的证据**。
-
-「别的办法」具体是哪一种（系统内 OTA / MiAssistant / fastboot 直刷 A 槽分区）仍在问。若是系统内
-OTA，说明这台机、这个包的 merge 链本身是通的，差别只在「我们这条路径」。
+拷完之后才允许重启；重启后才看首启。若卡住，再进 rec 按 §7.4 的三处取证。
 
