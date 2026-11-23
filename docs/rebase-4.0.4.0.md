@@ -244,15 +244,32 @@ dmesg | grep -E 'partitions not mounted|devices not brought up|mounted'
 3. **包里的 `boot`/`vbmeta` 内容本身能启动**：系统 OTA 写进去的 `boot_a`/`vbmeta_a`（同一份包的
    内容）起得来。于是「A 槽镜像 / AVB 起不来」排到最后。
 
+**已排除（2026-11-23 逐条核到代码）**
+
+- **`reflash()` 不碰 `boot`/`vbmeta`**：`keep.rs:15` `const PARTITION = "recovery"`，`keep.rs:66-67`
+  只把 `image::device(dir, PARTITION, slot)` 交给 `image::flash` —— 两槽 recovery，别的分区没有。
+- **`installed_boot_set()` 在这台机上是 no-op**：调用点 `run.rs:608`（apply 之前），实现在
+  `run.rs:554` → `ensure_installed()`（`skyward-systems/src/install.rs:378`），只有 `state.occupied`
+  有值才动作；这台机没装过第二系统，所以每次都是空转。
+- **merge 执行者没问题**：首启的 `init` + `snapuserd`；系统 OTA 已经用它把 `Snapshotted` 合到
+  `None`，而 recovery 内装完根本不跑 merge。
+- **包里的 `boot`/`vbmeta` 内容能启动**：系统 OTA 写进去的是同一份包的内容。
+
+**排序**
+
 | 排序 | 机制 | 为什么排这里 | 判据 |
 | --- | --- | --- | --- |
-| 1 | **我们写下的 COW / state 在首启的系统视图里对不上**（属主、SELinux label、路径） | 唯一能解释「同包、同机、同槽，OTA 成、我们不成」的差异：OTA 的 COW 是 vold 解密后由引擎自己写在 `/data` 上；我们的 COW 是我们**自己的 ext4 挂载**写下去的 | 卡住后进 rec：state 仍是 `Snapshotted`/`Merging`、`snapshots/` 还在 |
-| 2 | **重启前 state / COW 没落盘** | OTA 的重启走 Android 关机流程；我们是 `sys.powerctl`（`skyward_sys::power`）直接重启，`power()` 自己不 `sync`，落盘全靠 init 的 reboot 路径 | 同上（两者都只表现成 merge 一动不动） |
-| 3 | **我们多出来的动作**：`installed_boot_set()`（`run.rs:608`，装过第二系统时才动作，且会 `switch_to` 改启动槽）、`reflash()` 写回 recovery | OTA 没有这两步。`reflash` 可以**排除**：它只对 `recovery` 分区调 `image::flash`（`keep.rs:66-74`），不碰 `boot`/`vbmeta` | `/metadata/skyward/settings.json`、第二系统的 `state`；`recovery_a` 是否仍是 1.0.13 |
-| 4 | **A 槽镜像 / AVB 起不来** | 已被反证（同 `boot_a`、同 `vbmeta_a`，OTA 起得来）。唯一残留：我们那次写下的 `vbmeta` 与 OTA 写的不一致 | 卡住后进 rec：state 已 `None`、`snapshots/` 清空，而 bootstat 里那次没有 `boot_completed` |
+| 1 | **我们交给首启的那份 COW / state，与首启的系统视图对不上**（属主、SELinux label、路径） | 唯一能解释「同包、同机、同槽，OTA 成、我们不成」的差异：OTA 的 COW 是 vold 解密后由引擎自己写在 `/data` 上；我们的 COW 是我们**自己的 ext4 挂载**写下去的 | 卡住后进 rec：state 仍是 `Snapshotted`/`Merging`、`snapshots/` 还在 |
+| 2 | **`sync` 的边界与首启视图是否一致**（见下，第 1 条的一个具体成因） | `power()` 只写 `sys.powerctl`，落盘由 init 负责（`lib.rs:146` 注释：`init syncs and unmounts before it acts`）。能问的只是：那次 sync 覆不覆盖我们那份 COW 所在的挂载；以及 update_engine 自己 unmount `/metadata` 时是否已经把它的视图带走 | 与第 1 条同（都只表现成 merge 一动不动）；分开得看装完以后 `/proc/mounts` 里 `/data` 是谁挂的、dm 状态如何 |
+| 3 | **A 槽镜像 / AVB**（排末） | 已被反证：同 `boot_a`、同 `vbmeta_a` 的 OTA 起得来。只剩一种残留：我们那次写下的 `vbmeta` 与 OTA 写的不一致 | 卡住后进 rec：state 已 `None`、`snapshots/` 清空，而 bootstat 里那次没有 `boot_completed` |
+
+**关于第 2 条的措辞**：原来说「重启前没落盘」不准确 —— 落盘不是没人管，是 init 在 `sys.powerctl`
+之前 `sync` 并 unmount。所以收窄成「sync 的边界与首启视图是否一致」，而它的两个答案（sync 没覆盖
+那个挂载 / 引擎卸 `/metadata` 时带走了视图）都落回第 1 条：**首启拿到的输入与我们写下的不一致**。
+两条的判据因此不分家，别指望能分开。
 
 内核侧证据（pstore）在这台机上已确认拿不到（§7.4 第 2 条），所以排序只能靠「state 有没有被动过」
-加框架侧痕迹来判，别指望逐条区分 1 与 2。
+加框架侧痕迹来判。
 
 ### 7.3 判别实验的定位（已改）
 
@@ -262,7 +279,7 @@ dmesg | grep -E 'partitions not mounted|devices not brought up|mounted'
 | B 组（`adb sideload`，无快照）的结果 | 读法 |
 | --- | --- |
 | 进得了系统 | 病因锁死在**快照线**（§7.2 第 1/2 条）。干净覆盖写能起 ⇒ 我们写进去的镜像与 AVB 都对，差别只在 COW 与 state |
-| 照样卡 logo | 连不带快照的干净 A 槽都起不来 ⇒ 问题不在快照，而在我们写进去的东西或写完之后做的动作。回头核三样：① `vbmeta_a` 与包内是否一致；② `installed_boot_set()` 那次有没有动作（看双系统 `state`）；③ overwrite 分支下 `boot`/`vbmeta` 是 update_engine 直接写的，**不是**我们 `reflash` 写的（`keep.rs` 只写 recovery 分区） |
+| 照样卡 logo | 连不带快照的干净 A 槽都起不来 ⇒ 问题不在快照，而在**我们写进去的东西**或**写完之后做的动作**。核两样：① `vbmeta_a` 与包内那段是否逐字节一致；② overwrite 分支下 `boot`/`vbmeta` 是 update_engine 直接写的，不是我们写的（`reflash` 只写 recovery，`installed_boot_set()` 在这台机是 no-op，两条已在 §7.2 排除） |
 
 步骤、前置、判据、记录表仍在 **`docs/exp-404-sideload.md`**，照抄即可跑。主判据一行：装完后
 `recovery.log` 的 `left for the next start` 从 `Snapshotted, merge outstanding true` 变成
@@ -351,8 +368,9 @@ ls -lR $OUT > $OUT/manifest.txt
 adb pull /data/local/tmp/skyward-ota-XXXX ./
 ```
 
-- 这台 rec 的 adb 若没实现 `pull`（报 `unknown service`），改走 MTP（`/data` 开着时落点换
-  `/sdcard`）。**不要因为 pull 不顺就把手机重启掉。**
+- 这台 rec 的 adb 若没实现 `pull`（报 `unknown service`），改走 MTP：`/data` 开着时落点换
+  `/sdcard`，然后在 Windows 侧用 Shell COM（`Shell.Application` 的 `NameSpace`）直接从手机拷出来
+   —— 不在手机上折腾文件。**不要因为 pull 不顺就把手机重启掉。**
 - 「拷全」的判据：`manifest.txt` 里每一项都有大小；`state.hex` 不是空文件；`update_engine.log`
   不是 0 字节；`partitions.txt` 六行齐。
 
