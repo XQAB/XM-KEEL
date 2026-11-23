@@ -91,7 +91,7 @@ pub struct Install {
     /// A zip's install script runs only if the zip was signed with one of
     /// the phone's update keys.
     pub check_signature: bool,
-    /// Skyward goes back into the recovery partitions an install writes
+    /// XM KEEL goes back into the recovery partitions an install writes
     /// over.
     pub keep_recovery: bool,
 }

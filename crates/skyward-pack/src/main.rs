@@ -10,7 +10,7 @@ mod avb;
 
 use skyward_bootimg::{BootImage, Ramdisk};
 
-/// Builds Skyward recovery images from a device's own stock images.
+/// Builds XM KEEL recovery images from a device's own stock images.
 #[derive(Parser)]
 #[command(name = "skyward-pack")]
 struct Cli {
@@ -38,16 +38,16 @@ enum Cmd {
         #[arg(long)]
         out: PathBuf,
     },
-    /// Build a Skyward recovery image on top of the device's stock recovery:
+    /// Build a XM KEEL recovery image on top of the device's stock recovery:
     /// its init, adbd, SELinux policy and libraries stay, the recovery
-    /// service becomes Skyward. The image fills the whole partition and ends
+    /// service becomes XM KEEL. The image fills the whole partition and ends
     /// in an unsigned AVB footer of its own.
     Recovery {
         /// The device's stock recovery image: the whole partition, as the
         /// phone or a full update package holds it, ending in its AVB footer.
         #[arg(long)]
         stock: PathBuf,
-        /// Skyward built for the device (aarch64-linux-android).
+        /// XM KEEL built for the device (aarch64-linux-android).
         #[arg(long)]
         binary: PathBuf,
         /// The first program of a system installed beside the installed

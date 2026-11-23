@@ -3206,9 +3206,9 @@ mod tests {
         let c = Canvas::new(1, 1);
         let px = 40.0;
         let texts = [
-            "Skyward 是自由软件：你可以按照自由软件基金会发布的 GNU 通用公共许可证第 3 版，或者（由你选择）任何更新的版本，重新发布和修改它。",
+            "XM KEEL 是自由软件：你可以按照自由软件基金会发布的 GNU 通用公共许可证第 3 版，或者（由你选择）任何更新的版本，重新发布和修改它。",
             "You should have received a copy of the GNU General Public License along with this program. If not, see <https://www.gnu.org/licenses/>.",
-            "Skyward 的界面文字使用小米的 MiSans 字体，按《MiSans 字体知识产权许可协议》免费使用。",
+            "XM KEEL 的界面文字使用小米的 MiSans 字体，按《MiSans 字体知识产权许可协议》免费使用。",
             "boot、init_boot、vendor_boot、dtbo、vbmeta 和 recovery",
             "Copyright 2026 The Kirk Mono Project Authors (https://github.com/kirklin/kirk-mono)",
             "This phone's system doesn't make an emptied data partition anew when it starts, so it can't be wiped.",

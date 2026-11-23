@@ -86,7 +86,7 @@ pub enum Bound {
 /// number in the order the network uses.
 pub fn weaver_slot(raw: &[u8]) -> Result<u32> {
     let [layout, number @ ..] = raw else { bail!("the record of the blob's weaver slot is empty") };
-    ensure!(*layout == WEAVER_SLOT_LAYOUT, "the blob's weaver slot is recorded in layout {layout}, and Skyward reads layout {WEAVER_SLOT_LAYOUT}");
+    ensure!(*layout == WEAVER_SLOT_LAYOUT, "the blob's weaver slot is recorded in layout {layout}, and XM KEEL reads layout {WEAVER_SLOT_LAYOUT}");
     let Ok(number) = <[u8; 4]>::try_from(number) else {
         bail!("the record of the blob's weaver slot is {} bytes, and one is 5", raw.len());
     };
@@ -247,7 +247,7 @@ pub fn open_inner(secret: &[u8], blob: &[u8]) -> Result<Vec<u8>> {
 pub fn content(blob: &[u8]) -> Result<&[u8]> {
     let [version, kind, rest @ ..] = blob else { bail!("the user's blob says nothing about itself") };
     if *version != LATEST {
-        bail!("the user's blob is written in layout {version}, and Skyward reads layout {LATEST}");
+        bail!("the user's blob is written in layout {version}, and XM KEEL reads layout {LATEST}");
     }
     if *kind != BY_CREDENTIAL {
         bail!("the user's blob is kept behind something other than what the user knows");

@@ -4,7 +4,7 @@
 //! when the recovery next starts, and the installed system's boot set is
 //! never lost: it is saved before anything is written over it, into the
 //! entry its last save is not in, and that save counts only once whole.
-//! The other system starts with the program of the Skyward that switches
+//! The other system starts with the program of the XM KEEL that switches
 //! to it, put into its init_boot image as it is written.
 
 use crate::boot;

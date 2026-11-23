@@ -51,7 +51,7 @@ impl Token {
             bail!("the secure world's note is {} bytes, and {BYTES} is the length of one", raw.len());
         }
         if raw[0] != LATEST {
-            bail!("the secure world's note is written in layout {}, and Skyward reads layout {LATEST}", raw[0]);
+            bail!("the secure world's note is written in layout {}, and XM KEEL reads layout {LATEST}", raw[0]);
         }
         let own = |at: usize| i64::from_le_bytes(raw[at..at + 8].try_into().expect("eight bytes"));
         Ok(Token {

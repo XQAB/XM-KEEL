@@ -19,7 +19,7 @@ pub const MAX_BLOCKS: usize = 400;
 const MAX_BLOCK_CHARS: usize = 4000;
 
 /// What the browser calls itself where a server asks.
-const USER_AGENT: &str = concat!("Skyward/", env!("CARGO_PKG_VERSION"), " (recovery browser)");
+const USER_AGENT: &str = concat!("XM KEEL/", env!("CARGO_PKG_VERSION"), " (recovery browser)");
 
 /// How a block is set, from the page's own tags and a small part of CSS.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -1709,11 +1709,11 @@ mod tests {
     #[test]
     fn bing_s_rss_answer_is_read_as_results() {
         let rss = r#"<?xml version="1.0"?><rss><channel><title>Bing</title>
-            <item><title>Skyward recovery</title><link>https://example.com/skyward</link><description>Rust recovery</description></item>
+            <item><title>XM KEEL recovery</title><link>https://example.com/skyward</link><description>Rust recovery</description></item>
             <item><title>Another result</title><link>https://example.com/two</link><description>More</description></item>
         </channel></rss>"#;
         let page = rss_page("https://www.bing.com/search?format=rss&q=skyward", rss, false);
-        assert!(page.blocks.iter().any(|b| matches!(b, Block::Link { label, .. } if label == "Skyward recovery")));
+        assert!(page.blocks.iter().any(|b| matches!(b, Block::Link { label, .. } if label == "XM KEEL recovery")));
         assert!(page.blocks.iter().any(|b| matches!(b, Block::Paragraph { text, .. } if text == "Rust recovery")));
         assert!(page.title.contains("Bing"));
     }

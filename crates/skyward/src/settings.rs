@@ -1,7 +1,7 @@
 //! Where the settings the pages keep between starts live: a file of the
 //! recovery's own on /metadata, which every phone here has, which needs no
 //! screen lock to open, and which is there before the data partition opens,
-//! in fastboot too. Skyward keeps /metadata read-only; it is writable only
+//! in fastboot too. XM KEEL keeps /metadata read-only; it is writable only
 //! while the file is written.
 
 use anyhow::{Context, Result};

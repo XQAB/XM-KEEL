@@ -1,4 +1,4 @@
-# Skyward 移植到小米 MIX Flip 2（bixi）—— 适配记录
+# XM KEEL 移植到小米 MIX Flip 2（bixi）—— 适配记录
 
 > 本文是 **bixi 机型的单一真相源（single source of truth）**。
 > README 只保留安装入口；`CHANGELOG-bixi.md` 保留逐版本的验证时间线；
@@ -11,7 +11,7 @@
 
 ## 0. 一句话结论
 
-把通用 Rust recovery **Skyward** 移植到 MIX Flip 2，**90% 的工作不是"填参数"，而是
+把通用 Rust recovery **XM KEEL** 移植到 MIX Flip 2，**90% 的工作不是"填参数"，而是
 在 recovery 里手工重建 Android Secure World（TEE）整条信任链**：`qseecomd` →
 `keymint` → `weaver` → secure element（ESE），以及让触摸/外屏/WLAN 在 recovery 环境下正确工作。
 
@@ -31,7 +31,7 @@
 | 分区备份（全备份/关联备份/最小可开机集） | ✅ | LZ4 + `.img.lz4` + sidecar；可存内部或 U 盘 |
 | AVB flags 可写 | ✅（偏实现） | 先备份四个 vbmeta，写入后报告前后差异 |
 | 安装脚本 `7za`/`zstd`/`unzip`/`avbctl`/`resetprop` | ✅ | 内建到 recovery，按 argv[0] 分发 |
-| 系统更新 / Skyward 自更新 | ✅ | 双源；6 个镜像；sha256 校验 |
+| 系统更新 / XM KEEL 自更新 | ✅ | 双源；6 个镜像；sha256 校验 |
 | 镜像加速源 | ✅ | 检查与下载走不同加速源 |
 | 自更新 | ✅ | 优先 `.img`，回退 `.zip` |
 | **图案解锁 / 第二用户** | ❌ 已知限制 | recovery 里 gatekeeper 起不来（见 §5） |
@@ -176,7 +176,7 @@
 | 0.65 | 记住密码生效（「进 rec 就自动解密」）；ramdisk 兼容 `.img.zst` 资产 |
 | 0.66 | 分区可存 U 盘、最小可开机集、解密页独立删除、AVB 写后 diff、MTP 重新 offer |
 | 0.66.01 | 自更新改优先 `.img`；首次同发 `.img`+`.zip` |
-| 0.67 | 「Skyward 更新」页补加速源行；加速源扩到 6 档：**检查更新走代理，下载走你选的源** |
+| 0.67 | 「XM KEEL 更新」页补加速源行；加速源扩到 6 档：**检查更新走代理，下载走你选的源** |
 | **1.0.0** | 汇总以上全部，版本号锁定，README 与发版说明重写 |
 
 ---

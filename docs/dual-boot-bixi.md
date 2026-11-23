@@ -10,7 +10,7 @@
 | 第二系统的根 | data 分区里的一块 area，按分区直读直写，不挂文件系统 | `install.rs::FOLDER = /data/skyward/systems`、`skyward-block::area` |
 | 启动镜像集 | `boot` + `init_boot` 整套存在**另一块** area（store，3 个 entry 滚动保存） | `store.rs::ENTRIES = 3`、`OTHER = 2` |
 | 切换改哪两个分区 | 只改「下次启动槽位」的 `boot` 与 `init_boot`，别的一个都不碰 | `switch.rs::restore` |
-| 第二系统怎么起 | 用**主系统的 `vendor_boot` 和 `dtbo`**；它自己的 `init_boot` 里被塞进 Skyward 的程序，first stage 由 Skyward 接 | `store::restore(..., init_boot)`、`boot::with_program` |
+| 第二系统怎么起 | 用**主系统的 `vendor_boot` 和 `dtbo`**；它自己的 `init_boot` 里被塞进 XM KEEL 的程序，first stage 由 XM KEEL 接 | `store::restore(..., init_boot)`、`boot::with_program` |
 | 状态 | `/metadata/skyward/systems.toml`，切换每一步先落盘，断电后下次启动 `resume` 补完 | `state.rs::PATH`、`switch.rs::resume` |
 | 主系统启动集会不会丢 | 覆盖之前先把它存进 store 的另一个 entry，存完才算数 | `finish()` 里的 `store::save` |
 | 空间怎么算 | `room() = data 空闲 − store − 一份 super − area 头`，root 可选 8/16/32/64/128/256 GB | `install.rs::room` / `sizes` |
@@ -33,13 +33,13 @@ init_boot.img   可选：系统自带 first-stage ramdisk 时才有
 ## 4. bixi 上必须先确认的六件事（真机前逐条过）
 
 1. **`init_boot` 补丁**：bixi 现役 `init_boot` 带 KernelSU 补丁（两槽都是 `1cfa51ea…`）。
-   第二系统的 `init_boot` 若不是同一基线，注入 Skyward 程序后还能不能被 bootloader 接受，要先验。
+   第二系统的 `init_boot` 若不是同一基线，注入 XM KEEL 程序后还能不能被 bootloader 接受，要先验。
 2. **外屏**：第二系统若是 Linux 类系统，panel 配置和触摸都不在它的 `boot.img` 里，
    合盖状态大概率黑屏、外屏无触摸。这是产品取舍，不是移植 bug——要先决定「第二系统要不要外屏」。
 3. **`vendor_boot` / `dtbo` 共用**：主系统升级会换 `dtbo`，第二系统就起不来。
    store 里记了安装当时的 `vendor_boot` / `dtbo` 哈希，变了界面会提示「变了」，要重新安装或重存。
 4. **`vbmeta` / 验证启动**：切换不碰 `vbmeta`，但 `boot` / `init_boot` 换成非签名内容后，
-   若设备仍要求校验 `boot`，会拒绝起机。真机前先读两槽 `vbmeta` 的 flags（Skyward 的 AVB 页也能读）。
+   若设备仍要求校验 `boot`，会拒绝起机。真机前先读两槽 `vbmeta` 的 flags（XM KEEL 的 AVB 页也能读）。
 5. **TEE / 解密**：第二系统不共享 Android 的 TEE 链，但它不碰 `/data` 的文件系统（按 area 直读），
    不影响主系统解密——这一点理论上没耦合，仍要在切换后确认主系统还能解 data。
 6. **空间**：`room()` 已经扣掉一份 `super`，但 bixi 的 `super` 不小；先看 `/data` 实际剩余，

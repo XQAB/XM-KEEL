@@ -141,15 +141,15 @@ fn find<T>(packed: impl Read, wanted: impl Fn(&str) -> bool, take: impl FnOnce(&
     }
 }
 
-/// Whether `file` is a Skyward recovery: a boot image whose ramdisk carries
-/// the device configuration Skyward is packed with, packed in one of the
-/// ways read here, as Skyward packs it.
+/// Whether `file` is a XM KEEL recovery: a boot image whose ramdisk carries
+/// the device configuration XM KEEL is packed with, packed in one of the
+/// ways read here, as XM KEEL packs it.
 pub fn is_skyward<R: Read + Seek>(file: &mut R) -> Result<bool> {
     Ok(device_config(file)?.is_some())
 }
 
-/// The device configuration a Skyward recovery carries in its ramdisk;
-/// none when `file` is no Skyward recovery.
+/// The device configuration a XM KEEL recovery carries in its ramdisk;
+/// none when `file` is no XM KEEL recovery.
 pub fn device_config<R: Read + Seek>(file: &mut R) -> Result<Option<Vec<u8>>> {
     let mut head = Vec::with_capacity(4096);
     file.take(4096).read_to_end(&mut head).context("read the image's first bytes")?;
@@ -381,7 +381,7 @@ pub(crate) mod samples {
 
     pub use skyward_bootimg::lz4_legacy;
 
-    /// A recovery image, Skyward's or the stock one it is packed on.
+    /// A recovery image, XM KEEL's or the stock one it is packed on.
     pub fn recovery(skyward: bool) -> Vec<u8> {
         let mut names = vec!["init", "system/bin/recovery", "prop.default"];
         if skyward {
@@ -390,7 +390,7 @@ pub(crate) mod samples {
         boot_image(0, &lz4_legacy(&archive(&names)))
     }
 
-    /// Skyward's recovery for the phone `codename` names, its device
+    /// XM KEEL's recovery for the phone `codename` names, its device
     /// configuration naming it.
     pub fn skyward_for(codename: &str) -> Vec<u8> {
         let config = format!("[device]\ncodename = \"{codename}\"\n");
@@ -449,13 +449,13 @@ mod tests {
         assert!(is_skyward(&mut Cursor::new(recovery(true))).unwrap());
         assert!(!is_skyward(&mut Cursor::new(recovery(false))).unwrap());
         assert!(!is_skyward(&mut Cursor::new(boot_image(5000, &[]))).unwrap(), "a boot image with no ramdisk");
-        assert!(!is_skyward(&mut Cursor::new(boot_image(0, b"\xfd7zXZ\0"))).unwrap(), "a ramdisk packed as Skyward never packs it");
+        assert!(!is_skyward(&mut Cursor::new(boot_image(0, b"\xfd7zXZ\0"))).unwrap(), "a ramdisk packed as XM KEEL never packs it");
         assert!(!is_skyward(&mut Cursor::new(vec![0u8; 8192])).unwrap(), "an erased partition");
     }
 
     #[test]
     fn skyward_carries_its_device_configuration() {
-        let config = device_config(&mut Cursor::new(skyward_for("ishtar"))).unwrap().expect("Skyward carries one");
+        let config = device_config(&mut Cursor::new(skyward_for("ishtar"))).unwrap().expect("XM KEEL carries one");
         assert_eq!(config, b"[device]\ncodename = \"ishtar\"\n");
         assert!(is_skyward(&mut Cursor::new(skyward_for("ishtar"))).unwrap());
         assert_eq!(device_config(&mut Cursor::new(recovery(false))).unwrap(), None);

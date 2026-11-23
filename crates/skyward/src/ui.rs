@@ -280,7 +280,7 @@ impl Transfer {
         let device = skyward_mtp::Device {
             manufacturer: cfg.device.brand.clone(),
             model: info.model.clone(),
-            version: format!("Skyward {}", skyward_info::VERSION),
+            version: format!("XM KEEL {}", skyward_info::VERSION),
             serial: skyward_sys::prop("ro.serialno").unwrap_or_default(),
             name: info.model.clone(),
             battery: Box::new(|| skyward_info::battery_now().ok().flatten().map(|b| b.level)),
@@ -1332,7 +1332,7 @@ fn detach(services: Vec<Service>) -> Detach {
 }
 
 /// What an install does besides installing, as the install page's switches
-/// are set: puts Skyward back into the recovery partitions it writes over,
+/// are set: puts XM KEEL back into the recovery partitions it writes over,
 /// on a phone that has them, and checks a zip's signature before its
 /// install script runs.
 fn install_options(app: &App) -> Options {
@@ -1681,7 +1681,7 @@ pub fn run(cfg: &DeviceConfig, font: &Path, mono: &Path, request: bcb::Request, 
         }
     };
     app.state.phone_logs = cfg.wipe.logs.len();
-    // Skyward lives in a recovery partition of each slot where the phone
+    // XM KEEL lives in a recovery partition of each slot where the phone
     // has them, and the install page then offers to keep it there. Such a
     // phone holds a second system where it also has boot and init_boot
     // partitions in both slots, which a switch writes.
@@ -1900,7 +1900,7 @@ pub fn run(cfg: &DeviceConfig, font: &Path, mono: &Path, request: bcb::Request, 
     // Asking the update server, and downloading the full package.
     let mut checker: Option<updates::Worker> = None;
     let mut downloader: Option<updates::Worker> = None;
-    // Asking GitHub for Skyward's newest release, and updating to it.
+    // Asking GitHub for XM KEEL's newest release, and updating to it.
     let mut skyward_checker: Option<updates::Worker> = None;
     let mut skyward_updater: Option<updates::Worker> = None;
     // Timing the mirrors against the build the next update would download.
@@ -2742,7 +2742,7 @@ pub fn run(cfg: &DeviceConfig, font: &Path, mono: &Path, request: bcb::Request, 
         if let Some(c) = &skyward_checker {
             for ev in c.events() {
                 let updates::Event::SkywardChecked(answer) = ev else { unreachable!("asking GitHub downloads nothing") };
-                skyward_sys::kmsg(&format!("GitHub told of Skyward's newest release: {answer:?}"))?;
+                skyward_sys::kmsg(&format!("GitHub told of XM KEEL's newest release: {answer:?}"))?;
                 app.skyward_checked(answer);
                 asked = true;
             }
@@ -2763,9 +2763,9 @@ pub fn run(cfg: &DeviceConfig, font: &Path, mono: &Path, request: bcb::Request, 
                             updates::End::Failed(why) => SkywardEnd::Download(why),
                             updates::End::NotWritten(why) => SkywardEnd::NotWritten(why),
                             updates::End::WriteFailed(slots, why) => SkywardEnd::WriteFailed(slots, why),
-                            updates::End::Downloaded => unreachable!("Skyward's build is written once it is downloaded"),
+                            updates::End::Downloaded => unreachable!("XM KEEL's build is written once it is downloaded"),
                         };
-                        skyward_sys::kmsg(&format!("updating Skyward ended: {end:?}"))?;
+                        skyward_sys::kmsg(&format!("updating XM KEEL ended: {end:?}"))?;
                         app.skyward_ended(end, now);
                         updated = true;
                     }
@@ -3559,9 +3559,9 @@ pub fn run(cfg: &DeviceConfig, font: &Path, mono: &Path, request: bcb::Request, 
                     // in memory, before its image goes into the recovery
                     // partitions.
                     Effect::UpdateSkyward(build) => {
-                        ensure!(skyward_updater.is_none(), "Skyward is being updated already");
+                        ensure!(skyward_updater.is_none(), "XM KEEL is being updated already");
                         ensure!(installer.is_none(), "an installer is running already");
-                        skyward_sys::kmsg(&format!("updating Skyward to {}", build.name))?;
+                        skyward_sys::kmsg(&format!("updating XM KEEL to {}", build.name))?;
                         let path = Path::new(skyward_sys::RUN).join(&build.name);
                         // The mirror chosen on the download page carries the
                         // zip too; with none chosen the file is asked for
@@ -3570,16 +3570,16 @@ pub fn run(cfg: &DeviceConfig, font: &Path, mono: &Path, request: bcb::Request, 
                         let task = updates::Task::UpdateSkyward { build, codename: cfg.device.codename.clone(), path, mirror };
                         skyward_updater = Some(updates::Worker::start(task, servers.clone())?);
                     }
-                    Effect::StopSkywardUpdate => skyward_updater.as_ref().context("Skyward is not being updated")?.stop(),
+                    Effect::StopSkywardUpdate => skyward_updater.as_ref().context("XM KEEL is not being updated")?.stop(),
                     // A build kept in a place the user picked goes into the
                     // recovery partitions the way a downloaded one does: its
                     // image is checked for this phone first, and it stays
                     // where it is afterwards.
                     Effect::WriteSkyward(place, path) => {
-                        ensure!(skyward_updater.is_none(), "Skyward is being updated already");
+                        ensure!(skyward_updater.is_none(), "XM KEEL is being updated already");
                         ensure!(installer.is_none(), "an installer is running already");
                         let file = in_place(place, &path);
-                        skyward_sys::kmsg(&format!("writing the Skyward build at {}", file.display()))?;
+                        skyward_sys::kmsg(&format!("writing the XM KEEL build at {}", file.display()))?;
                         let task = updates::Task::Write { path: file, codename: cfg.device.codename.clone() };
                         skyward_updater = Some(updates::Worker::start(task, servers.clone())?);
                     }

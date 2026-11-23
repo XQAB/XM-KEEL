@@ -1,13 +1,15 @@
-![Skyward Recovery](assets/hero.jpg)
+![XM KEEL Recovery](assets/hero.jpg)
 
-# Skyward
+# XM KEEL
 
 [English](README.md) | 简体中文
 
-Skyward 是使用 Rust 编写的 recovery，从零开始编写。
+XM KEEL 是使用 Rust 编写的 recovery，从零开始编写。最初源自
+[kirklin/skyward](https://github.com/kirklin/skyward)（GPL-3.0），现由 XM KEEL
+独立维护，许可证与原作者署名保留。
 
-> **小米 MIX Flip 2（`bixi`）· 1.0.4** —— 本分支把 Skyward 做成这台机器的版本（SM8750，Android 17，A/B + 动态分区，现役系统 `OS4.0.0.11.XOHCNXM`，出包基线 `OS4.0.0.11.XOHCNXM`）。外屏是主力屏；密码记住一次之后 `/data` 自己就开；分区镜像可以存到 U 盘；`avbctl` 改完会把写前写后的 flags 差值报回来；recovery 还能从 GitHub 发行里更新自己——**优先裸 `.img`，没有才退回 `.zip`**，并且走你选的加速源。
-> 完整变更、借鉴了哪些 fork 的哪些做法、以及已知限制：见 [CHANGELOG-bixi.md](CHANGELOG-bixi.md) · [Releases](https://github.com/XQAB/skyward/releases)
+> **小米 MIX Flip 2（`bixi`）· 1.0.4** —— 本分支把 XM KEEL 做成这台机器的版本（SM8750，Android 17，A/B + 动态分区，现役系统 `OS4.0.0.11.XOHCNXM`，出包基线 `OS4.0.0.11.XOHCNXM`）。外屏是主力屏；密码记住一次之后 `/data` 自己就开；分区镜像可以存到 U 盘；`avbctl` 改完会把写前写后的 flags 差值报回来；recovery 还能从 GitHub 发行里更新自己——**优先裸 `.img`，没有才退回 `.zip`**，并且走你选的加速源。
+> 完整变更、借鉴了哪些 fork 的哪些做法、以及已知限制：见 [CHANGELOG-bixi.md](CHANGELOG-bixi.md) · [Releases](https://github.com/XQAB/XM-KEEL/releases)
 > 移植的决策记录（bixi 的单一真相源）：[docs/bixi-porting.md](docs/bixi-porting.md)
 
 <p align="center">
@@ -38,7 +40,7 @@ Skyward 是使用 Rust 编写的 recovery，从零开始编写。
 
 ### 在线更新
 
-![系统和 Skyward 都能在线更新](slides/zh-CN/out/05-updates.png)
+![系统和 XM KEEL 都能在线更新](slides/zh-CN/out/05-updates.png)
 
 ### 备份和恢复
 
@@ -46,7 +48,7 @@ Skyward 是使用 Rust 编写的 recovery，从零开始编写。
 
 ### 文件管理
 
-![在 Skyward 中管理手机里的文件](slides/zh-CN/out/07-files.png)
+![在 XM KEEL 中管理手机里的文件](slides/zh-CN/out/07-files.png)
 
 ### 终端
 
@@ -62,7 +64,7 @@ Skyward 是使用 Rust 编写的 recovery，从零开始编写。
 
 ### 替换原厂 recovery
 
-![系统发来的请求，Skyward 照常处理](slides/zh-CN/out/11-requests.png)
+![系统发来的请求，XM KEEL 照常处理](slides/zh-CN/out/11-requests.png)
 
 ### 搜索
 
@@ -92,27 +94,27 @@ Skyward 是使用 Rust 编写的 recovery，从零开始编写。
 | 小米 MIX Flip 2 | `bixi` | OS4.0.11.XOHCNXM（Android 17） |
 
 这个仓库只维护这一台机器。合上手机后点亮的外屏、外屏触摸，以及 bixi 的其他改动都在
-`main` 上，镜像在 [Releases](https://github.com/XQAB/skyward/releases)。
+`main` 上，镜像在 [Releases](https://github.com/XQAB/XM-KEEL/releases)。
 
-## 安装 Skyward
+## 安装 XM KEEL
 
-Skyward 需要已解锁的 bootloader。从 [Releases](https://github.com/XQAB/skyward/releases) 下载这台机器的镜像——最新的是 `skyward-v1.0.7-bixi-OS4.0.0.11.XOHCNXM.img`，`0.32.00` 是第一版带外屏（合盖屏）的镜像，`0.37.00` 起外屏触摸在真机上验收通过——对照 `SHA256SUMS` 里的 SHA-256 校验（`sha256sum skyward-v1.0.7-bixi-OS4.0.0.11.XOHCNXM.img`），然后写入当前运行槽位的 recovery 分区：
+XM KEEL 需要已解锁的 bootloader。从 [Releases](https://github.com/XQAB/XM-KEEL/releases) 下载这台机器的镜像——最新的是 `skyward-v1.0.7-bixi-OS4.0.0.11.XOHCNXM.img`，`0.32.00` 是第一版带外屏（合盖屏）的镜像，`0.37.00` 起外屏触摸在真机上验收通过——对照 `SHA256SUMS` 里的 SHA-256 校验（`sha256sum skyward-v1.0.7-bixi-OS4.0.0.11.XOHCNXM.img`），然后写入当前运行槽位的 recovery 分区：
 
 ```sh
 dd if=skyward-v1.0.7-bixi-OS4.0.0.11.XOHCNXM.img of=/dev/block/by-name/recovery_a bs=1048576
 ```
 
-这台机器用 `fastboot flash recovery` 刷 100MB 的镜像会在中途断链（`Write to device failed (no link)`），所以从 root shell 写——在 Skyward 里，或者通过 `adb`——才是可靠的方式。
+这台机器用 `fastboot flash recovery` 刷 100MB 的镜像会在中途断链（`Write to device failed (no link)`），所以从 root shell 写——在 XM KEEL 里，或者通过 `adb`——才是可靠的方式。
 
-之后连接 WLAN，就可以在“设置”的“Skyward 更新”页面更新到最新版本，也可以在 Skyward 自己的“安装”页面安装解压出来的新版镜像。从 1.0.7 起这两条路之外还有第三条：更新页的“从内部存储刷入镜像”，挑一个放在内部存储里的 `skyward-….img`（或它那个 `.zip`），Skyward 会先认出这是不是本机的镜像，再写进下次启动那个槽位和另一个装有 Skyward 的槽位——不下载、也不挪走你的文件，和在线更新走的是同一条写盘路径。打开 **自动重新刷入 Skyward** 之后，在 Skyward 里安装的更新或刷机包覆盖 recovery 分区时，Skyward 会把它们刷回来；fastboot 刷入和原厂系统更新不在其中，因为它们不经过 Skyward。安装刚写完的分区会带着只读旗标，所以每次写入前都要先清掉它——1.0.2 会清，1.0.1 是在这里失败（`Operation not permitted`）。
+之后连接 WLAN，就可以在“设置”的“XM KEEL 更新”页面更新到最新版本，也可以在 XM KEEL 自己的“安装”页面安装解压出来的新版镜像。从 1.0.7 起这两条路之外还有第三条：更新页的“从内部存储刷入镜像”，挑一个放在内部存储里的 `skyward-….img`（或它那个 `.zip`），XM KEEL 会先认出这是不是本机的镜像，再写进下次启动那个槽位和另一个装有 XM KEEL 的槽位——不下载、也不挪走你的文件，和在线更新走的是同一条写盘路径。打开 **自动重新刷入 XM KEEL** 之后，在 XM KEEL 里安装的更新或刷机包覆盖 recovery 分区时，XM KEEL 会把它们刷回来；fastboot 刷入和原厂系统更新不在其中，因为它们不经过 XM KEEL。安装刚写完的分区会带着只读旗标，所以每次写入前都要先清掉它——1.0.2 会清，1.0.1 是在这里失败（`Operation not permitted`）。
 
-Skyward 中的 adb 是 root shell，手机上无需授权：手机处于 recovery 的时候，任何人拿到手机和数据线都能访问其中的存储。
+XM KEEL 中的 adb 是 root shell，手机上无需授权：手机处于 recovery 的时候，任何人拿到手机和数据线都能访问其中的存储。
 
 ## 双系统的工作方式
 
-Skyward 可以在手机自身分区中的系统旁边安装第二系统，主系统是 HyperOS 或者第三方 ROM 都可以，并在首页的“双系统”中切换。第二系统的根文件系统是 data 分区中的一个文件，文件系统不能移动或删除它，Skyward 直接通过分区读写其中的内容；两个系统的启动镜像保存在另一个这样的文件中。切换系统只改写下次启动槽位的 boot 和 init_boot 分区，每一步都先记录在 /metadata 中，切换过程中断电的话，Skyward 下次启动时会完成这次切换。vendor_boot、dtbo、recovery、vbmeta、固件和 super 都保持不变，第二系统使用主系统的 vendor_boot 和 dtbo 启动。
+XM KEEL 可以在手机自身分区中的系统旁边安装第二系统，主系统是 HyperOS 或者第三方 ROM 都可以，并在首页的“双系统”中切换。第二系统的根文件系统是 data 分区中的一个文件，文件系统不能移动或删除它，XM KEEL 直接通过分区读写其中的内容；两个系统的启动镜像保存在另一个这样的文件中。切换系统只改写下次启动槽位的 boot 和 init_boot 分区，每一步都先记录在 /metadata 中，切换过程中断电的话，XM KEEL 下次启动时会完成这次切换。vendor_boot、dtbo、recovery、vbmeta、固件和 super 都保持不变，第二系统使用主系统的 vendor_boot 和 dtbo 启动。
 
-其他操作写入启动分区之前，Skyward 会先把主系统的启动镜像写回：安装、切换启动槽位、fastboot、恢复出厂设置，以及备份或恢复启动分区。系统更新尚未合并的时候，暂不切换到第二系统；备份 data 分区的时候不包含第二系统。
+其他操作写入启动分区之前，XM KEEL 会先把主系统的启动镜像写回：安装、切换启动槽位、fastboot、恢复出厂设置，以及备份或恢复启动分区。系统更新尚未合并的时候，暂不切换到第二系统；备份 data 分区的时候不包含第二系统。
 
 第二系统的安装包是 zip 文件，和其他安装包一样在“安装”页面安装：
 
@@ -123,13 +125,13 @@ Skyward 可以在手机自身分区中的系统旁边安装第二系统，主系
 | `rootfs.img` | 根文件系统的镜像，格式为 `filesystem` 指定的文件系统 |
 | `init_boot.img` | 只有自带第一阶段 ramdisk 的系统需要 |
 
-没有自带 init_boot 镜像的系统，从 Skyward 生成的 init_boot 镜像启动。其中的程序按照主系统第一阶段的方式加载第一阶段的内核模块，包括模块之间的软依赖和内核命令行中给模块的参数，然后在 data 分区中找到根文件系统，挂载之后运行其中的 `init`。启动过程中出现任何错误，这个程序都会进入 Skyward，和主系统启动失败时进入 recovery 一样：它在 misc 中留下原因，把当前槽位 recovery 分区中的 ramdisk 按照 bootloader 启动 recovery 时内核解包的方式解包到自己的 ramdisk 上，然后交给 Skyward 的第一个程序运行，所以无论 bootloader 怎样处理重启，都能进入 Skyward。Skyward 显示原因；用户在“双系统”中切换之前，下次启动的仍是第二系统。启动长时间没有进展时，这个程序改为重启到 recovery；交给第二系统之前手机重启的话，下次启动时它会在 misc 中看到同样的请求，先进入 Skyward。两种方式都无法进入 Skyward 时，手机停留在出错的地方，不会反复启动同一个系统。自带第一阶段 ramdisk 的系统可以运行 Skyward 放在 `/skyward/map` 的程序，它把根文件系统映射为块设备，并输出设备节点的路径。每次切换到第二系统，Skyward 都用自己带的程序写入第二系统的 init_boot 镜像，所以更新 Skyward 以后，第二系统也用新的程序启动。
+没有自带 init_boot 镜像的系统，从 XM KEEL 生成的 init_boot 镜像启动。其中的程序按照主系统第一阶段的方式加载第一阶段的内核模块，包括模块之间的软依赖和内核命令行中给模块的参数，然后在 data 分区中找到根文件系统，挂载之后运行其中的 `init`。启动过程中出现任何错误，这个程序都会进入 XM KEEL，和主系统启动失败时进入 recovery 一样：它在 misc 中留下原因，把当前槽位 recovery 分区中的 ramdisk 按照 bootloader 启动 recovery 时内核解包的方式解包到自己的 ramdisk 上，然后交给 XM KEEL 的第一个程序运行，所以无论 bootloader 怎样处理重启，都能进入 XM KEEL。XM KEEL 显示原因；用户在“双系统”中切换之前，下次启动的仍是第二系统。启动长时间没有进展时，这个程序改为重启到 recovery；交给第二系统之前手机重启的话，下次启动时它会在 misc 中看到同样的请求，先进入 XM KEEL。两种方式都无法进入 XM KEEL 时，手机停留在出错的地方，不会反复启动同一个系统。自带第一阶段 ramdisk 的系统可以运行 XM KEEL 放在 `/skyward/map` 的程序，它把根文件系统映射为块设备，并输出设备节点的路径。每次切换到第二系统，XM KEEL 都用自己带的程序写入第二系统的 init_boot 镜像，所以更新 XM KEEL 以后，第二系统也用新的程序启动。
 
-正在运行的系统也可以请求切换：在 misc 中写入 `boot-recovery` 和 `--switch_system=installed`，或者 `--switch_system=` 加上第二系统的 `id`，然后重启到 recovery。bootloader 仍然启动这个槽位的话（小米 13 Ultra 连着 USB 线时可能这样），Skyward 的程序会在下次启动时在 misc 中看到这个请求，先进入 Skyward。
+正在运行的系统也可以请求切换：在 misc 中写入 `boot-recovery` 和 `--switch_system=installed`，或者 `--switch_system=` 加上第二系统的 `id`，然后重启到 recovery。bootloader 仍然启动这个槽位的话（小米 13 Ultra 连着 USB 线时可能这样），XM KEEL 的程序会在下次启动时在 misc 中看到这个请求，先进入 XM KEEL。
 
 ## 构建
 
-Skyward 使用 `rust-toolchain.toml` 指定的稳定版 Rust 和它的 `aarch64-linux-android` 目标、Android NDK r29 和 [cargo-ndk](https://github.com/bbqsrc/cargo-ndk) 构建。recovery 服务针对手机构建，打包工具针对电脑构建：
+XM KEEL 使用 `rust-toolchain.toml` 指定的稳定版 Rust 和它的 `aarch64-linux-android` 目标、Android NDK r29 和 [cargo-ndk](https://github.com/bbqsrc/cargo-ndk) 构建。recovery 服务针对手机构建，打包工具针对电脑构建：
 
 ```sh
 cargo ndk -t arm64-v8a --platform 30 build --release -p skyward

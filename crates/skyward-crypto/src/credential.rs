@@ -71,7 +71,7 @@ pub fn open(serial: &str, file: &[u8]) -> Result<Vec<u8>> {
         return Err(anyhow!("it is {} bytes, too short to be a credential", file.len()));
     }
     if &file[..8] != MAGIC {
-        return Err(anyhow!("it does not start as a credential Skyward wrote"));
+        return Err(anyhow!("it does not start as a credential XM KEEL wrote"));
     }
     let salt = &file[8..8 + SALT];
     let nonce = &file[8 + SALT..8 + SALT + NONCE];

@@ -105,7 +105,7 @@ pub enum Screen {
     /// Where an update the system installed stands, and merging it into
     /// the slot it went to.
     Update,
-    /// Skyward's newest release, and updating to it: its build for the
+    /// XM KEEL's newest release, and updating to it: its build for the
     /// phone downloaded and written into the recovery partitions.
     SkywardUpdate,
     /// A file taken from an address typed on the screen's own keyboard, into
@@ -134,13 +134,13 @@ pub enum Screen {
     /// A page of its own, so its states are reached from Settings rather
     /// than from the foot of the update page.
     Plugin,
-    /// Skyward's own licence.
+    /// XM KEEL's own licence.
     License,
     /// The interface typeface and the terms it is used under.
     FontLicense,
     /// Which slot the phone starts from next.
     Slot,
-    /// The installed system and the one Skyward installed beside it: which
+    /// The installed system and the one XM KEEL installed beside it: which
     /// of them starts, switching between them, and taking the other away.
     Systems,
     /// The phone's own fastbootd serving the computer's fastboot, and where
@@ -395,7 +395,7 @@ impl Browser {
     }
 }
 
-/// How far asking GitHub for Skyward's newest release has come.
+/// How far asking GitHub for XM KEEL's newest release has come.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub enum SkywardCheck {
     #[default]
@@ -417,7 +417,7 @@ pub enum Weighing {
     Weighed(Vec<u64>),
 }
 
-/// Updating Skyward, as its page shows it: downloading the newest release's
+/// Updating XM KEEL, as its page shows it: downloading the newest release's
 /// build for the phone, then writing it into the recovery partitions, how
 /// far that has come, and how it ended.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -513,9 +513,9 @@ pub const DATA_OPENING: Text = ["正在打开 data 分区，请稍后再试", "�
 /// What an install is told while the last one has not ended.
 pub const INSTALL_UNFINISHED: Text = ["上一次安装尚未结束，请稍后再试", "上一次安裝尚未結束，請稍後再試", "The last install hasn't ended. Try again shortly"];
 
-/// What a build kept in a place is told while Skyward is being updated
+/// What a build kept in a place is told while XM KEEL is being updated
 /// already.
-const SKYWARD_UNFINISHED: Text = ["Skyward 正在更新，请稍后再试", "Skyward 正在更新，請稍後再試", "Skyward is being updated. Try again shortly"];
+const SKYWARD_UNFINISHED: Text = ["XM KEEL 正在更新，请稍后再试", "XM KEEL 正在更新，請稍後再試", "XM KEEL is being updated. Try again shortly"];
 
 /// What work on the data partition is told once it has been erased whole.
 pub const DATA_ERASED: Text = ["data 分区已清除", "data 分割區已清除", "The data partition was wiped"];
@@ -904,7 +904,7 @@ pub enum Switch {
     /// Run a zip's install script only if the zip was signed with one of
     /// the phone's update keys.
     Signature,
-    /// Write Skyward back into the recovery partitions an install writes
+    /// Write XM KEEL back into the recovery partitions an install writes
     /// over.
     KeepRecovery,
     /// Keep what opened the data partition, sealed for this phone, and try
@@ -1249,7 +1249,7 @@ fn file_name(path: &str) -> Option<String> {
     std::path::Path::new(path).file_name().map(|n| n.to_string_lossy().into_owned())
 }
 
-/// Whether `name` is what Skyward calls the build it publishes, a bare image
+/// Whether `name` is what XM KEEL calls the build it publishes, a bare image
 /// or the zip it comes in: `skyward-v1.0.6-bixi-OS4.0.0.11.XOHCNXM.img`.
 fn is_skyward_build(name: Option<&str>) -> bool {
     name.is_some_and(|n| n.starts_with("skyward-") && (n.ends_with(".img") || n.ends_with(".zip")))
@@ -1805,7 +1805,7 @@ pub enum Action {
     StopDownload,
     /// Install the full package downloaded.
     InstallDownloaded,
-    /// Ask GitHub for Skyward's newest release.
+    /// Ask GitHub for XM KEEL's newest release.
     CheckSkyward,
     /// Download the newest release's build for the phone and write it into
     /// the recovery partitions.
@@ -2305,9 +2305,9 @@ pub struct State {
     /// the phone's update keys.
     pub check_signature: bool,
     /// The phone keeps its recovery in a partition of each slot, which the
-    /// install page then offers to keep Skyward in.
+    /// install page then offers to keep XM KEEL in.
     pub recovery_partitions: bool,
-    /// Skyward goes back into the recovery partitions an install writes
+    /// XM KEEL goes back into the recovery partitions an install writes
     /// over.
     pub keep_recovery: bool,
     /// What opened the data partition once is kept on /metadata, sealed for
@@ -2325,7 +2325,7 @@ pub struct State {
     /// When what was kept was sealed, in whole seconds since 1970, so the
     /// page can say how long it has been there.
     pub credential_at: Option<i64>,
-    /// How Skyward went back into the recovery partitions the install
+    /// How XM KEEL went back into the recovery partitions the install
     /// wrote over, where it did.
     pub reflash: Option<Reflash>,
     /// The mount page's partitions, as the runtime last read them, or why
@@ -2358,7 +2358,7 @@ pub struct State {
     pub next_slot: Option<Slot>,
     /// The phone has what a second system needs: boot and init_boot
     /// partitions in both slots, which a switch writes, and recovery
-    /// partitions apart from them, which keep Skyward through it.
+    /// partitions apart from them, which keep XM KEEL through it.
     pub dual_boot: bool,
     /// The systems, as the runtime last read them, or why it could not;
     /// none until it has.
@@ -2473,7 +2473,7 @@ pub struct State {
     /// ended.
     pub download: Option<DownloadJob>,
     pub skyward_check: SkywardCheck,
-    /// Updating Skyward, or how that last ended.
+    /// Updating XM KEEL, or how that last ended.
     pub skyward_job: Option<SkywardJob>,
     /// The full browser the owner may keep on the phone: whether it is
     /// there, and the download of it.
@@ -2673,7 +2673,7 @@ impl State {
         self.download.as_ref().is_some_and(|d| d.outcome.is_none())
     }
 
-    /// Skyward's newest release, as GitHub told of it.
+    /// XM KEEL's newest release, as GitHub told of it.
     pub fn skyward_newest(&self) -> Option<&Newest> {
         match &self.skyward_check {
             SkywardCheck::Answered(n) => Some(n),
@@ -2681,13 +2681,13 @@ impl State {
         }
     }
 
-    /// Whether Skyward is being updated.
+    /// Whether XM KEEL is being updated.
     pub fn updating_skyward(&self) -> bool {
         self.skyward_job.as_ref().is_some_and(|j| j.outcome.is_none())
     }
 
     /// Whether the phone has the page `screen`: the WLAN page where the
-    /// recovery brings the phone's WLAN up, and updating Skyward where the
+    /// recovery brings the phone's WLAN up, and updating XM KEEL where the
     /// phone also keeps its recovery in a partition of each slot.
     pub fn offers(&self, screen: Screen) -> bool {
         match screen {
@@ -2912,7 +2912,7 @@ pub enum Effect {
     /// goes with [`App::download_progress`] and [`App::download_ended`].
     Download(Release),
     StopDownload,
-    /// Ask GitHub for Skyward's newest release, telling what it answered
+    /// Ask GitHub for XM KEEL's newest release, telling what it answered
     /// with [`App::skyward_checked`].
     CheckSkyward,
     /// Download `build` and write it into the recovery partitions, telling
@@ -2932,7 +2932,7 @@ pub enum Effect {
     /// and the page has to tell the owner what is there, not what was
     /// readable then.
     ReadPlugin,
-    /// Write the Skyward build kept at `path` in `place` into the recovery
+    /// Write the XM KEEL build kept at `path` in `place` into the recovery
     /// partitions, telling how it goes with [`App::skyward_progress`] and
     /// [`App::skyward_ended`].
     WriteSkyward(Place, String),
@@ -4694,7 +4694,7 @@ impl App {
         self.refresh();
     }
 
-    /// What GitHub answered of Skyward's newest release.
+    /// What GitHub answered of XM KEEL's newest release.
     pub fn skyward_checked(&mut self, answer: Result<Newest, Unanswered>) {
         self.state.skyward_check = match answer {
             Ok(newest) => SkywardCheck::Answered(newest),
@@ -4719,7 +4719,7 @@ impl App {
         }
     }
 
-    /// How far updating Skyward has come, and how fast the download goes,
+    /// How far updating XM KEEL has come, and how fast the download goes,
     /// in bytes a second.
     pub fn skyward_progress(&mut self, stage: SkywardStage, rate: u64) {
         let job = self.state.skyward_job.as_mut().expect("only an update under way moves on");
@@ -4830,7 +4830,7 @@ impl App {
         }
     }
 
-    /// Updating Skyward has ended: its page says how, lit for the user to
+    /// Updating XM KEEL has ended: its page says how, lit for the user to
     /// read.
     pub fn skyward_ended(&mut self, end: SkywardEnd, now: u64) {
         let job = self.state.skyward_job.as_mut().expect("only an update under way ends");
@@ -6095,7 +6095,7 @@ impl App {
                 self.state.restore = None;
                 self.state.asking_delete = false;
             }
-            // The page stays while Skyward is updated: once downloaded, the
+            // The page stays while XM KEEL is updated: once downloaded, the
             // build is written at once, which nothing may cut short.
             Screen::SkywardUpdate => match self.state.skyward_job.as_ref().filter(|j| j.outcome.is_none()).map(|j| j.stage) {
                 Some(Some(SkywardStage::Write { .. })) => {
@@ -6333,7 +6333,7 @@ impl App {
                 }
                 fx
             }
-            // Skyward's own page asks GitHub the same way.
+            // XM KEEL's own page asks GitHub the same way.
             Screen::SkywardUpdate if matches!(self.state.skyward_check, SkywardCheck::Idle | SkywardCheck::Failed(_)) && self.state.online() => {
                 self.state.skyward_check = SkywardCheck::Asking;
                 vec![Effect::CheckSkyward]
@@ -7398,7 +7398,7 @@ impl App {
     /// following how it goes; one install at a time.
     fn install_file(&mut self, place: Place, path: String, size: u64, now: u64) -> Vec<Effect> {
         let name = file_name(&path);
-        // A Skyward build kept in a place goes into the recovery partitions
+        // A XM KEEL build kept in a place goes into the recovery partitions
         // the way the page's own update does; the installer would take it for
         // a boot image and write one slot only.
         if is_skyward_build(name.as_deref()) {
@@ -7407,7 +7407,7 @@ impl App {
         self.install_named(Source::File(place), name, size, Effect::InstallFile(place, path), now)
     }
 
-    /// Write the Skyward build kept at `path` in `place` into the recovery
+    /// Write the XM KEEL build kept at `path` in `place` into the recovery
     /// partitions of both slots, its page following how it goes: one update
     /// at a time, and none while an install is under way.
     fn write_skyward(&mut self, place: Place, path: String, now: u64) -> Vec<Effect> {
@@ -12561,11 +12561,11 @@ mod tests {
         assert!(app.act(Action::Open(Screen::Wlan), 0).is_empty(), "a WLAN that is off is not scanned");
         assert_eq!(tap(&mut app, &f, &i, Action::Toggle(Switch::Wlan)), vec![Effect::Wlan(true)]);
         assert_eq!(app.state.wlan.as_ref().unwrap().power, Power::Starting, "the switch moves at once");
-        let nearby = vec![network("Skyward", -34, Security::Psk), network("Skyward-Open", -72, Security::Open), network("Skyward-WEP", -60, Security::Wep)];
+        let nearby = vec![network("XM KEEL", -34, Security::Psk), network("XM KEEL-Open", -72, Security::Open), network("XM KEEL-WEP", -60, Security::Wep)];
         app.set_wlan(Wlan { power: Power::On, networks: nearby, joined: None });
         tap(&mut app, &f, &i, Action::JoinNetwork(2));
         assert_eq!(toast(&app), Some("暂不支持 WEP 加密的网络"));
-        let cafe = Effect::JoinWlan { ssid: b"Skyward-Open".to_vec(), name: "Skyward-Open".into(), security: Security::Open, password: Secret::default() };
+        let cafe = Effect::JoinWlan { ssid: b"XM KEEL-Open".to_vec(), name: "XM KEEL-Open".into(), security: Security::Open, password: Secret::default() };
         assert_eq!(tap(&mut app, &f, &i, Action::JoinNetwork(1)), vec![cafe], "an open network is joined at once");
         tap(&mut app, &f, &i, Action::JoinNetwork(0));
         assert_eq!(app.screen(), Screen::WlanPassword);
@@ -12580,13 +12580,13 @@ mod tests {
         tap(&mut app, &f, &i, Action::Type(Cap::Show(Layer::Digits)));
         type_in(&mut app, "12");
         let fx = tap(&mut app, &f, &i, Action::Type(Cap::Enter));
-        let join = Effect::JoinWlan { ssid: b"Skyward".to_vec(), name: "Skyward".into(), security: Security::Psk, password: Secret("secret12".into()) };
-        assert_eq!(format!("{join:?}"), r#"JoinWlan { ssid: [83, 107, 121, 119, 97, 114, 100], name: "Skyward", security: Psk, password: Secret(8 characters) }"#, "what is printed leaves the password out");
+        let join = Effect::JoinWlan { ssid: b"XM KEEL".to_vec(), name: "XM KEEL".into(), security: Security::Psk, password: Secret("secret12".into()) };
+        assert_eq!(format!("{join:?}"), r#"JoinWlan { ssid: [88, 77, 32, 75, 69, 69, 76], name: "XM KEEL", security: Psk, password: Secret(8 characters) }"#, "what is printed leaves the password out");
         assert_eq!(fx, vec![join]);
         assert_eq!(app.screen(), Screen::Wlan, "the WLAN page shows how joining goes");
         assert_eq!((app.state.password.as_str(), app.state.joining.as_ref()), ("", None), "the password is not kept");
-        app.set_wlan(connected("Skyward"));
-        assert_eq!(fmt::wlan_value(Lang::Hans, app.state.wlan.as_ref().unwrap()), "Skyward");
+        app.set_wlan(connected("XM KEEL"));
+        assert_eq!(fmt::wlan_value(Lang::Hans, app.state.wlan.as_ref().unwrap()), "XM KEEL");
         tap(&mut app, &f, &i, Action::OpenJoined);
         assert_eq!(app.screen(), Screen::WlanNetwork);
         assert_eq!(tap(&mut app, &f, &i, Action::LeaveNetwork), vec![Effect::LeaveWlan]);
@@ -12599,16 +12599,16 @@ mod tests {
     fn a_refused_password_is_asked_for_again_from_the_networks_row() {
         let (f, i) = (fonts(), info());
         let mut app = App::new(Screen::Home, W, H, PPD);
-        app.state.wlan = Some(joined("Skyward", Joining::WrongPassword));
+        app.state.wlan = Some(joined("XM KEEL", Joining::WrongPassword));
         app.act(Action::Open(Screen::Wlan), 0);
         tap(&mut app, &f, &i, Action::OpenJoined);
         assert_eq!(app.screen(), Screen::WlanPassword);
-        assert_eq!(app.state.joining.as_ref().map(|n| n.name.as_str()), Some("Skyward"));
+        assert_eq!(app.state.joining.as_ref().map(|n| n.name.as_str()), Some("XM KEEL"));
         app.key(Key::Back, 0);
-        app.set_wlan(joined("Skyward", Joining::Joining));
+        app.set_wlan(joined("XM KEEL", Joining::Joining));
         tap(&mut app, &f, &i, Action::OpenJoined);
         assert_eq!(app.screen(), Screen::WlanNetwork, "a network being joined shows how that goes");
-        assert_eq!(app.state.details.as_ref().map(|n| n.name.as_str()), Some("Skyward"));
+        assert_eq!(app.state.details.as_ref().map(|n| n.name.as_str()), Some("XM KEEL"));
         app.key(Key::Back, 0);
         assert_eq!(app.state.details, None);
     }
@@ -12619,9 +12619,9 @@ mod tests {
         let mut app = App::new(Screen::Home, W, H, PPD);
         app.set_wlan(Wlan { power: Power::On, networks: Vec::new(), joined: None });
         assert!(app.wlan_mark().is_none(), "no network joined");
-        app.set_wlan(joined("Skyward", Joining::Addressing));
+        app.set_wlan(joined("XM KEEL", Joining::Addressing));
         assert!(app.wlan_mark().is_none(), "not while it has no address");
-        app.set_wlan(connected("Skyward"));
+        app.set_wlan(connected("XM KEEL"));
         let mark = app.wlan_mark().unwrap();
         assert_eq!((mark.level, mark.speed.as_str(), mark.unit, mark.receiving, mark.sending), (3, "0.00", "KB/s", false, false));
         app.frame(&f, &i);
@@ -12689,7 +12689,7 @@ mod tests {
     fn a_network_added_by_hand_is_turned_down_for_a_name_too_long_and_joined_open_without_its_password() {
         let (f, i) = (fonts(), info());
         let mut app = App::new(Screen::Home, W, H, PPD);
-        app.state.wlan = Some(Wlan { power: Power::On, networks: vec![network("Skyward-Open", -72, Security::Open)], joined: None });
+        app.state.wlan = Some(Wlan { power: Power::On, networks: vec![network("XM KEEL-Open", -72, Security::Open)], joined: None });
         app.act(Action::Open(Screen::Wlan), 0);
         tap(&mut app, &f, &i, Action::AddNetwork);
         tap(&mut app, &f, &i, Action::ChooseSecurity);
@@ -12767,13 +12767,13 @@ mod tests {
     fn a_networks_round_button_opens_its_details_and_its_row_joins_it() {
         let (f, i) = (fonts(), info());
         let mut app = App::new(Screen::Home, W, H, PPD);
-        let nearby = vec![network("Skyward", -34, Security::Psk), network("Skyward-Open", -72, Security::Open)];
+        let nearby = vec![network("XM KEEL", -34, Security::Psk), network("XM KEEL-Open", -72, Security::Open)];
         app.state.wlan = Some(Wlan { power: Power::On, networks: nearby, joined: None });
         app.act(Action::Open(Screen::Wlan), 0);
         assert_eq!(tap(&mut app, &f, &i, Action::Rescan), vec![Effect::ScanWlan]);
         tap(&mut app, &f, &i, Action::NetworkDetails(1));
         assert_eq!(app.screen(), Screen::WlanNetwork);
-        assert_eq!(app.state.details.as_ref().map(|n| n.name.as_str()), Some("Skyward-Open"));
+        assert_eq!(app.state.details.as_ref().map(|n| n.name.as_str()), Some("XM KEEL-Open"));
         assert!(!app.frame(&f, &i).hits.iter().any(|h| h.action == Action::LeaveNetwork), "a network not chosen has nothing to forget");
         app.key(Key::Back, 0);
         // The round button sits on its row, and is what a touch on it finds.
@@ -12808,7 +12808,7 @@ mod tests {
         assert!(tap(&mut app, &f, &i, Action::CheckUpdate).is_empty());
         assert_eq!(app.screen(), Screen::Wlan, "asking takes a network, which the WLAN page joins");
         app.key(Key::Back, 0);
-        app.set_wlan(connected("Skyward"));
+        app.set_wlan(connected("XM KEEL"));
         assert_eq!(tap(&mut app, &f, &i, Action::CheckUpdate), vec![Effect::CheckUpdate]);
         assert_eq!(app.state.check, Check::Asking);
         app.update_checked(Ok(Some(newest())), Have::Nothing);
@@ -12842,7 +12842,7 @@ mod tests {
     fn the_update_page_asks_the_server_as_it_opens_once_a_network_is_joined() {
         let (f, i) = (fonts(), info());
         let mut app = App::new(Screen::Advanced, W, H, PPD);
-        app.state.wlan = Some(connected("Skyward"));
+        app.state.wlan = Some(connected("XM KEEL"));
         assert_eq!(tap(&mut app, &f, &i, Action::Open(Screen::Update)), vec![Effect::ReadUpdate, Effect::ReadPlugin], "a phone whose server is not known asks nothing");
         app.key(Key::Back, 0);
         app.state.update_server = true;
@@ -12882,7 +12882,7 @@ mod tests {
         assert!(tap(&mut app, &f, &i, Action::CheckSkyward).is_empty());
         assert_eq!(app.screen(), Screen::Wlan, "asking takes a network, which the WLAN page joins");
         app.key(Key::Back, 0);
-        app.set_wlan(connected("Skyward"));
+        app.set_wlan(connected("XM KEEL"));
         assert_eq!(tap(&mut app, &f, &i, Action::CheckSkyward), vec![Effect::CheckSkyward]);
         assert_eq!(app.state.skyward_check, SkywardCheck::Asking);
         app.skyward_checked(Ok(skyward_newest(true)));
@@ -12913,7 +12913,7 @@ mod tests {
     fn the_quickest_mirror_is_the_one_the_next_update_goes_through() {
         let (f, i) = (fonts(), info());
         let mut app = App::new(Screen::SkywardUpdate, W, H, PPD);
-        app.state.wlan = Some(connected("Skyward"));
+        app.state.wlan = Some(connected("XM KEEL"));
         app.state.recovery_partitions = true;
         app.refresh();
         app.skyward_checked(Ok(skyward_newest(true)));
@@ -12940,7 +12940,7 @@ mod tests {
         assert_eq!(
             app.install_file(Place::Storage, path.clone(), size, 0),
             vec![Effect::WriteSkyward(Place::Storage, path.clone())],
-            "a Skyward build goes into the recovery partitions, not the installer"
+            "a XM KEEL build goes into the recovery partitions, not the installer"
         );
         assert_eq!(app.screen(), Screen::SkywardUpdate, "its page shows how it goes");
         assert!(app.state.updating_skyward(), "one update at a time");
@@ -12957,7 +12957,7 @@ mod tests {
     fn the_skyward_page_asks_github_as_it_opens_once_a_network_is_joined() {
         let (f, i) = (fonts(), info());
         let mut app = App::new(Screen::Settings, W, H, PPD);
-        app.state.wlan = Some(connected("Skyward"));
+        app.state.wlan = Some(connected("XM KEEL"));
         app.state.recovery_partitions = true;
         app.refresh();
         assert_eq!(tap(&mut app, &f, &i, Action::Open(Screen::SkywardUpdate)), vec![Effect::CheckSkyward]);
@@ -13642,7 +13642,7 @@ mod tests {
     #[test]
     fn a_page_asked_for_while_another_is_read_is_read_too() {
         let mut app = App::new(Screen::Browser, W, H, PPD);
-        app.state.wlan = Some(connected("Skyward"));
+        app.state.wlan = Some(connected("XM KEEL"));
         app.read_page("https://example.com/one".into());
         assert!(app.state.browser.reading, "the first read is under way");
         // A slow network holds the first read for as long as its timeouts

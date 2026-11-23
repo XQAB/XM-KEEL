@@ -164,7 +164,7 @@ libraries = ["/odm/lib64", "/system/lib64", "/vendor/lib64", "/mnt/system/system
 ready_service = "android.hardware.weaver.IWeaver/default"
 registers = ["android.hardware.weaver.IWeaver/default"]
 # bixi 的 odm 清单里 weaver 还是老写法（<interface><name>/<instance>），
-# Skyward 只认 <fqname>IWeaver/default</fqname>，于是这个文件不会被选中、
+# XM KEEL 只认 <fqname>IWeaver/default</fqname>，于是这个文件不会被选中、
 # servicemanager 也就拒绝注册。这里给它一份现代写法的描述。
 description = "/system/etc/vintf/weaver-nxp.xml"
 # 参照 songyuan（同为骁龙 + NXP 方案）：weaver 用 root。它要开 TEE 的

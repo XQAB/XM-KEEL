@@ -40,7 +40,7 @@
 - `/metadata/skyward/settings.json` 完好：`keep_recovery=true`、`remember_credential=true`。
 - recovery 可进，v1.0.13 起得来。
 
-第一条要改读法（2026-11-22 修正）。**这次升级不是走 rec 装整包完成的**：进 Skyward rec
+第一条要改读法（2026-11-22 修正）。**这次升级不是走 rec 装整包完成的**：进 XM KEEL rec
 点安装 4.0.4.0 完整包没有成功（另案，见 §7），最后是别的办法进的系统。所以
 `recovery_a/b` 仍是 `3676c676…` 只说明「没有任何东西写过这两个分区」，**推不出**
 `keep_recovery` 的 hold → 装 → reflash 这条链在 4.0.4.0 上验证过；要验它，得等一次
@@ -327,7 +327,7 @@ dmesg | grep -E 'partitions not mounted|devices not brought up|mounted'
 
 1. 密码解锁 → 能不能进主页并看到 `/data` 内容（3.1）；
 2. 合盖 → 熄屏 → 点亮 → 点一下（副屏触摸，v1.0.13 的验收项，在 4.0.4.0 上重做一次）；
-3. 设置页里「Skyward 更新」那一页读到的机器版本（看 About 页 built on / running 两行差多少）。
+3. 设置页里「XM KEEL 更新」那一页读到的机器版本（看 About 页 built on / running 两行差多少）。
 
 ### 打包侧
 

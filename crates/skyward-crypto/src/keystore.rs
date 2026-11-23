@@ -67,10 +67,10 @@ impl StoredKey {
         let read = |name: &str| fs::read(dir.join(name)).with_context(|| format!("read {}", dir.join(name).display()));
         let version = fs::read_to_string(dir.join(FN_VERSION)).with_context(|| format!("read {}", dir.join(FN_VERSION).display()))?;
         if version.trim() != VERSION {
-            bail!("{} is written in layout {}, Skyward reads layout {VERSION}", dir.display(), version.trim());
+            bail!("{} is written in layout {}, XM KEEL reads layout {VERSION}", dir.display(), version.trim());
         }
         if dir.join(FN_STRETCHING).exists() {
-            bail!("{} was written by an Android too old for Skyward to read", dir.display());
+            bail!("{} was written by an Android too old for XM KEEL to read", dir.display());
         }
         let secdiscardable_hash = match dir.join(FN_SECDISCARDABLE).exists() {
             true => hash_with_prefix(SECDISCARDABLE_PREFIX, &read(FN_SECDISCARDABLE)?),

@@ -1,15 +1,15 @@
-//! The first program of a system Skyward installed beside the installed
-//! one, as the init_boot image Skyward made for it starts it. Before the
+//! The first program of a system XM KEEL installed beside the installed
+//! one, as the init_boot image XM KEEL made for it starts it. Before the
 //! system's own first program, it loads the drivers the installed system's
 //! first stage loads, as that stage loads them, finds the system's root
-//! where Skyward put it in the data partition, lays it out as a device,
+//! where XM KEEL put it in the data partition, lays it out as a device,
 //! mounts it, and hands over to the system's own first program there.
 //!
 //! Whatever stops it on the way brings up the recovery, with a request in
 //! misc that says why: an error at once, a start that stops moving after a
 //! while, and a phone restarted before the hand-over, through the request
 //! it keeps in misc until then. The recovery partition of the slot holds
-//! Skyward, and its ramdisk is unpacked over the one the kernel unpacked,
+//! XM KEEL, and its ramdisk is unpacked over the one the kernel unpacked,
 //! as the kernel unpacks it when the bootloader starts the recovery: its
 //! own first program then takes over in this one's place, and the recovery
 //! comes up whatever the bootloader makes of a restart. A start that stops
@@ -444,7 +444,7 @@ mod sys {
         fs::remove_file(&start).with_context(|| format!("take away {}", start.display()))
     }
 
-    /// Bring the recovery up in this program's place: Skyward's ramdisk,
+    /// Bring the recovery up in this program's place: XM KEEL's ramdisk,
     /// from the recovery partition of the slot the phone started from,
     /// unpacked over the one the kernel unpacked, as the kernel unpacks it
     /// when the bootloader starts the recovery, and its own first program

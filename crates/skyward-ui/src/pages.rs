@@ -158,7 +158,7 @@ pub fn confirm_label(which: Confirm, s: &State) -> (&'static str, bool) {
 
 /// The home page's large title, and what its search bar and the search
 /// page's field say while nothing is typed.
-pub const HOME_TITLE: &str = "Skyward";
+pub const HOME_TITLE: &str = "XM KEEL";
 pub const SEARCH_HINT: Text = ["搜索功能与分区", "搜尋功能與分割區", "Search features and partitions"];
 
 const REBOOT_TARGETS: [(Text, Option<Text>); 6] = [
@@ -182,7 +182,7 @@ const SPECS: Text = ["全部参数与信息", "全部規格與資訊", "All spec
 const LOGS: Text = ["导出日志", "匯出記錄", "Export logs"];
 const SCREEN_TIMEOUT: Text = ["息屏时间", "螢幕自動關閉", "Screen timeout"];
 const UPDATE: Text = ["系统更新", "系統更新", "System update"];
-const SKYWARD_UPDATE: Text = ["Skyward 更新", "Skyward 更新", "Skyward update"];
+const SKYWARD_UPDATE: Text = ["XM KEEL 更新", "XM KEEL 更新", "XM KEEL update"];
 const FILES: Text = ["文件管理", "檔案管理", "File manager"];
 const TERMINAL: Text = ["终端", "終端機", "Terminal"];
 const LANGUAGE: Text = ["语言", "語言", "Language"];
@@ -528,7 +528,7 @@ pub fn settings(cx: &Ctx) -> Frame {
     Frame::new(t, fit(c, t, about.bottom), out, l.pick(SETTINGS), top)
 }
 
-/// What the settings page says beside its Skyward update entry: an update
+/// What the settings page says beside its XM KEEL update entry: an update
 /// under way, or a newer release found.
 fn skyward_value(cx: &Ctx) -> Option<&'static str> {
     let (s, l) = (cx.state, cx.state.lang);
@@ -659,7 +659,7 @@ pub fn about(cx: &Ctx) -> Frame {
     let (out, summary_top, bottom) = about_cards(cx, &mut c);
     let canvas = fit(c, t, bottom);
     let art = HeroArt {
-        wordmark: widgets::wordmark(t, f, "Skyward", m.dp(246.0), m.dp(45.0)),
+        wordmark: widgets::wordmark(t, f, "XM KEEL", m.dp(246.0), m.dp(45.0)),
         version: widgets::version_line(t, f, VERSION),
         author: widgets::author_lines(t, f, &AUTHOR),
         runs: canvas.runs(),
@@ -808,7 +808,7 @@ fn specs_page(cx: &Ctx, canvas: Canvas, out: &mut Vec<Hit>, top: f32) -> (Canvas
         y = widgets::info_card(&mut c, t, f, y + gap, &[(l.pick(ANDROID_VERSION), fmt::android(l, r, i.security_patch.as_ref()))]);
     }
     y = widgets::info_card(&mut c, t, f, y + gap, &[
-        (l.pick(["Recovery 版本", "Recovery 版本", "Recovery version"]), format!("Skyward {VERSION}")),
+        (l.pick(["Recovery 版本", "Recovery 版本", "Recovery version"]), format!("XM KEEL {VERSION}")),
         (l.pick(["内核版本", "核心版本", "Kernel version"]), i.kernel.clone()),
     ]);
 
@@ -1111,13 +1111,13 @@ pub fn install(cx: &Ctx) -> Frame {
     let note = l.pick(["开启后，仅安装带有本机官方签名的刷机包。", "開啟後，僅安裝帶有本機官方簽章的刷機包。", "When on, only zips signed with this phone's official keys install."]);
     let mut y = widgets::footnote(&mut c, t, f, signature.bottom, note);
     if cx.state.recovery_partitions {
-        let row = Row::new(l.pick(["自动重新刷入 Skyward", "自動重新刷入 Skyward", "Flash Skyward again"])).trail(Trail::Switch(cx.state.keep_recovery));
+        let row = Row::new(l.pick(["自动重新刷入 XM KEEL", "自動重新刷入 XM KEEL", "Flash XM KEEL again"])).trail(Trail::Switch(cx.state.keep_recovery));
         let options = widgets::list(&mut c, t, f, y + t.m.card_gap, &[row]);
         out.extend(hits(&options.rows, &[Action::Toggle(Switch::KeepRecovery)]));
         let note = l.pick([
-            "开启后，安装系统更新或刷机包时被覆盖的 recovery 分区将重新刷入 Skyward。",
-            "開啟後，安裝系統更新或刷機包時被覆寫的 recovery 分割區將重新刷入 Skyward。",
-            "When on, Skyward goes back into the recovery partitions a system update or flashable zip writes over.",
+            "开启后，安装系统更新或刷机包时被覆盖的 recovery 分区将重新刷入 XM KEEL。",
+            "開啟後，安裝系統更新或刷機包時被覆寫的 recovery 分割區將重新刷入 XM KEEL。",
+            "When on, XM KEEL goes back into the recovery partitions a system update or flashable zip writes over.",
         ]);
         y = widgets::footnote(&mut c, t, f, options.bottom, note);
     }
@@ -1209,10 +1209,10 @@ fn system_stage(l: Lang, stage: Option<&Stage>) -> (String, Option<f32>) {
     }
 }
 
-const REFLASHING: Text = ["正在重新刷入 Skyward", "正在重新刷入 Skyward", "Flashing Skyward again"];
+const REFLASHING: Text = ["正在重新刷入 XM KEEL", "正在重新刷入 XM KEEL", "Flashing XM KEEL again"];
 
 /// What the card says while an install script runs, and how far it is: the
-/// last line the script showed and how far it says it is, then Skyward
+/// last line the script showed and how far it says it is, then XM KEEL
 /// going back into the recovery partitions it wrote over.
 fn script_stage<'a>(l: Lang, stage: Option<&Stage>, said: &'a [String]) -> (&'a str, Option<f32>) {
     let running = l.pick(["正在运行安装脚本", "正在執行安裝指令碼", "Running the install script"]);
@@ -1224,7 +1224,7 @@ fn script_stage<'a>(l: Lang, stage: Option<&Stage>, said: &'a [String]) -> (&'a 
     }
 }
 
-/// How Skyward went back into the recovery partitions the install wrote
+/// How XM KEEL went back into the recovery partitions the install wrote
 /// over, where it did.
 fn reflashed(c: &mut Canvas, cx: &Ctx, y: f32) -> f32 {
     let (t, f, l) = (cx.t, cx.f, cx.state.lang);
@@ -1233,13 +1233,13 @@ fn reflashed(c: &mut Canvas, cx: &Ctx, y: f32) -> f32 {
         Some(Reflash::Written(written)) => {
             let slots = fmt::slots(l, written);
             let said = match (l, written.len()) {
-                (Lang::En, 1) => format!("Skyward went back into {slots}'s recovery partition."),
-                _ => tr!(l, "已将 Skyward 重新刷入{slots} 的 recovery 分区。", "已將 Skyward 重新刷入{slots} 的 recovery 分割區。", "Skyward went back into the recovery partitions of {slots}."),
+                (Lang::En, 1) => format!("XM KEEL went back into {slots}'s recovery partition."),
+                _ => tr!(l, "已将 XM KEEL 重新刷入{slots} 的 recovery 分区。", "已將 XM KEEL 重新刷入{slots} 的 recovery 分割區。", "XM KEEL went back into the recovery partitions of {slots}."),
             };
             widgets::footnote(c, t, f, y, &said)
         }
         Some(Reflash::Failed(why)) => {
-            let note = l.pick(["未能将 Skyward 重新刷入 recovery 分区。", "無法將 Skyward 重新刷入 recovery 分割區。", "Couldn't flash Skyward back into the recovery partitions."]);
+            let note = l.pick(["未能将 XM KEEL 重新刷入 recovery 分区。", "無法將 XM KEEL 重新刷入 recovery 分割區。", "Couldn't flash XM KEEL back into the recovery partitions."]);
             let y = widgets::footnote(c, t, f, y, note);
             widgets::footnote(c, t, f, y, why)
         }
@@ -2014,9 +2014,9 @@ pub fn backup(cx: &Ctx) -> Frame {
     let parts = widgets::list(&mut c, t, f, y, &rows);
     out.extend(hits(&parts.rows, &[0, 1, 2, 3].map(Action::BackupPart)));
     let y = widgets::footnote(&mut c, t, f, parts.bottom, l.pick([
-        "第二系统的系统镜像不在备份里（data 分区里的 Skyward 目录被跳过），删掉第二系统后要重新安装。",
-        "第二系統的系統映像檔不在備份裡（data 分割區裡的 Skyward 目錄被跳過），刪掉第二系統後要重新安裝。",
-        "The second system's image is not in a backup — the Skyward folder in the data partition is skipped — so the second system has to be installed again after it is removed.",
+        "第二系统的系统镜像不在备份里（data 分区里的 XM KEEL 目录被跳过），删掉第二系统后要重新安装。",
+        "第二系統的系統映像檔不在備份裡（data 分割區裡的 XM KEEL 目錄被跳過），刪掉第二系統後要重新安裝。",
+        "The second system's image is not in a backup — the XM KEEL folder in the data partition is skipped — so the second system has to be installed again after it is removed.",
     ]));
     let y = widgets::section(&mut c, t, f, y, l.pick(["存放位置", "存放位置", "Save to"]));
     let storage = match (s.data.storage_open(), i.storage.free.map(fmt::gb)) {
@@ -3156,7 +3156,7 @@ fn downloaded(l: Lang, progress: Progress, rate: u64) -> (&'static str, String, 
     }
 }
 
-/// Skyward's own update: the build running now; Skyward's newest release
+/// XM KEEL's own update: the build running now; XM KEEL's newest release
 /// on GitHub, and updating to it; then what to note before updating.
 pub fn skyward_update(cx: &Ctx) -> Frame {
     let (t, f, s, l) = (cx.t, cx.f, cx.state, cx.state.lang);
@@ -3205,9 +3205,9 @@ pub fn skyward_update(cx: &Ctx) -> Frame {
             "The new version is downloaded from GitHub and goes into the recovery partitions once its SHA-256 checks out. The system and user data are left as they are.",
         ]),
         l.pick([
-            "新版本将写入下次启动所用槽位的 recovery 分区；另一个槽位装有 Skyward 时，也会一并更新。",
-            "新版本將寫入下次啟動所用槽位的 recovery 分割區；另一個槽位裝有 Skyward 時，也會一併更新。",
-            "The new version goes into the recovery partition of the slot that starts next, and into the other slot's where it holds Skyward.",
+            "新版本将写入下次启动所用槽位的 recovery 分区；另一个槽位装有 XM KEEL 时，也会一并更新。",
+            "新版本將寫入下次啟動所用槽位的 recovery 分割區；另一個槽位裝有 XM KEEL 時，也會一併更新。",
+            "The new version goes into the recovery partition of the slot that starts next, and into the other slot's where it holds XM KEEL.",
         ]),
         l.pick(["更新完成后，重启到恢复模式即可使用新版本。", "更新完成後，重新啟動到復原模式即可使用新版本。", "Once updated, reboot to recovery to use the new version."]),
     ];
@@ -3215,7 +3215,7 @@ pub fn skyward_update(cx: &Ctx) -> Frame {
     Frame::new(t, fit(c, t, y), out, l.pick(SKYWARD_UPDATE), top)
 }
 
-/// Asking GitHub for Skyward's newest release, then updating to it: its
+/// Asking GitHub for XM KEEL's newest release, then updating to it: its
 /// build for the phone downloaded and written into the recovery partitions,
 /// how far that has come, and how it ended.
 fn skyward_online(c: &mut Canvas, cx: &Ctx, y: f32, out: &mut Vec<Hit>) -> f32 {
@@ -3280,12 +3280,12 @@ fn skyward_online(c: &mut Canvas, cx: &Ctx, y: f32, out: &mut Vec<Hit>) -> f32 {
         Some(SkywardJob { outcome: Some(SkywardEnd::Updated(slots)), .. }) => {
             let names = fmt::slots(l, slots);
             let detail = match (l, slots.len()) {
-                (Lang::En, 1) => format!("Skyward {version} is in {names}'s recovery partition."),
+                (Lang::En, 1) => format!("XM KEEL {version} is in {names}'s recovery partition."),
                 _ => tr!(
                     l,
-                    "已将 Skyward {version} 刷入{names} 的 recovery 分区。",
-                    "已將 Skyward {version} 刷入{names} 的 recovery 分割區。",
-                    "Skyward {version} is in the recovery partitions of {names}."
+                    "已将 XM KEEL {version} 刷入{names} 的 recovery 分区。",
+                    "已將 XM KEEL {version} 刷入{names} 的 recovery 分割區。",
+                    "XM KEEL {version} is in the recovery partitions of {names}."
                 ),
             };
             let y = widgets::list(c, t, f, y + gap, &[standing(l.pick(["更新成功", "更新成功", "Updated"]), GREEN, Icon::Install, &detail)]).bottom;
@@ -3306,14 +3306,14 @@ fn skyward_online(c: &mut Canvas, cx: &Ctx, y: f32, out: &mut Vec<Hit>) -> f32 {
                     let names = fmt::slots(l, slots);
                     let warning = match (l, slots.len()) {
                         (Lang::En, 1) => format!(
-                            "{}'s recovery partition was only partly written, so rebooting to recovery may not start Skyward. Update again, and reboot once it's done.",
+                            "{}'s recovery partition was only partly written, so rebooting to recovery may not start XM KEEL. Update again, and reboot once it's done.",
                             capitalized(l, &names)
                         ),
                         _ => tr!(
                             l,
-                            "{names} 的 recovery 分区仅写入了部分内容，重启到恢复模式可能无法进入 Skyward。请重新更新，完成后再重启。",
-                            "{names} 的 recovery 分割區僅寫入了部分內容，重新啟動到復原模式可能無法進入 Skyward。請重新更新，完成後再重新啟動。",
-                            "The recovery partitions of {names} were only partly written, so rebooting to recovery may not start Skyward. Update again, and reboot once it's done."
+                            "{names} 的 recovery 分区仅写入了部分内容，重启到恢复模式可能无法进入 XM KEEL。请重新更新，完成后再重启。",
+                            "{names} 的 recovery 分割區僅寫入了部分內容，重新啟動到復原模式可能無法進入 XM KEEL。請重新更新，完成後再重新啟動。",
+                            "The recovery partitions of {names} were only partly written, so rebooting to recovery may not start XM KEEL. Update again, and reboot once it's done."
                         ),
                     };
                     y = widgets::footnote(c, t, f, y, &warning);
@@ -3479,9 +3479,9 @@ pub fn wlan(cx: &Ctx) -> Frame {
     match &w.power {
         Power::Off => {
             let note = l.pick([
-                "开启后，可连接 WLAN 下载系统更新和 Skyward 新版本。",
-                "開啟後，可連接 Wi-Fi 下載系統更新和 Skyward 新版本。",
-                "When on, system updates and new versions of Skyward can download over Wi-Fi.",
+                "开启后，可连接 WLAN 下载系统更新和 XM KEEL 新版本。",
+                "開啟後，可連接 Wi-Fi 下載系統更新和 XM KEEL 新版本。",
+                "When on, system updates and new versions of XM KEEL can download over Wi-Fi.",
             ]);
             y = widgets::footnote(&mut c, t, f, y, note)
         }
@@ -4265,7 +4265,7 @@ fn browser_opening(c: &mut Canvas, t: &Theme, f: &Fonts, b: &Browser, l: Lang, t
     icons::glyph(c, Icon::Globe, dcx, dcy, m.dp(50.0), white);
     let x = m.margin + m.dp(24.0);
     let room = w - m.dp(130.0);
-    c.text_top(&f.heading, "Skyward", x, top + m.dp(30.0), m.dp(26.0), white, Some(room));
+    c.text_top(&f.heading, "XM KEEL", x, top + m.dp(30.0), m.dp(26.0), white, Some(room));
     c.text_top(&f.body, l.pick(BROWSER), x, top + m.dp(72.0), m.dp(16.0), white.with_alpha(220), Some(room));
     c.text_top(&f.body, l.pick(BROWSER_HOME_HINT), x, top + m.dp(98.0), m.dp(13.0), white.with_alpha(185), Some(room));
     let mut y = top + hero_h + m.dp(14.0);
@@ -5011,23 +5011,23 @@ pub fn logs(cx: &Ctx) -> Frame {
     Frame::new(t, fit(c, t, export.y + export.h), out, l.pick(LOGS), top)
 }
 
-/// Skyward's licence, in Chinese, ahead of the words the licence gives for
+/// XM KEEL's licence, in Chinese, ahead of the words the licence gives for
 /// a program's notice; English reads those words alone.
 const LICENSE_NOTICE: [&str; 2] = [
-    "Skyward 是自由软件：你可以依据自由软件基金会发布的 GNU 通用公共许可证第 3 版，或（由你选择）任何更新的版本，重新发布和修改它。\n\n\
-发布 Skyward 是希望它有用，但不附带任何担保，也不担保其适销性或适用于特定用途。详见 GNU 通用公共许可证。",
-    "Skyward 是自由軟體：你可以依據自由軟體基金會發布的 GNU 通用公眾授權條款第 3 版，或（由你選擇）任何更新的版本，重新發布和修改它。\n\n\
-發布 Skyward 是希望它有用，但不附帶任何擔保，也不擔保其適銷性或適用於特定用途。詳見 GNU 通用公眾授權條款。",
+    "XM KEEL 是自由软件：你可以依据自由软件基金会发布的 GNU 通用公共许可证第 3 版，或（由你选择）任何更新的版本，重新发布和修改它。\n\n\
+发布 XM KEEL 是希望它有用，但不附带任何担保，也不担保其适销性或适用于特定用途。详见 GNU 通用公共许可证。",
+    "XM KEEL 是自由軟體：你可以依據自由軟體基金會發布的 GNU 通用公眾授權條款第 3 版，或（由你選擇）任何更新的版本，重新發布和修改它。\n\n\
+發布 XM KEEL 是希望它有用，但不附帶任何擔保，也不擔保其適銷性或適用於特定用途。詳見 GNU 通用公眾授權條款。",
 ];
 
-const LICENSE_ORIGINAL: &str = "Skyward\nCopyright (C) 2026 Kirk Lin\n\n\
+const LICENSE_ORIGINAL: &str = "XM KEEL\nCopyright (C) 2026 Kirk Lin\n\n\
 This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.\n\n\
 This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.\n\n\
 You should have received a copy of the GNU General Public License along with this program. If not, see <https://www.gnu.org/licenses/>.";
 
 const LICENSE_TERMS: Text = ["许可证", "授權條款", "License"];
 
-/// Skyward's own licence.
+/// XM KEEL's own licence.
 pub fn license(cx: &Ctx) -> Frame {
     let (t, f, l) = (cx.t, cx.f, cx.state.lang);
     let mut c = long_page(cx);
@@ -5067,9 +5067,9 @@ pub fn font_license(cx: &Ctx) -> Frame {
         (copyright, f.info.copyright.clone().expect("MiSans names its copyright holder")),
     ]);
     let misans = l.pick([
-        "界面文字使用小米 MiSans 字体，依据《MiSans 字体知识产权许可协议》免费使用。字体文件未经修改，仅随 Skyward 提供，不单独分发。\n\n协议全文可在 MiSans 官方网站查看。",
-        "介面文字使用小米 MiSans 字型，依據《MiSans 字體知識產權許可協議》免費使用。字型檔案未經修改，僅隨 Skyward 提供，不單獨散布。\n\n協議全文可在 MiSans 官方網站查看。",
-        "The interface text is set in Xiaomi's MiSans, used free of charge under the MiSans Font Intellectual Property License Agreement. The font files are unchanged, and come with Skyward alone, never on their own.\n\nThe agreement in full is on the MiSans website.",
+        "界面文字使用小米 MiSans 字体，依据《MiSans 字体知识产权许可协议》免费使用。字体文件未经修改，仅随 XM KEEL 提供，不单独分发。\n\n协议全文可在 MiSans 官方网站查看。",
+        "介面文字使用小米 MiSans 字型，依據《MiSans 字體知識產權許可協議》免費使用。字型檔案未經修改，僅隨 XM KEEL 提供，不單獨散布。\n\n協議全文可在 MiSans 官方網站查看。",
+        "The interface text is set in Xiaomi's MiSans, used free of charge under the MiSans Font Intellectual Property License Agreement. The font files are unchanged, and come with XM KEEL alone, never on their own.\n\nThe agreement in full is on the MiSans website.",
     ]);
     let y = widgets::paragraph(&mut c, t, f, y + t.m.dp(4.0), misans);
     let y = widgets::section(&mut c, t, f, y, l.pick(["终端文字", "終端機文字", "Terminal text"]));
@@ -5542,7 +5542,7 @@ pub fn unhandled(cx: &Ctx) -> Frame {
         items.push((l.pick(REASON), reason.clone()));
     }
     let y = widgets::info_card(&mut c, t, f, top, &items);
-    let y = widgets::footnote(&mut c, t, f, y, l.pick(["Skyward 暂不支持该请求，本机未做任何改动。", "Skyward 尚不支援這項要求，本機未做任何變更。", "Skyward doesn't support this request, and changed nothing on this phone."]));
+    let y = widgets::footnote(&mut c, t, f, y, l.pick(["XM KEEL 暂不支持该请求，本机未做任何改动。", "XM KEEL 尚不支援這項要求，本機未做任何變更。", "XM KEEL doesn't support this request, and changed nothing on this phone."]));
     let y = widgets::section(&mut c, t, f, y, l.pick(ACTIONS));
     let bottom = afterwards(&mut c, t, f, l, y, true, &mut out);
     Frame { back: false, ..Frame::new(t, fit(c, t, bottom), out, l.pick(["无法处理该请求", "無法處理這項要求", "Can't handle the request"]), top) }
@@ -5569,8 +5569,8 @@ mod tests {
         assert_eq!(script_stage(l, None, &[]), ("正在运行安装脚本", None));
         assert_eq!(script_stage(Lang::En, None, &[]), ("Running the install script", None));
         assert_eq!(script_stage(l, Some(&Stage::Script { thousandths: 250 }), &said), ("- Flashing boot", Some(0.25)), "past a blank line");
-        assert_eq!(script_stage(l, Some(&Stage::Reflashing { done: 1, total: 4 }), &said), ("正在重新刷入 Skyward", Some(0.25)));
-        assert_eq!(update_stage(Lang::En, Some(&Stage::Reflashing { done: 3, total: 4 })), ("Flashing Skyward again".to_string(), Some(0.75)));
+        assert_eq!(script_stage(l, Some(&Stage::Reflashing { done: 1, total: 4 }), &said), ("正在重新刷入 XM KEEL", Some(0.25)));
+        assert_eq!(update_stage(Lang::En, Some(&Stage::Reflashing { done: 3, total: 4 })), ("Flashing XM KEEL again".to_string(), Some(0.75)));
         assert_eq!(update_stage(Lang::Hant, Some(&Stage::Writing { done: 1, total: 4 })).0, "第 1 步，共 3 步：寫入新系統 25%");
     }
 

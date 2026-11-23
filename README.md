@@ -1,12 +1,15 @@
-![Skyward Recovery](assets/hero.jpg)
+![XM KEEL Recovery](assets/hero.jpg)
 
-# Skyward
+# XM KEEL
 
 English | [简体中文](README.zh-CN.md)
 
-Skyward is a recovery written in Rust, from scratch.
+XM KEEL is a recovery written in Rust, from scratch. It began as a fork of
+[kirklin/skyward](https://github.com/kirklin/skyward) (GPL-3.0) and is now
+maintained independently as XM KEEL, keeping that license and the original
+authors' credit.
 
-> **MIX Flip 2 (`bixi`) · 1.0.1** — this branch builds Skyward for the Xiaomi MIX Flip 2
+> **MIX Flip 2 (`bixi`) · 1.0.1** — this branch builds XM KEEL for the Xiaomi MIX Flip 2
 > (SM8750, Android 17, A/B + dynamic partitions, running `OS4.0.11.XOHCNXM`, built on
 > `OS4.0.0.11.XOHCNXM`). The cover display is the
 > primary screen, `/data` unlocks itself once the password has been kept, images can be
@@ -14,7 +17,7 @@ Skyward is a recovery written in Rust, from scratch.
 > reported back, and the recovery updates itself from GitHub releases — bare `.img`
 > first, `.zip` after it — through a mirror you pick.
 > Full changelog, what was borrowed from other forks and the known limits:
-> [CHANGELOG-bixi.md](CHANGELOG-bixi.md) · [Releases](https://github.com/XQAB/skyward/releases)
+> [CHANGELOG-bixi.md](CHANGELOG-bixi.md) · [Releases](https://github.com/XQAB/XM-KEEL/releases)
 > How the port got here, decision by decision: [docs/bixi-porting.md](docs/bixi-porting.md)
 
 <p align="center">
@@ -49,7 +52,7 @@ read and set properties.
 
 ### Online updates
 
-![Update the system and Skyward online](slides/en/out/05-updates.png)
+![Update the system and XM KEEL online](slides/en/out/05-updates.png)
 
 ### Backup and restore
 
@@ -57,7 +60,7 @@ read and set properties.
 
 ### File manager
 
-![Manage the phone's files in Skyward](slides/en/out/07-files.png)
+![Manage the phone's files in XM KEEL](slides/en/out/07-files.png)
 
 ### Terminal
 
@@ -73,7 +76,7 @@ read and set properties.
 
 ### Replacing the stock recovery
 
-![Skyward does what the system asks](slides/en/out/11-requests.png)
+![XM KEEL does what the system asks](slides/en/out/11-requests.png)
 
 ### Search
 
@@ -94,7 +97,7 @@ read and set properties.
 
 ### Without a system
 
-![Skyward starts even without a system](slides/en/out/15-no-system.png)
+![XM KEEL starts even without a system](slides/en/out/15-no-system.png)
 
 ## Supported devices
 
@@ -102,15 +105,15 @@ read and set properties.
 | --- | --- | --- |
 | Xiaomi MIX Flip 2 | `bixi` | OS4.0.11.XOHCNXM (Android 17) |
 
-This fork keeps Skyward for that phone only. The work on it — the cover screen that
+This repository keeps XM KEEL for that phone only. The work on it — the cover screen that
 comes on when the phone is shut, its touch, and the rest of the bixi changes — is on
 `main`, and the images are on
-[Releases](https://github.com/XQAB/skyward/releases).
+[Releases](https://github.com/XQAB/XM-KEEL/releases).
 
-## Installing Skyward
+## Installing XM KEEL
 
-Skyward needs an unlocked bootloader. Download the image for this phone from
-[Releases](https://github.com/XQAB/skyward/releases) — the newest one is
+XM KEEL needs an unlocked bootloader. Download the image for this phone from
+[Releases](https://github.com/XQAB/XM-KEEL/releases) — the newest one is
 `skyward-v1.0.7-bixi-OS4.0.0.11.XOHCNXM.img`, and `0.32.00` was the first version
 with the cover panel, `0.37.00` the first one whose cover touch was accepted on
 the phone — check it against the SHA-256 in `SHA256SUMS`
@@ -123,39 +126,39 @@ dd if=skyward-v1.0.7-bixi-OS4.0.0.11.XOHCNXM.img of=/dev/block/by-name/recovery_
 
 `fastboot flash recovery` on this phone drops the link partway through a 100MB
 image (`Write to device failed (no link)`), so writing it from a root shell — in
-Skyward itself, or over `adb` — is the way that holds.
+XM KEEL itself, or over `adb` — is the way that holds.
 
-Afterwards Skyward updates itself over Wi-Fi from its newest release, on the
-Skyward update page in Settings; a newer image, unzipped, also installs from its own
+Afterwards XM KEEL updates itself over Wi-Fi from its newest release, on the
+XM KEEL update page in Settings; a newer image, unzipped, also installs from its own
 Install page. Since 1.0.7 there is a third way on that page: **Write a build kept in
 internal storage** takes a `skyward-….img` (or its `.zip`) sitting in internal
 storage, checks it is this phone's build, and writes it into the slot that starts
-next and into the other slot where Skyward is held — nothing is downloaded and
+next and into the other slot where XM KEEL is held — nothing is downloaded and
 nothing of yours is moved, and the write goes through the same path an update from
-GitHub does. With **Flash Skyward again** on, an update or flashable zip installed
-here in Skyward that writes over the recovery partitions gets Skyward back in them.
+GitHub does. With **Flash XM KEEL again** on, an update or flashable zip installed
+here in XM KEEL that writes over the recovery partitions gets XM KEEL back in them.
 A fastboot flash or the phone's own system updater is not covered, as it runs
-without Skyward. The partitions an install has just written are left read-only, so
-Skyward clears that flag before every write — 1.0.2 does; 1.0.1 failed with
+without XM KEEL. The partitions an install has just written are left read-only, so
+XM KEEL clears that flag before every write — 1.0.2 does; 1.0.1 failed with
 `Operation not permitted` instead.
 
-adb in Skyward is a root shell that needs no authorization on the phone: anyone
+adb in XM KEEL is a root shell that needs no authorization on the phone: anyone
 with the phone and a cable can reach its storage while it is in recovery.
 
 ## How dual boot works
 
-Skyward installs a second system beside the one in the phone's own partitions,
+XM KEEL installs a second system beside the one in the phone's own partitions,
 whether that is HyperOS or a custom ROM, and switches between them from **Dual boot**
 on its home page. The second system's root is a file in the data partition that the
 filesystem may neither move nor delete, read and written through the partition
 itself; the boot images of both systems are kept in another such file. A switch
 writes only the boot and init_boot partitions of the slot that starts next, and
 keeps each step on /metadata first, so a switch cut off by a loss of power is
-finished when Skyward next starts. vendor_boot, dtbo, recovery, vbmeta, the firmware
+finished when XM KEEL next starts. vendor_boot, dtbo, recovery, vbmeta, the firmware
 and super stay as they are, and the second system starts with the installed
 system's vendor_boot and dtbo.
 
-Before anything else writes the boot partitions, Skyward puts the installed system's
+Before anything else writes the boot partitions, XM KEEL puts the installed system's
 boot images back: an install, a slot switch, fastboot, a factory reset, and a backup
 or restore of the boot partitions. The second system waits while a system update is
 still to be merged, and backups of the data partition leave it out.
@@ -169,34 +172,34 @@ A second system installs from a zip on the Install page, as any other package do
 | `rootfs.img` | The root filesystem's image, of the `filesystem` named |
 | `init_boot.img` | Only for a system with a first ramdisk of its own |
 
-A system without an init_boot image of its own starts from one Skyward makes. Its
+A system without an init_boot image of its own starts from one XM KEEL makes. Its
 program loads the installed system's first-stage kernel modules the way that
 system's first stage loads them, with their soft dependencies and the settings the
 kernel command line gives them, finds the root in the data partition, mounts it and
-starts `init` there. If anything stops it, it brings Skyward up, as a failed start
+starts `init` there. If anything stops it, it brings XM KEEL up, as a failed start
 of the installed system ends in the recovery: it leaves the reason in misc, unpacks
 the ramdisk of the slot's recovery partition over its own, as the kernel unpacks it
-when the bootloader starts the recovery, and hands over to Skyward's first program,
-so Skyward comes up however the bootloader treats a restart. Skyward shows why, and
+when the bootloader starts the recovery, and hands over to XM KEEL's first program,
+so XM KEEL comes up however the bootloader treats a restart. XM KEEL shows why, and
 the second system still starts next until the user switches on Dual boot. A start
 that stops moving restarts into the recovery instead, and a phone restarted before
 the hand-over finds the same request in misc at its next start, which brings
-Skyward up before anything else. Where Skyward comes up neither way, the phone stays
+XM KEEL up before anything else. Where XM KEEL comes up neither way, the phone stays
 where it stopped, and never starts the same again and again. A system with a first
-ramdisk of its own finds Skyward's program at `/skyward/map`, which lays the root
+ramdisk of its own finds XM KEEL's program at `/skyward/map`, which lays the root
 out as a block device and prints its node. Each switch to the second system writes
-its init_boot image with the program of the Skyward that switches, so an updated
-Skyward starts it with the new program.
+its init_boot image with the program of the XM KEEL that switches, so an updated
+XM KEEL starts it with the new program.
 
 A running system switches by writing `boot-recovery` with
 `--switch_system=installed`, or `--switch_system=` and the second system's `id`, to
 misc, and restarting into recovery. Where the bootloader starts the slot again, as
-the 13 Ultra's can with a USB cable in, Skyward's program finds the request in misc
-at the next start and brings Skyward up before anything else.
+the 13 Ultra's can with a USB cable in, XM KEEL's program finds the request in misc
+at the next start and brings XM KEEL up before anything else.
 
 ## Building
 
-Skyward builds with the stable Rust that `rust-toolchain.toml` names, with its
+XM KEEL builds with the stable Rust that `rust-toolchain.toml` names, with its
 `aarch64-linux-android` target, the Android NDK r29 and
 [cargo-ndk](https://github.com/bbqsrc/cargo-ndk). The recovery service is built for
 the phone, and the packer for the computer:

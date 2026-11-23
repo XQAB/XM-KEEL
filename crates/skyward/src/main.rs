@@ -49,7 +49,7 @@ mod wipe;
 mod wlan;
 
 #[derive(Parser)]
-#[command(name = "skyward", version, about = "Skyward recovery")]
+#[command(name = "skyward", version, about = "XM KEEL recovery")]
 struct Cli {
     #[command(subcommand)]
     cmd: Cmd,

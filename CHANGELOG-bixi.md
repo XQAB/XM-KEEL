@@ -1,7 +1,7 @@
-# Skyward for bixi · 1.0.10
+# XM KEEL for bixi · 1.0.10
 
 > 机型：小米 MIX Flip 2（`bixi`，SM8750 / `sun`，Android 17，A/B + 动态分区，现役系统 `OS4.0.0.11.XOHCNXM`，出包基线 `OS4.0.0.11.XOHCNXM`）
-> 上游：[kirklin/skyward](https://github.com/kirklin/skyward)；本分支：[`bixi-cover-display-v2`](https://github.com/XQAB/skyward/tree/bixi-cover-display-v2)（PR #38）
+> 上游：[kirklin/skyward](https://github.com/kirklin/skyward)；本分支：[`bixi-cover-display-v2`](https://github.com/XQAB/XM-KEEL/tree/bixi-cover-display-v2)（PR #38）
 
 ## 1.0.10
 
@@ -25,8 +25,8 @@
 | 项 | 状态 | 关键点 |
 | --- | --- | --- |
 | 镜像测速，最快的那个自动选中 | ✅ 已实现（待真机验证） | 新 `crates/skyward-net/src/mirror.rs`：`rate()` 用一次 `Range: bytes=0-…` 只取 256 KiB 并计时，得到这个镜像在这个网络上的字节/秒；拒答、超时、什么都不发的镜像得到错误而不是「最慢」，因为它是没答上来。`quickest()` 是纯算术：零跳过、其余取最大、相等取先出现的；第一个位置是「不加速」（文件直接走 GitHub），所以 GitHub 自己最快时就选回它。更新页在「在线更新」下面多一行「测速选出最快的镜像」，只在 GitHub 已答出「有比本机新的一版」之后出现，量的是这一版真正要下的那个 `link`，量完直接写回 `state.mirror`——接着点「下载并更新」就走它，不用再手动切换；六个全没答上来时保留用户原本的选择 |
-| 本地挑镜像刷（第 4 项的另一半） | ✅ 已实现（待真机验证） | 更新页多一行「从内部存储刷入镜像」。data 分区没打开时照安装页的说法写「请先完成『解密』」并去解密页，已擦除写「data 分区已清除」。挑文件复用现成的 `Screen::Choose(Place::Storage)`，落点在 `App::install_file`：文件名是 Skyward 自己发布的那种（`skyward-…img` / `…zip`）就走 `write_skyward`——把 `skyward_job` 立起来、跳到更新页、交出 `Effect::WriteSkyward`；安装器那条路会把它当 boot 镜像、只写一个槽位，所以不能走。真正写盘的仍是 `updates::write`：先 `upgrade::check` 认这是不是本机的 Skyward 镜像，再写进下次启动那个槽位与另一个装有 Skyward 的槽位，写一段读回一段。`Task::Write` 不下载，也不删用户的文件 |
-| 两处新增断言 | ✅ 桌面跑过 | `the_quickest_mirror_is_the_one_the_next_update_goes_through`：交出去的是 build 自己的 `link`、量的时候不会被点第二次、六个数里最快的被选中、全零时保留原选择、没有新版本时这一行不出现。`a_skyward_build_kept_in_storage_goes_into_the_recovery_partitions`：`skyward-…img` 交 `Effect::WriteSkyward` 且跳更新页、第二次被挡住、之后 `rom.zip` 仍交 `Effect::InstallFile`。`mirror.rs` 自己四条（纯算术，与真 TCP 服务器的 206／404／空包） |
+| 本地挑镜像刷（第 4 项的另一半） | ✅ 已实现（待真机验证） | 更新页多一行「从内部存储刷入镜像」。data 分区没打开时照安装页的说法写「请先完成『解密』」并去解密页，已擦除写「data 分区已清除」。挑文件复用现成的 `Screen::Choose(Place::Storage)`，落点在 `App::install_file`：文件名是 XM KEEL 自己发布的那种（`skyward-…img` / `…zip`）就走 `write_skyward`——把 `skyward_job` 立起来、跳到更新页、交出 `Effect::WriteXM KEEL`；安装器那条路会把它当 boot 镜像、只写一个槽位，所以不能走。真正写盘的仍是 `updates::write`：先 `upgrade::check` 认这是不是本机的 XM KEEL 镜像，再写进下次启动那个槽位与另一个装有 XM KEEL 的槽位，写一段读回一段。`Task::Write` 不下载，也不删用户的文件 |
+| 两处新增断言 | ✅ 桌面跑过 | `the_quickest_mirror_is_the_one_the_next_update_goes_through`：交出去的是 build 自己的 `link`、量的时候不会被点第二次、六个数里最快的被选中、全零时保留原选择、没有新版本时这一行不出现。`a_skyward_build_kept_in_storage_goes_into_the_recovery_partitions`：`skyward-…img` 交 `Effect::WriteXM KEEL` 且跳更新页、第二次被挡住、之后 `rom.zip` 仍交 `Effect::InstallFile`。`mirror.rs` 自己四条（纯算术，与真 TCP 服务器的 206／404／空包） |
 
 `mirror.rs` 的四条与两条界面断言都由桌面 `cargo test --workspace` 真跑；`rate()` 与 `Task::Weigh`／`Task::Write` 的 Android 侧仍靠 `cargo ndk clippy` 看编译、靠真机看行为。
 
@@ -75,7 +75,7 @@
 | 修复 | ✅ 真机验过 | 把干净镜像前 8MB（sha256 `9687c46e…d049`）`dd` 到 `/dev/block/sda33` 的 `seek=16631808 count=16384`，再读回同一区间，sha256 与写入逐位一致。随后清掉半截更新状态（`/metadata` 在 rec 里默认 **ro**，必须先 `mount -o remount,rw` 才能删，否则 `rm` 静默失败：`state`、`snapshots/*`、`snapshot-boot`、`/data/gsi/ota/*`） |
 | 修好后的现场 | ✅ 真机验过 | 从 B 槽开机成功（`sys.boot_completed=1`、`ro.boot.slot_suffix=_b`、`OS4.0.0.11.XOHCNXM`）；`ro.system_ext.build.version.incremental` = `17OS4.0.260920.222807714.QCPECN.S`（1.0.3 那个「props 读不出来」的症状消失）；`/system_ext/etc` 87 项、`build.prop` 5894 B、`NOTICE.xml.gz` 202941 B |
 | 新槽 logo 循环的真因 | ✅ 订正 1.0.2 的记录 | 前两次「装到非当前槽 → 重启新槽」停在 logo，不是快照没清、也不是槽位写错：基座上被半写的 `system_ext` 让 init 读不到 `/etc`，VABC 随后回滚。基座修好后同一个 B 槽直接起来了 |
-| 装整包会不会写回 recovery（[issue #4](https://github.com/XQAB/skyward/issues/4)） | ✅ 有正向结果 | `keep_recovery=false` 时 dmesg 里既无 `the recovery partition does not hold Skyward` 也无 `written back to`，`recovery_b` 留原厂；开关打开后装 4.0.0.11 到 B，`recovery_a` 与 `recovery_b` 都是 `17d18608cb1193c4…449241`（Skyward 1.0.3，与装前基线相同），dmesg 三条：`left for the next start: snapshots Snapshotted, merge outstanding true` / `this recovery written back to [B]: Ok(())` / `Installed { slot: B, wipe: false }`。代码侧 `hold()` 传的是**当前运行槽**，不是 next |
+| 装整包会不会写回 recovery（[issue #4](https://github.com/XQAB/XM-KEEL/issues/4)） | ✅ 有正向结果 | `keep_recovery=false` 时 dmesg 里既无 `the recovery partition does not hold XM KEEL` 也无 `written back to`，`recovery_b` 留原厂；开关打开后装 4.0.0.11 到 B，`recovery_a` 与 `recovery_b` 都是 `17d18608cb1193c4…449241`（XM KEEL 1.0.3，与装前基线相同），dmesg 三条：`left for the next start: snapshots Snapshotted, merge outstanding true` / `this recovery written back to [B]: Ok(())` / `Installed { slot: B, wipe: false }`。代码侧 `hold()` 传的是**当前运行槽**，不是 next |
 | 写回失败的机制 | ✅ 已订正 | RO 分区上 `open(O_RDWR)` 不被拒（`count=0` 的 `dd` 能过），拒绝发生在 `write()`；`blockdev --setrw` 用 `O_RDONLY` 就能清旗标，所以「先 open 再 `make_writable`」的顺序本身没问题，1.0.2 的 bug 是 `make_writable(...).unwrap_or(false)` 把 `BLKROGET` 的失败吞了 |
 | `make_writable` 三态 | ✅ 已合 | `Writable::{Already, Cleared, StillReadOnly}`：清完还是只读，不再被当成「本来就可写」 |
 | props 读失败 | ✅ 已合 | 只对 EIO/超时类错误做 200 ms 有界重试（erofs inode 坏是稳定错误，重试只是白等）；About 页一行 `Unreadable{partition,file,error}`，带分区名与文件名 |
@@ -100,14 +100,14 @@ init: Service 'recovery' (pid 1438) exited with status 1
 | 项 | 状态 | 关键点 |
 | --- | --- | --- |
 | 一条 prop 决定 rec 生死 | ✅ 修（待真机复验） | `installed_props` 读 `build.prop` 遇到任何报错只往 kmsg 写一行（`… of … is unreadable: …`）并跳过，About 页少几条属性，rec 照常起来 |
-| `system_ext` 整盘读不了 | ⏳ 留真机查 | 只降级、没解释：那一次挂载为什么会整盘 `os error 95`（Android 侧同一分区可读）仍在查，证据见 [issue #4](https://github.com/XQAB/skyward/issues/4) |
+| `system_ext` 整盘读不了 | ⏳ 留真机查 | 只降级、没解释：那一次挂载为什么会整盘 `os error 95`（Android 侧同一分区可读）仍在查，证据见 [issue #4](https://github.com/XQAB/XM-KEEL/issues/4) |
 
 `1.0.3` 的资产：`skyward-v1.0.3-bixi-OS4.0.0.11.XOHCNXM.img`（裸镜像，直写 recovery 分区）、
 同名 `.zip`（自更新可直接吃）、`SHA256SUMS`、`verify-report.txt`。
 
 ## 1.0.2
 
-1.0.1 发出去后第一次拿官方整包做真机验收，暴露出两件事：装完 Skyward 写回 recovery 分区当场失败，以及装完的槽位起不来。这版修前者、把安装进度做成看得见的，后者只留诊断。
+1.0.1 发出去后第一次拿官方整包做真机验收，暴露出两件事：装完 XM KEEL 写回 recovery 分区当场失败，以及装完的槽位起不来。这版修前者、把安装进度做成看得见的，后者只留诊断。
 
 | 项 | 状态 | 关键点 |
 | --- | --- | --- |
@@ -115,7 +115,7 @@ init: Service 'recovery' (pid 1438) exited with status 1
 | 写回重试 | ✅ | 清只读后仍失败时等 0.8 s 再写一次（重试会重新清一遍只读），两次都失败才把首次原因一并报出 |
 | 安装进度看得见 | ✅ | 屏幕本来就有「第 1/2/3 步，共 3 步 + 百分比」，但百分比只靠 fuse 已送出的字节推算；现在同时解析 `update_engine` 的 `progress <frac> <seconds>` 状态行，优先用引擎自报的比例，进度条按它走 |
 | 装完后的状态留痕 | ✅ | 安装成功后在 kmsg 记一行 `install: left for the next start: snapshots …`（`/metadata/ota` 的快照状态 + 是否欠一次 merge），供「新槽起不来」排查 |
-| 整包装完后新槽起不来 | ❌ 本版不修 | 真机实测：同支 `4.0.0.11` 与 `4.0.3.0` 两个整包装进 B 槽后，重启都停在 logo 循环；两槽的 `boot`/`vendor_boot`/`vbmeta`/`dtbo` 的 sha256 前 16 位完全相同，写错已排除。回旧槽启动后 `/metadata/ota/state` 被清成 0 字节、`snapshots/` 清空（`vendor.snapshot_clear`，退出 0），VABC 快照失效，目标槽从此不可启。根因未定，详见 [issue #4](https://github.com/XQAB/skyward/issues/4) |
+| 整包装完后新槽起不来 | ❌ 本版不修 | 真机实测：同支 `4.0.0.11` 与 `4.0.3.0` 两个整包装进 B 槽后，重启都停在 logo 循环；两槽的 `boot`/`vendor_boot`/`vbmeta`/`dtbo` 的 sha256 前 16 位完全相同，写错已排除。回旧槽启动后 `/metadata/ota/state` 被清成 0 字节、`snapshots/` 清空（`vendor.snapshot_clear`，退出 0），VABC 快照失效，目标槽从此不可启。根因未定，详见 [issue #4](https://github.com/XQAB/XM-KEEL/issues/4) |
 | About 页出包基线对比 | ⏳ 留真机验收 | 与 1.0.1 相同，仍待真机确认 system 的挂载路径 |
 
 `1.0.2` 的资产：`skyward-v1.0.2-bixi-OS4.0.0.11.XOHCNXM.img`（裸镜像，直写 recovery 分区）、
@@ -130,7 +130,7 @@ init: Service 'recovery' (pid 1438) exited with status 1
 | 发版只认 sha256 | ✅ | v1.0.0 说明里的 MD5 表删掉，资产表全部换成资产 digest 的 sha256；此后校验只认 sha256 |
 | `7za l` | ✅ | 按 7-Zip 的六列（`Date/Time`、`Attr`、`Size`、`Compressed`、`Name`）打印，末行合计 `N file(s), M folder(s)`，可按名字筛选，只读目录区；`.7z` 容器仍不做（要背一个 LZMA/LZMA2 解码器，这套 shim 只为从 zip 里取镜像，原因见「已知限制」） |
 | MTP 未解锁提示 | ✅ | 文件传输开着而 `/data` 没解锁时，设置页直接说「电脑上看不到文件：data 还没解锁」，副标题给出顺序（先解密、后插线），点这一行进「解密」页；脚注随「文件传输开/关、data 解锁/未解锁」四种组合换文案 |
-| `tools/verify-release.py` | ✅ 已进 CI | 打包后当场把镜像按 bootloader 的读法拆回去核一遍：boot v4 头（recovery 无 kernel）、LZ4 legacy ramdisk、newc 归档、`<codename>_extra` 每个文件逐字节、五个 `system/bin` 软链（`7za`/`zstd`/`unzip`/`avbctl`/`resetprop` → `recovery`）、镜像内 `Skyward <版本>` 串、`prop.default` 出包基线对 `[stock].version`、packer 设置与剥离的属性、extra 二进制的 `DT_NEEDED` 依赖闭包；报告随 img/zip 进 artifact。清单从 `<codename>_extra/` 生成，不认机型 |
+| `tools/verify-release.py` | ✅ 已进 CI | 打包后当场把镜像按 bootloader 的读法拆回去核一遍：boot v4 头（recovery 无 kernel）、LZ4 legacy ramdisk、newc 归档、`<codename>_extra` 每个文件逐字节、五个 `system/bin` 软链（`7za`/`zstd`/`unzip`/`avbctl`/`resetprop` → `recovery`）、镜像内 `XM KEEL <版本>` 串、`prop.default` 出包基线对 `[stock].version`、packer 设置与剥离的属性、extra 二进制的 `DT_NEEDED` 依赖闭包；报告随 img/zip 进 artifact。清单从 `<codename>_extra/` 生成，不认机型 |
 | About 页出包基线对比 | ⏳ 留真机验收 | 本版没有动 UI：改之前要先在真机上确认 system 的挂载路径，留为下一版第一项 |
 | 文档 | ✅ | `docs/bixi-porting.md`（bixi 移植记录的单一真相源）、`bixi_extra/SOURCES.md`（8 个 extra 文件的出处与用途） |
 
@@ -160,9 +160,9 @@ init: Service 'recovery' (pid 1438) exited with status 1
 | 分区镜像 | ✅ | 全备（LZ4 + `.img.lz4` + sidecar）、关键分区、最小可开机集；可存内部存储或 U 盘 |
 | AVB flags 可写 | ✅ 已实现（真机验待补） | 先备份四份 `vbmeta_*`，写后上报 `0x00 -> 0x03` 这类差值 |
 | 安装脚本兼容 | ✅ 真机验过 | `7za`、`zstd`、`unzip`、`avbctl`、`resetprop` 都是 recovery 内建命令 |
-| 双更新源 | ✅ | 系统更新（`update.miui.com`，答复加密）+ Skyward 更新（GitHub Releases） |
+| 双更新源 | ✅ | 系统更新（`update.miui.com`，答复加密）+ XM KEEL 更新（GitHub Releases） |
 | 加速源 | ✅ | 6 档可选，更新页与下载页共用；检查走能转 API 的镜像，下载走你选的镜像 |
-| 自更新 | ✅ | 优先裸 `.img`，退回 `.zip`；sha256 校验；写入下一个槽位与另一块装了 Skyward 的分区 |
+| 自更新 | ✅ | 优先裸 `.img`，退回 `.zip`；sha256 校验；写入下一个槽位与另一块装了 XM KEEL 的分区 |
 | 启动指令页 | ✅ 真机验过（0.66） | 读 `misc` 里的 BCB，可单独清除，不动任何分区 |
 | 关于页排版 | ✅ 定案（0.63） | 字标 45.0dp、三行 17.2dp、版本 15.4dp、基线 301.0 |
 
@@ -181,7 +181,7 @@ init: Service 'recovery' (pid 1438) exited with status 1
 | 0.65 | 记住解密密码生效（「进 rec 就自动解锁了」）；ramdisk 兼容 `.img.zst` 资产 |
 | 0.66 | 镜像可存 U 盘、最小可开机集、解密页单独删、AVB 写后 flags 差值、MTP 重复 offer 封版 |
 | 0.66.01 | 自更新改为优先裸 `.img`；第一次同时挂 `.img` + `.zip` 两份资产 |
-| 0.67 | 「Skyward 更新」页补加速源行；加速源扩到 6 档；**检查更新走代理，与下载分开策略** |
+| 0.67 | 「XM KEEL 更新」页补加速源行；加速源扩到 6 档；**检查更新走代理，与下载分开策略** |
 | **1.0.0** | 汇总以上全部，版本号落定，README 与发行说明重写 |
 | **1.0.1** | 发版只认 sha256、`7za l`、MTP 未解锁提示、`verify-release.py` 进 CI、移植文档入库（About 基线对比留真机验收） |
 | **1.0.4** | `system_ext` 半写根因定死并修好（只坏前 8MB）、装整包写回 recovery 有正向结果、`make_writable` 三态、About 标红不可读属性 |
@@ -238,9 +238,9 @@ init: Service 'recovery' (pid 1438) exited with status 1
 
 - 两个更新源分得很清楚：
   1. 系统更新 → `https://update.miui.com/updates/miotaV3.php`，答复加密，用内置公钥解（`skyward-net/src/release.rs`）。镜像站不转这条，所以这一页**没有**加速源。
-  2. Skyward 更新 → `https://api.github.com/repos/XQAB/skyward/releases/latest`，同时充当联网校时。
+  2. XM KEEL 更新 → `https://api.github.com/repos/XQAB/skyward/releases/latest`，同时充当联网校时。
 - 自更新的硬条件：tag 以 `v` 开头；资产名前缀 `skyward-{tag}-{codename}-`、后缀 `.zip` 或 `.img`；GitHub 给出 `sha256` digest。0.66.01 起**先找裸 `.img`，没有才退回 `.zip`**。
-- 加速源 6 档：不加速 / `gh-proxy.com` / `gh-proxy.org` / `gh-proxy.cc` / `ghfast.top` / `github.akams.cn`，下载页与「Skyward 更新」页共用同一个选择，由 Keeper 定时落盘。
+- 加速源 6 档：不加速 / `gh-proxy.com` / `gh-proxy.org` / `gh-proxy.cc` / `ghfast.top` / `github.akams.cn`，下载页与「XM KEEL 更新」页共用同一个选择，由 Keeper 定时落盘。
 - **检查与下载分开**：`api.github.com` 只有 `gh-proxy.com`、`gh-proxy.org`、`gh-proxy.cc` 会转（`ghfast.top` 对接口 403、`github.akams.cn` 404）。所以检查更新会先走能转 API 的镜像，再兜底直连；下载则走你选的镜像——想要速度就选 ghfast。
 
 ### 界面与文案

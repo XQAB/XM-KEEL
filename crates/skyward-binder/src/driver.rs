@@ -114,9 +114,9 @@ impl Binder {
         let mut version: i32 = 0;
         unsafe { call(&file, BINDER_VERSION, &mut version as *mut i32 as *mut libc::c_void) }.context("ask the driver its protocol")?;
         if version != PROTOCOL {
-            bail!("the driver speaks protocol {version}, Skyward speaks {PROTOCOL}");
+            bail!("the driver speaks protocol {version}, XM KEEL speaks {PROTOCOL}");
         }
-        // Skyward only ever calls out, so the driver never needs us to take
+        // XM KEEL only ever calls out, so the driver never needs us to take
         // a call and never has to ask for a thread to take it on.
         let mut threads: u32 = 0;
         unsafe { call(&file, BINDER_SET_MAX_THREADS, &mut threads as *mut u32 as *mut libc::c_void) }.context("give up taking calls")?;
@@ -217,7 +217,7 @@ impl Binder {
                     let code = i32::from_ne_bytes(raw.try_into().unwrap_or([0; 4]));
                     bail!("the driver reported error {code}");
                 }
-                other => bail!("the driver said {other:#x}, which Skyward does not know"),
+                other => bail!("the driver said {other:#x}, which XM KEEL does not know"),
             }
         }
         Ok(None)

@@ -1,5 +1,5 @@
 name: Bug report
-description: Something in Skyward for the MIX Flip 2 (bixi) does not work
+description: Something in XM KEEL for the MIX Flip 2 (bixi) does not work
 labels: ["bug"]
 body:
   - type: markdown
@@ -9,7 +9,7 @@ body:
   - type: input
     id: skyward-version
     attributes:
-      label: Skyward version
+      label: XM KEEL version
       description: The image you flashed, e.g. 1.0.0, or the release tag.
       placeholder: 1.0.0
     validations:
@@ -44,7 +44,7 @@ body:
     attributes:
       label: Log
       description: |
-        While Skyward is running, `adb pull /tmp/recovery.log` (or attach the file).
+        While XM KEEL is running, `adb pull /tmp/recovery.log` (or attach the file).
         If it does not boot at all, say what the phone does instead - black panel, reboot loop, stuck on the logo.
       render: shell
   - type: textarea

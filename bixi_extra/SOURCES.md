@@ -1,6 +1,6 @@
 # bixi_extra — 文件出处说明
 
-本目录下的文件用于补齐 Skyward recovery 相对原厂 recovery 缺失的
+本目录下的文件用于补齐 XM KEEL recovery 相对原厂 recovery 缺失的
 HAL 声明与脚本，共 8 个（`tools/verify-release.py` 按本目录生成清单，
 打包后逐个核对）。出处分两类。
 
@@ -29,7 +29,7 @@ HAL 声明与脚本，共 8 个（`tools/verify-release.py` 按本目录生成�
 
 ## 使用限制
 
-这些文件只随 Skyward recovery 打包进 recovery 分区使用，不用于
+这些文件只随 XM KEEL recovery 打包进 recovery 分区使用，不用于
 构建系统镜像，也不得单独分发用于其他用途。二进制文件的版本与
 `[stock]` 指定的官方包对应；换基线包时按 issue「换 stock 包时的
 重适配清单」重新提取核对。

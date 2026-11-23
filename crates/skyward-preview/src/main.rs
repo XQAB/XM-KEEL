@@ -558,7 +558,7 @@ fn main() -> Result<()> {
             app.state.browser.page = Some(sample_page());
             app.state.browser.book = vec![
                 Sheet { url: "https://example.com/".into(), title: "Example".into() },
-                Sheet { url: "https://skyward.example/release".into(), title: "Skyward, the recovery".into() },
+                Sheet { url: "https://skyward.example/release".into(), title: "XM KEEL, the recovery".into() },
             ];
         }),
         ("36-browser-light-was-file", Screen::Browser, false, &|app| {
@@ -643,12 +643,12 @@ fn main() -> Result<()> {
         ("153-wlan-light-searching", Screen::Wlan, false, &|app| app.state.wlan = Some(Wlan { power: Power::On, ..Wlan::default() })),
         ("154-wlan-add-light", Screen::WlanAdd, false, &|app| adding(app, "", Security::Open, Field::Name, false)),
         ("155-wlan-add-light-password", Screen::WlanAdd, false, &|app| {
-            adding(app, "Skyward-Attic", Security::Psk, Field::Password, false);
+            adding(app, "XM KEEL-Attic", Security::Psk, Field::Password, false);
             app.state.password = "skyward2024".into();
         }),
-        ("156-wlan-add-light-choosing", Screen::WlanAdd, false, &|app| adding(app, "Skyward-Attic", Security::Psk, Field::Name, true)),
+        ("156-wlan-add-light-choosing", Screen::WlanAdd, false, &|app| adding(app, "XM KEEL-Attic", Security::Psk, Field::Name, true)),
         ("157-wlan-add-dark-choosing", Screen::WlanAdd, true, &|app| {
-            adding(app, "Skyward-Attic", Security::Open, Field::Name, true);
+            adding(app, "XM KEEL-Attic", Security::Open, Field::Name, true);
             app.state.held = Some(Action::PickSecurity(Security::Sae));
         }),
         ("158-wlan-light-traffic", Screen::Wlan, false, &|app| {
@@ -1351,7 +1351,7 @@ fn sample_root() -> Vec<FileRow> {
 fn sample_download() -> Vec<FileRow> {
     let (today, this_year, earlier) = (LISTED - 4 * 3600, 1_790_380_800, 1_667_692_800);
     vec![
-        folder("Skyward", 3, today),
+        folder("XM KEEL", 3, today),
         folder("安装包", 68, this_year),
         file("1d9bf122-130e-4db7-ae55-460c84819f0e.pdf", 1_090_000, this_year),
         file("2021一带一路暨金砖大赛之物联网技术及其在智慧城市与工业互联网领域的应用创新赛表彰文件.pdf", 634_960, earlier),
@@ -1427,13 +1427,13 @@ fn sample_page() -> web::Page {
     let plain = web::Style::default();
     web::Page {
         url: "https://example.com/a-page".into(),
-        title: "Skyward, a recovery that can be worked with".into(),
+        title: "XM KEEL, a recovery that can be worked with".into(),
         site: "https://example.com".into(),
         description: Some("A page read without its scripts or its pictures.".into()),
         blocks: vec![
-            web::Block::Heading { level: 1, text: "What Skyward does".into(), style: s },
+            web::Block::Heading { level: 1, text: "What XM KEEL does".into(), style: s },
             web::Block::Paragraph {
-                text: "Skyward 是一个 recovery：解锁、解密、刷整包、备份分区、看文件，都在同一个界面上。这一页里读到的文字，是阅读器从网页最初的 HTML 里取出的。".into(),
+                text: "XM KEEL 是一个 recovery：解锁、解密、刷整包、备份分区、看文件，都在同一个界面上。这一页里读到的文字，是阅读器从网页最初的 HTML 里取出的。".into(),
                 style: plain,
             },
             web::Block::Bullet { text: "整包安装：从内部存储、U 盘或电脑".into(), style: plain },
@@ -1445,7 +1445,7 @@ fn sample_page() -> web::Page {
             web::Block::Heading { level: 2, text: "装好之后".into(), style: plain },
             web::Block::Code { text: "fastboot flash recovery skyward.img\nfastboot reboot recovery".into(), style: plain },
             web::Block::Paragraph {
-                text: "若要从系统更新里保住 recovery，两槽各写一次即可；Skyward 自己在整包安装之后也会这么做。".into(),
+                text: "若要从系统更新里保住 recovery，两槽各写一次即可；XM KEEL 自己在整包安装之后也会这么做。".into(),
                 style: plain,
             },
             web::Block::Rule,
@@ -1470,18 +1470,18 @@ fn nearby() -> Vec<Network> {
         Network { ssid: name.as_bytes().to_vec(), name: name.into(), signal, frequency, bands, security }
     };
     vec![
-        n("Skyward", -30, 2462, Some(5805), Security::Psk),
-        n("Skyward-Guest", -36, 2447, Some(5180), Security::Psk),
-        n("Skyward-IoT", -38, 2447, None, Security::Psk),
-        n("Skyward-Lab", -45, 2452, None, Security::Psk),
-        n("Skyward客厅", -50, 5180, None, Security::Psk),
-        n("Skyward-Mesh", -62, 2452, None, Security::Psk),
-        n("Skyward-Office", -68, 2412, None, Security::Psk),
-        n("Skyward-5G", -68, 5745, None, Security::Psk),
-        n("Skyward-Family", -71, 2462, None, Security::Sae),
-        n("Skyward-Garage", -77, 2437, None, Security::Psk),
-        n("Skyward书房", -80, 2437, None, Security::Psk),
-        n("Skyward-Open", -84, 2412, None, Security::Open),
+        n("XM KEEL", -30, 2462, Some(5805), Security::Psk),
+        n("XM KEEL-Guest", -36, 2447, Some(5180), Security::Psk),
+        n("XM KEEL-IoT", -38, 2447, None, Security::Psk),
+        n("XM KEEL-Lab", -45, 2452, None, Security::Psk),
+        n("XM KEEL客厅", -50, 5180, None, Security::Psk),
+        n("XM KEEL-Mesh", -62, 2452, None, Security::Psk),
+        n("XM KEEL-Office", -68, 2412, None, Security::Psk),
+        n("XM KEEL-5G", -68, 5745, None, Security::Psk),
+        n("XM KEEL-Family", -71, 2462, None, Security::Sae),
+        n("XM KEEL-Garage", -77, 2437, None, Security::Psk),
+        n("XM KEEL书房", -80, 2437, None, Security::Psk),
+        n("XM KEEL-Open", -84, 2412, None, Security::Open),
     ]
 }
 
@@ -1528,7 +1528,7 @@ fn online(app: &mut App) {
     app.state.wlan = Some(joined(Joining::Connected(router_link())));
 }
 
-/// A newer release of Skyward than the one running, as GitHub tells of it,
+/// A newer release of XM KEEL than the one running, as GitHub tells of it,
 /// with its zip for the 17 Ultra.
 fn skyward_newest() -> Newest {
     Newest {

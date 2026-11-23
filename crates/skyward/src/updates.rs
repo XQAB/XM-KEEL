@@ -1,5 +1,5 @@
 //! Asking the phone maker's update server for the newest system and
-//! downloading its full package; and asking GitHub for Skyward's newest
+//! downloading its full package; and asking GitHub for XM KEEL's newest
 //! release, downloading its build for the phone and writing it into the
 //! recovery partitions: on a thread of their own that tells the screen how
 //! far they have come.
@@ -53,14 +53,14 @@ pub enum Task {
     /// Download `release`'s full package to `path`; `server` is asked again
     /// for where it is when the addresses it gave have run out.
     Download { server: String, installed: Installed, release: Release, path: PathBuf },
-    /// Ask GitHub for Skyward's newest release and its zip for the phone
+    /// Ask GitHub for XM KEEL's newest release and its zip for the phone
     /// `codename` names; where that fails, `probe` says whether the network
     /// is why.
     CheckSkyward { probe: String, codename: String, mirror: Option<String> },
-    /// Download `build` to `path`, check that its image is Skyward for the
+    /// Download `build` to `path`, check that its image is XM KEEL for the
     /// phone `codename` names, and write the image into the recovery
     /// partitions of the slot that starts next and of any other slot that
-    /// holds Skyward.
+    /// holds XM KEEL.
     UpdateSkyward { build: Build, codename: String, path: PathBuf, mirror: Option<String> },
     /// Take what `url` holds into `path`: an address the user typed, which
     /// nothing vouches for, so what comes is kept as it comes.
@@ -76,8 +76,8 @@ pub enum Task {
     /// it are asked of each one, and what came of it is how fast that one
     /// is on this network.
     Weigh { link: String, mirrors: Vec<String>, sample: u64 },
-    /// Write the Skyward build kept at `path` into the recovery partitions,
-    /// checked as Skyward for the phone `codename` names first: the build
+    /// Write the XM KEEL build kept at `path` into the recovery partitions,
+    /// checked as XM KEEL for the phone `codename` names first: the build
     /// was not downloaded here, but goes in the same way.
     Write { path: PathBuf, codename: String },
     /// Download the full browser into `path` and unpack it into `dir`: a
@@ -91,7 +91,7 @@ pub enum Task {
 
 pub enum Event {
     Checked(Result<Option<Release>, Unanswered>),
-    /// What GitHub answered of Skyward's newest release.
+    /// What GitHub answered of XM KEEL's newest release.
     SkywardChecked(Result<Newest, Unanswered>),
     /// How far the download has come, and how fast it goes, in bytes a
     /// second.
@@ -99,7 +99,7 @@ pub enum Event {
     /// The time of day a server kept, in Unix seconds, or why it did not
     /// say.
     Timed(Result<i64, String>),
-    /// Skyward's build is written into the recovery partitions and read
+    /// XM KEEL's build is written into the recovery partitions and read
     /// back: bytes so far, of all.
     Writing { done: u64, total: u64 },
     /// How fast each mirror gave the build the next update would download,
@@ -119,14 +119,14 @@ pub enum Event {
 
 pub enum End {
     Downloaded,
-    /// Skyward's build is in the recovery partitions of these slots.
+    /// XM KEEL's build is in the recovery partitions of these slots.
     Updated(Vec<Slot>),
     Stopped,
     Failed(Failure),
-    /// Skyward's build could not go in, or where it goes could not be told:
+    /// XM KEEL's build could not go in, or where it goes could not be told:
     /// why. Nothing was written.
     NotWritten(String),
-    /// Writing Skyward's build into the recovery partitions of these slots
+    /// Writing XM KEEL's build into the recovery partitions of these slots
     /// failed, after some of it was written: why.
     WriteFailed(Vec<Slot>, String),
 }
@@ -344,7 +344,7 @@ impl Worker {
                         tell(Event::Dropped(gone));
                     }
                     // The build was not downloaded here: it is kept in a place
-                    // the user chose, and its image is checked to be Skyward
+                    // the user chose, and its image is checked to be XM KEEL
                     // for this phone before anything goes in.
                     Task::Write { path, codename } => {
                         tell(Event::Ended(write(&path, &codename, &tell)));
@@ -608,8 +608,8 @@ fn fetch(
 }
 
 /// Write the image at `path` — a zip holding it, or the bare image — once it
-/// is Skyward for the phone `codename` names, into the recovery partitions of
-/// the slot that starts next and of any other slot that holds Skyward,
+/// is XM KEEL for the phone `codename` names, into the recovery partitions of
+/// the slot that starts next and of any other slot that holds XM KEEL,
 /// telling how far that has come.
 fn write(path: &Path, codename: &str, tell: &dyn Fn(Event)) -> End {
     let dir = Path::new(skyward_block::BY_NAME);
@@ -633,7 +633,7 @@ fn write(path: &Path, codename: &str, tell: &dyn Fn(Event)) -> End {
             told = Some(Instant::now());
         }
     });
-    let _ = skyward_sys::kmsg(&format!("Skyward's build written to {slots:?}: {written:?}"));
+    let _ = skyward_sys::kmsg(&format!("XM KEEL's build written to {slots:?}: {written:?}"));
     match written {
         Ok(()) => End::Updated(slots),
         // The first part written is told at once, so nothing told is

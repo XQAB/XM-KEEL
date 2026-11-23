@@ -954,7 +954,7 @@ mod tests {
     #[test]
     fn folders_and_files_are_made_where_they_are_missing() {
         let at = scratch("make");
-        let deep = at.join("Skyward").join("logs").join("20261021-133000");
+        let deep = at.join("XM KEEL").join("logs").join("20261021-133000");
         make_folders(&deep, Ownership::Kept).unwrap();
         assert!(deep.is_dir(), "with every folder on the way");
         make_folders(&deep, Ownership::Kept).unwrap();

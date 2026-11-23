@@ -19,7 +19,7 @@ const PARTITION: &str = "recovery";
 const RETRY_AFTER: Duration = Duration::from_millis(800);
 
 /// What a slot's recovery partition holds: a digest of all of it, and
-/// whether that is Skyward, any build of it.
+/// whether that is XM KEEL, any build of it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Held {
     pub digest: [u8; 32],
@@ -38,7 +38,7 @@ pub struct Kept {
 impl Kept {
     /// Hold this recovery from the recovery partitions among the links in
     /// `dir`, before an install; none when the partition of the `current`
-    /// slot does not hold Skyward, as when it was started without being
+    /// slot does not hold XM KEEL, as when it was started without being
     /// flashed.
     pub fn hold(dir: &Path, current: Slot) -> Result<Option<Kept>> {
         let (a, image_a) = read(&image::device(dir, PARTITION, Slot::A))?;
@@ -93,7 +93,7 @@ fn read(path: &Path) -> Result<(Held, Vec<u8>)> {
 /// install is done, by what each held `before` and `after` it, slot A
 /// first: the slot that starts next, `next`, unless it holds this build,
 /// whose digest is `own`; and any other the install wrote over with
-/// something that is not Skyward.
+/// something that is not XM KEEL.
 pub fn restore(before: [Held; 2], after: [Held; 2], own: [u8; 32], next: Slot) -> Vec<Slot> {
     [Slot::A, Slot::B]
         .into_iter()
@@ -114,7 +114,7 @@ mod tests {
 
     const SKYWARD: Held = Held { digest: [1; 32], skyward: true };
     const OWN: [u8; 32] = SKYWARD.digest;
-    /// Another build of Skyward.
+    /// Another build of XM KEEL.
     const OTHER_BUILD: Held = Held { digest: [4; 32], skyward: true };
     const STOCK: Held = Held { digest: [2; 32], skyward: false };
     const OLD: Held = Held { digest: [3; 32], skyward: false };
@@ -123,7 +123,7 @@ mod tests {
     fn the_slot_that_starts_next_gets_this_build() {
         assert_eq!(restore([SKYWARD, OLD], [SKYWARD, STOCK], OWN, Slot::B), [Slot::B], "an update or a package that went to slot B");
         assert_eq!(restore([SKYWARD, OLD], [SKYWARD, OLD], OWN, Slot::B), [Slot::B], "an older recovery there, left alone by the install");
-        assert_eq!(restore([SKYWARD, OTHER_BUILD], [SKYWARD, OTHER_BUILD], OWN, Slot::B), [Slot::B], "another build of Skyward there");
+        assert_eq!(restore([SKYWARD, OTHER_BUILD], [SKYWARD, OTHER_BUILD], OWN, Slot::B), [Slot::B], "another build of XM KEEL there");
         assert!(restore([SKYWARD, SKYWARD], [SKYWARD, SKYWARD], OWN, Slot::A).is_empty(), "this recovery is there already");
     }
 
@@ -132,7 +132,7 @@ mod tests {
         assert!(restore([SKYWARD, OLD], [SKYWARD, OLD], OWN, Slot::A).is_empty(), "a package that left recovery alone, such as a root installer");
         assert_eq!(restore([SKYWARD, OLD], [SKYWARD, STOCK], OWN, Slot::A), [Slot::B]);
         assert_eq!(restore([SKYWARD, OLD], [STOCK, STOCK], OWN, Slot::A), [Slot::A, Slot::B]);
-        assert!(restore([SKYWARD, OLD], [SKYWARD, OTHER_BUILD], OWN, Slot::A).is_empty(), "a package that put another build of Skyward in");
+        assert!(restore([SKYWARD, OLD], [SKYWARD, OTHER_BUILD], OWN, Slot::A).is_empty(), "a package that put another build of XM KEEL in");
     }
 
     /// Recovery partitions of `size` bytes holding `a` and `b`.
@@ -151,7 +151,7 @@ mod tests {
         let (skyward, stock) = (recovery(true), recovery(false));
         let size = skyward.len().max(stock.len()) + 4096;
         let dir = partitions(&skyward, &stock, size);
-        let kept = Kept::hold(dir.path(), Slot::A).unwrap().expect("slot A's partition holds Skyward");
+        let kept = Kept::hold(dir.path(), Slot::A).unwrap().expect("slot A's partition holds XM KEEL");
         assert!(kept.wanted(Slot::A).unwrap().is_empty(), "nothing written over");
         // A package puts the stock recovery in both slots.
         let mut written = stock.clone();

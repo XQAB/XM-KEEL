@@ -3,7 +3,7 @@ use serde::Deserialize;
 use std::collections::HashMap;
 use std::path::Path;
 
-/// Recovery ramdisk files Skyward reads, adds or changes, as archive paths
+/// Recovery ramdisk files XM KEEL reads, adds or changes, as archive paths
 /// (they sit under `/` once the kernel unpacks the ramdisk).
 pub mod ramdisk {
     /// The device configuration, copied from `devices/<codename>.toml`.
@@ -18,11 +18,11 @@ pub mod ramdisk {
     /// The recovery service binary init starts.
     pub const RECOVERY: &str = "system/bin/recovery";
     /// The first program of a system installed beside the installed one,
-    /// which Skyward puts in that system's init_boot image: linked
+    /// which XM KEEL puts in that system's init_boot image: linked
     /// statically, since it runs before any system's libraries are there.
     pub const SYSTEM_INIT: &str = "skyward/system-init";
     /// The commands install scripts written for other recoveries run that
-    /// Skyward answers itself: 7za, avbctl, resetprop and zstd, which a
+    /// XM KEEL answers itself: 7za, avbctl, resetprop and zstd, which a
     /// stock recovery does not carry, and unzip, whose stock version holds
     /// all that `-p` takes out in memory. Each is a link to the recovery
     /// service binary beside it, which runs the command it is started as.
@@ -35,7 +35,7 @@ pub mod ramdisk {
     /// The init rules that set up file transfer's USB function.
     pub const MTP_RC: &str = "system/etc/init/skyward-mtp.rc";
 
-    /// Whether the running root is Skyward's recovery ramdisk.
+    /// Whether the running root is XM KEEL's recovery ramdisk.
     pub fn in_recovery() -> bool {
         std::path::Path::new("/").join(CONFIG).exists()
     }
@@ -511,7 +511,7 @@ fn default_module_sources() -> Vec<String> {
 }
 
 /// The phone a device configuration is for, read on its own: the
-/// configuration a newer build of Skyward carries may hold what this build
+/// configuration a newer build of XM KEEL carries may hold what this build
 /// does not read.
 pub fn codename(text: &str) -> Result<String> {
     #[derive(Deserialize)]

@@ -170,7 +170,7 @@ bixi 也没有外接显示器的场景，先记着不搬。
 - **4.19 上重编 WLAN 驱动的一串兼容补丁**：`Alittlejelly/skyward-for-MI10` `42afe684`、`b9667cab`、`36c0e999`、`9c7877f5`、`e55995c8`、`33374f3c`、`7594fd93`、`74d5cd34`。同上，前提不成立。
 - **oppo 的 HIDL 服务目录与 binder 节点**：`XuexGao/skyward` `6f399fb4`、`b2cd25f7`、`9152e023`。服务链是机型自己的，bixi 是小米 OS4，搬不过去。
 - **放宽 weaver 服务名识别**：`ChuiShui233` `6689a436`。bixi 的服务名已确定；放宽只会把不该匹配的也匹上。（同一提交里「更新页机型属性名配置化」这一小点可另看，我们的 Specs 页也读机型属性。）
-- **双系统的实现与文案**：`FireMapleHyper/skyward-firemaplehyper`（`main`，头 `ff1668fd`，2026-11-08）。这条线的次序是 `c0dd300a`（把第二系统与两套启动集放进 data 分区）→ `ff7655e2`（用 Skyward 自己的第一段程序启动第二系统）→ `2d2caa1b`（装第二系统并从「双系统」页切过去）→ `1b3fa6ea`（动别的之前先把已装系统的启动集放回去）→ `83cdf6f9`（第二系统起不来时把 Skyward 拉起来）；`ff1668fd` 本身就是「README 里给每个功能配图」，不是实现提交。我们自己的 `Screen::Systems` 已经能做装/切/删，只借它「切换前先把要保留那套的启动集写回」的次序。
+- **双系统的实现与文案**：`FireMapleHyper/skyward-firemaplehyper`（`main`，头 `ff1668fd`，2026-11-08）。这条线的次序是 `c0dd300a`（把第二系统与两套启动集放进 data 分区）→ `ff7655e2`（用 XM KEEL 自己的第一段程序启动第二系统）→ `2d2caa1b`（装第二系统并从「双系统」页切过去）→ `1b3fa6ea`（动别的之前先把已装系统的启动集放回去）→ `83cdf6f9`（第二系统起不来时把 XM KEEL 拉起来）；`ff1668fd` 本身就是「README 里给每个功能配图」，不是实现提交。我们自己的 `Screen::Systems` 已经能做装/切/删，只借它「切换前先把要保留那套的启动集写回」的次序。
 - **pudding 的 `patches/` 不能直接打**：`mariusarva/skyward-pudding` 的补丁是相对
   上游 v0.2.0 的，我们在 v0.3.1 上重建过（`28a34829`），只能读代码挑逻辑，不能
   `git apply`。
@@ -304,7 +304,7 @@ update 会在**同一个 minor** 上连续造 dm 设备，ueventd 听到「上�
 `skyward-vab/src/snapshots.rs`（snapshot 名跟着前缀走，merge 的回收按前缀找）。
 
 **(d) `df33fcae`：内存储关闭时也要清 snapshot state。** 一次停掉的 update 会留下
-`/metadata/ota/state` 与快照文件，Skyward 之后每次都拒装；原来只有 data 开着才清，
+`/metadata/ota/state` 与快照文件，XM KEEL 之后每次都拒装；原来只有 data 开着才清，
 而恰恰是「update 把 data 卸了」这条路径留下了它。
 **对我们的适用性**：值得照抄。我们的清理入口在 `skyward-block/src/cache.rs`，
 要核一遍「data 没开时这条还跑不跑」。**列进下一批。**

@@ -548,7 +548,7 @@ fn short_of_charge(origin: Origin) -> Result<Option<Refusal>> {
 }
 
 /// Put the installed system's boot set back into the boot partitions where
-/// the second system's is, before anything writes them: Skyward is the only
+/// the second system's is, before anything writes them: XM KEEL is the only
 /// one to write over the boot set it keeps track of, so that it never puts
 /// back one older than what is there.
 fn installed_boot_set() -> Result<()> {
@@ -661,7 +661,7 @@ fn hold(ctx: &Context, current: Slot) -> Result<Option<Kept>> {
     }
     let kept = Kept::hold(Path::new(skyward_block::BY_NAME), current).context("hold this recovery from its partition")?;
     if kept.is_none() {
-        let _ = kmsg("install: the recovery partition does not hold Skyward, so there is none to keep");
+        let _ = kmsg("install: the recovery partition does not hold XM KEEL, so there is none to keep");
     }
     Ok(kept)
 }

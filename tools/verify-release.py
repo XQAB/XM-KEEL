@@ -2,7 +2,7 @@
 """Check a built recovery image against what a release has to hold.
 
 The packer puts a ramdisk-only boot image together from the phone's own stock
-recovery, the Skyward binary, and the vendor files a device keeps in
+recovery, the XM KEEL binary, and the vendor files a device keeps in
 ``<codename>_extra/``. Everything that has to be in it is put there in code or
 copied from that folder, and a build that quietly lost a piece of it still
 flashes and still boots — into a recovery whose MTP page is empty, or whose
@@ -17,7 +17,7 @@ bootloader does and says which pieces are there:
   packer gives it;
 * ``system/bin/{7za,zstd,unzip,avbctl,resetprop}`` are links to ``recovery``,
   which is how install scripts find the commands a stock recovery lacks;
-* the recovery binary says which version it is, ``Skyward <version>``;
+* the recovery binary says which version it is, ``XM KEEL <version>``;
 * ``prop.default`` names the stock build the image was made on, and the
   properties the packer sets (and the ones it takes out) are as expected.
 
@@ -461,13 +461,13 @@ def verify(image, config, extra, version, manifest):
             versions.append(compiled)
     binary = by_name.get(RECOVERY)
     if binary is not None:
-        found = [v for v in versions if f"Skyward {v}".encode() in binary.data]
+        found = [v for v in versions if f"XM KEEL {v}".encode() in binary.data]
         if not versions:
             report.warn("version string", "no version to look for; give --version or run from the repository")
         elif found:
-            report.ok("version string", f"the binary says Skyward {found[0]}")
+            report.ok("version string", f"the binary says XM KEEL {found[0]}")
         else:
-            report.fail("version string", f"the binary says none of {', '.join('Skyward ' + v for v in versions)}")
+            report.fail("version string", f"the binary says none of {', '.join('XM KEEL ' + v for v in versions)}")
 
     # prop.default: the stock build the image was made on, the properties the
     # packer sets, and the ones it takes out for the recovery to fill in later.

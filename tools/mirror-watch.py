@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Ask each GitHub mirror whether it still carries the release Skyward hands out.
+"""Ask each GitHub mirror whether it still carries the release XM KEEL hands out.
 
-Skyward's update page can send its download through one of five mirrors, and
+XM KEEL's update page can send its download through one of five mirrors, and
 its "is there a newer version" question through the ones that carry GitHub's
 API. A mirror that quietly stops answering looks exactly like a bad network on
 the phone, so this asks them all the same two questions and writes down which
@@ -21,7 +21,7 @@ import time
 import urllib.error
 import urllib.request
 
-LATEST = "https://api.github.com/repos/XQAB/skyward/releases/latest"
+LATEST = "https://api.github.com/repos/XQAB/XM-KEEL/releases/latest"
 PROBE_BYTES = 2048
 TIMEOUT = 20
 
@@ -83,7 +83,7 @@ def gh(path, method="GET", payload=None):
 
 def file_issue(report, failed):
     """Open one issue for this, or add a comment when something new broke."""
-    repo = os.environ.get("GITHUB_REPOSITORY", "XQAB/skyward")
+    repo = os.environ.get("GITHUB_REPOSITORY", "XQAB/XM-KEEL")
     fingerprint = hashlib.sha256("\n".join(sorted(failed)).encode()).hexdigest()[:12]
     marker = f"<!-- mirror-watch: {fingerprint} -->"
     body = report + "\nWhat broke:\n\n" + "\n".join(f"- {one}" for one in failed) + f"\n\n{marker}\n"
@@ -107,7 +107,7 @@ def file_issue(report, failed):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Probe the GitHub mirrors Skyward offers.")
+    parser = argparse.ArgumentParser(description="Probe the GitHub mirrors XM KEEL offers.")
     parser.add_argument("--report", help="write the table here as markdown too")
     parser.add_argument("--file-issue", action="store_true",
                         help="open or update the mirror-watch issue when something stopped")

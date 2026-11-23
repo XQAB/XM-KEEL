@@ -62,7 +62,7 @@ impl Bcb {
     /// What the message asks the recovery to do, read the way Android's
     /// own recovery reads it: of several pieces of work it does the first
     /// in this order, fastboot, switching systems and showing why the
-    /// second system's start stopped, which are Skyward's own, an update
+    /// second system's start stopped, which are XM KEEL's own, an update
     /// package, erasing data, asking whether to erase data, erasing the
     /// cache, erasing by a wipe package, sideload, rescue, unsharing
     /// blocks, leaving at once. A command with no arguments can ask for
@@ -253,10 +253,10 @@ pub enum Work {
     /// shared ones, so they can be written to.
     UnshareBlocks,
     /// Have the bootloader start another system: `installed` for the one in
-    /// the phone's own partitions, or the id of the one Skyward installed
+    /// the phone's own partitions, or the id of the one XM KEEL installed
     /// beside it, as that system asks.
     SwitchSystem { to: String },
-    /// Say why the second system's start stopped, as Skyward's program that
+    /// Say why the second system's start stopped, as XM KEEL's program that
     /// starts it tells: the phone stays in the recovery, and the same
     /// system starts next.
     SystemStopped,

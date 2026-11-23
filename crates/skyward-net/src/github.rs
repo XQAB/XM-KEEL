@@ -1,18 +1,18 @@
-//! Skyward's own releases on GitHub: which is the newest, and the zip in
+//! XM KEEL's own releases on GitHub: which is the newest, and the zip in
 //! it for one phone, as the release workflow names each phone's.
 
 use anyhow::{anyhow, bail, ensure, Context, Error, Result};
 use serde::Deserialize;
 
-/// Where GitHub answers which release of Skyward is the newest. This build
-/// of Skyward is not the one upstream hands out: it is the one for the MIX
+/// Where GitHub answers which release of XM KEEL is the newest. This build
+/// of XM KEEL is not the one upstream hands out: it is the one for the MIX
 /// Flip 2, and it asks its own releases where the next build of itself is.
-pub const LATEST: &str = "https://api.github.com/repos/XQAB/skyward/releases/latest";
+pub const LATEST: &str = "https://api.github.com/repos/XQAB/XM-KEEL/releases/latest";
 
 /// The version of GitHub's API the answer is read as.
 const API_VERSION: &str = "2022-11-28";
 
-/// The newest release, as the build of Skyward that asked sees it.
+/// The newest release, as the build of XM KEEL that asked sees it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Newest {
     /// Its version, such as 0.1.4.
@@ -23,7 +23,7 @@ pub struct Newest {
     pub build: Option<Build>,
 }
 
-/// A phone's zip in a release, which holds Skyward's image for the phone.
+/// A phone's zip in a release, which holds XM KEEL's image for the phone.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Build {
     /// The zip's own name, such as
@@ -158,7 +158,7 @@ fn carries_api(mirror: &str) -> bool {
     API_MIRRORS.iter().any(|host| mirror.contains(host))
 }
 
-/// Ask GitHub for Skyward's newest release, and its zip for the phone
+/// Ask GitHub for XM KEEL's newest release, and its zip for the phone
 /// `codename` names, as the build of version `running`, through `mirror`
 /// where that one carries the API too, and from GitHub itself otherwise.
 pub fn ask(agent: &ureq::Agent, codename: &str, running: &str, mirror: Option<&str>) -> Result<Newest> {
@@ -190,7 +190,7 @@ fn asked_at(agent: &ureq::Agent, url: &str, codename: &str, running: &str) -> Re
         .get(url)
         .header("Accept", "application/vnd.github+json")
         .header("X-GitHub-Api-Version", API_VERSION)
-        .header("User-Agent", format!("Skyward/{running}"))
+        .header("User-Agent", format!("XM KEEL/{running}"))
         .call()
         .with_context(|| format!("ask {url}"))?;
     let status = response.status();
@@ -209,7 +209,7 @@ pub fn locate(agent: &ureq::Agent, url: &str, running: &str) -> Result<String> {
         .get(url)
         .header("Accept", "application/octet-stream")
         .header("X-GitHub-Api-Version", API_VERSION)
-        .header("User-Agent", format!("Skyward/{running}"))
+        .header("User-Agent", format!("XM KEEL/{running}"))
         .config()
         .max_redirects(0)
         .build()
@@ -302,7 +302,7 @@ mod tests {
         assert_eq!(locate(&agent, &url, "0.1.2").unwrap(), "https://release-assets.githubusercontent.com/a?sig=1", "the address, not followed");
         let request = held.join().unwrap().to_lowercase();
         assert!(request.contains("accept: application/octet-stream\r\n"), "asked for the file itself: {request}");
-        assert!(request.contains("user-agent: skyward/0.1.2\r\n"), "{request}");
+        assert!(request.contains("user-agent: xm keel/0.1.2\r\n"), "{request}");
         let why = r#"{"message":"API rate limit exceeded for 203.0.113.7"}"#;
         let (url, _) = server(format!("HTTP/1.1 403 Forbidden\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{why}", why.len()));
         assert_eq!(locate(&agent, &url, "0.1.2").unwrap_err().to_string(), "GitHub answered 403 Forbidden: API rate limit exceeded for 203.0.113.7");

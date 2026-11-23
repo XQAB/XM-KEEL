@@ -1,5 +1,5 @@
 //! The browser's full mode: the phone's owner puts a Chromium on it, and
-//! Skyward asks that Chromium to draw a page and hand back what it came to.
+//! XM KEEL asks that Chromium to draw a page and hand back what it came to.
 //!
 //! Nothing here is needed for the browser to work. The plugin is a root
 //! filesystem on the owner's storage with `usr/lib/chromium/chromium` in it;

@@ -1325,9 +1325,9 @@ pub fn joining(l: Lang, stage: &WlanStage) -> &'static str {
 /// What a network that wants a login in a browser first leaves to do,
 /// with a recovery that has no browser to log in with.
 const LOGIN: Text = [
-    "需要先在网页上登录才能访问互联网，Skyward 无法打开网页登录。可以改用无需登录的网络，例如手机热点。",
-    "需要先在網頁上登入才能連上網際網路，Skyward 無法開啟網頁登入。可以改用無需登入的網路，例如手機熱點。",
-    "needs a sign-in in a browser before it reaches the internet, and Skyward has no browser to sign in with. Use a network that needs no sign-in instead, such as a phone's hotspot.",
+    "需要先在网页上登录才能访问互联网，XM KEEL 无法打开网页登录。可以改用无需登录的网络，例如手机热点。",
+    "需要先在網頁上登入才能連上網際網路，XM KEEL 無法開啟網頁登入。可以改用無需登入的網路，例如手機熱點。",
+    "needs a sign-in in a browser before it reaches the internet, and XM KEEL has no browser to sign in with. Use a network that needs no sign-in instead, such as a phone's hotspot.",
 ];
 
 /// What the WLAN page says under the network joined of how far it reaches,
@@ -1392,7 +1392,7 @@ pub fn download_failure(l: Lang, f: &DownloadFailure) -> String {
     }
 }
 
-/// Why downloading Skyward's build did not end with it whole. It goes into
+/// Why downloading XM KEEL's build did not end with it whole. It goes into
 /// the recovery's own folder, which is in memory.
 pub fn skyward_download_failure(l: Lang, f: &DownloadFailure) -> String {
     match f {
@@ -1891,7 +1891,7 @@ mod tests {
         assert_eq!(joining(HANS, &joined(Some(Reach::Offline("no answer in 5 s".into())))), "已连接，但无法访问互联网");
         assert_eq!(reach(HANS, &Reach::Online), None, "the page says nothing of a network that reaches the internet");
         let login = reach(HANS, &Reach::Login(Some("http://192.168.64.254:2060/redirect/".into()))).expect("a login is said");
-        assert_eq!(login, "该网络需要先在网页上登录才能访问互联网，Skyward 无法打开网页登录。可以改用无需登录的网络，例如手机热点。");
+        assert_eq!(login, "该网络需要先在网页上登录才能访问互联网，XM KEEL 无法打开网页登录。可以改用无需登录的网络，例如手机热点。");
         assert_eq!(reach(HANS, &Reach::Offline("no answer in 5 s".into())).as_deref(), Some("该网络无法访问互联网：no answer in 5 s"));
         assert!(unanswered(HANS, &Unanswered::Login).starts_with("检查更新失败，当前 WLAN 需要先在网页上登录"));
         assert!(unanswered(Lang::En, &Unanswered::Login).starts_with("Couldn't check for updates. The Wi-Fi network joined needs a sign-in in a browser"));

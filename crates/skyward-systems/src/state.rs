@@ -1,4 +1,4 @@
-//! What Skyward keeps of the systems, on /metadata, which the recovery
+//! What XM KEEL keeps of the systems, on /metadata, which the recovery
 //! reads before the data partition opens and which no filesystem it holds
 //! the areas in can take away without it.
 
@@ -94,7 +94,7 @@ pub struct System {
 }
 
 impl System {
-    /// What Skyward's program reads of the system, to start it.
+    /// What XM KEEL's program reads of the system, to start it.
     pub fn start(&self) -> Start {
         Start { id: self.id.clone(), filesystem: self.filesystem.clone(), init: self.init.clone(), root: self.root.clone() }
     }

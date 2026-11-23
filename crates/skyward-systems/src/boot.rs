@@ -1,6 +1,6 @@
 //! The init_boot image the other system starts from: the bootloader joins
 //! its ramdisk to the installed system's vendor ramdisk, and the program
-//! Skyward puts in it finds the system's root in the data partition and
+//! XM KEEL puts in it finds the system's root in the data partition and
 //! starts the system's own first program from it.
 
 use anyhow::{ensure, Context, Result};
@@ -33,7 +33,7 @@ impl Start {
     }
 }
 
-/// Skyward's archive in an init_boot image: `program` at `at`, and `start`
+/// XM KEEL's archive in an init_boot image: `program` at `at`, and `start`
 /// beside it, compressed as the vendor ramdisk before it is, for the kernel
 /// to read on into it from there.
 fn archive(at: &str, program: &[u8], start: &Start) -> Result<Vec<u8>> {
@@ -99,7 +99,7 @@ pub(crate) mod tests {
         image
     }
 
-    /// The entries of Skyward's archive `bytes`, by name, with their data.
+    /// The entries of XM KEEL's archive `bytes`, by name, with their data.
     pub fn entries(bytes: &[u8]) -> Vec<(String, Vec<u8>)> {
         assert_eq!(bytes[..4], [0x02, 0x21, 0x4c, 0x18], "LZ4 in the legacy framing, as the vendor ramdisk is");
         Ramdisk::decode(bytes).unwrap().entries.into_iter().map(|e| (e.name, e.data)).collect()
@@ -131,7 +131,7 @@ pub(crate) mod tests {
         let (theirs, ours) = back.ramdisk.split_at(b"its own archive".len());
         assert_eq!(theirs, b"its own archive", "its archive first");
         let names: Vec<String> = entries(ours).into_iter().map(|(n, _)| n).collect();
-        assert_eq!(names, ["skyward", MAP, START], "and no first program of Skyward's");
+        assert_eq!(names, ["skyward", MAP, START], "and no first program of XM KEEL's");
     }
 
     #[test]

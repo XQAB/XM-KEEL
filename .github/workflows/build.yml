@@ -189,7 +189,7 @@ jobs:
           NAME: ${{ steps.pack.outputs.name }}
         run: zip -9 "$NAME.zip" "$NAME.img"
       # Both of them: the zip people unzip, and the bare partition image that
-      # Skyward's own updater takes first when it asks GitHub for a release.
+      # XM KEEL's own updater takes first when it asks GitHub for a release.
       - uses: actions/upload-artifact@v7
         with:
           name: ${{ steps.pack.outputs.name }}
@@ -250,4 +250,4 @@ jobs:
             echo "::error::$notes is not in this tag: a release is published with the notes written for it"
             exit 1
           fi
-          gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file "$notes" "${assets[@]}" images/SHA256SUMS
+          gh release create "$GITHUB_REF_NAME" --title "XM KEEL $GITHUB_REF_NAME" --notes-file "$notes" "${assets[@]}" images/SHA256SUMS

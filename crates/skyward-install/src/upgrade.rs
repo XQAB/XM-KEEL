@@ -1,7 +1,7 @@
-//! A newer build of Skyward, as its release zips it: the image in the zip,
-//! checked to be Skyward for this phone, and the recovery partitions it
+//! A newer build of XM KEEL, as its release zips it: the image in the zip,
+//! checked to be XM KEEL for this phone, and the recovery partitions it
 //! goes into, those of the slot that starts next and of any other slot
-//! that holds Skyward.
+//! that holds XM KEEL.
 
 use crate::image;
 use anyhow::{ensure, Context, Result};
@@ -55,18 +55,18 @@ fn unpack_zstd(packed: &[u8], name: &str) -> Result<Vec<u8>> {
     Ok(out.stdout)
 }
 
-/// Check that `image` is Skyward, packed for the phone `codename` names.
+/// Check that `image` is XM KEEL, packed for the phone `codename` names.
 pub fn check(image: &[u8], codename: &str) -> Result<()> {
-    let config = image::device_config(&mut Cursor::new(image)).context("look into the image")?.context("the image is not Skyward")?;
+    let config = image::device_config(&mut Cursor::new(image)).context("look into the image")?.context("the image is not XM KEEL")?;
     let config = std::str::from_utf8(&config).context("the image's device configuration is not text")?;
     let named = skyward_config::codename(config).context("read the image's device configuration")?;
-    ensure!(named == codename, "the image is Skyward for {named}, not for {codename}");
+    ensure!(named == codename, "the image is XM KEEL for {named}, not for {codename}");
     Ok(())
 }
 
 /// The slots whose recovery partition, among the links in `dir`, the newer
 /// build goes into, slot A first: `next`, the slot that starts next, and
-/// any other whose partition holds Skyward now, any build of it.
+/// any other whose partition holds XM KEEL now, any build of it.
 pub fn slots(dir: &Path, next: Slot) -> Result<Vec<Slot>> {
     let mut slots = Vec::new();
     for slot in [Slot::A, Slot::B] {
@@ -123,8 +123,8 @@ mod tests {
     fn only_skyward_for_this_phone_goes_in() {
         assert!(check(&skyward_for("ishtar"), "ishtar").is_ok());
         let e = check(&skyward_for("nezha"), "ishtar").unwrap_err();
-        assert_eq!(e.to_string(), "the image is Skyward for nezha, not for ishtar");
-        assert_eq!(check(&recovery(false), "ishtar").unwrap_err().to_string(), "the image is not Skyward");
+        assert_eq!(e.to_string(), "the image is XM KEEL for nezha, not for ishtar");
+        assert_eq!(check(&recovery(false), "ishtar").unwrap_err().to_string(), "the image is not XM KEEL");
         assert!(check(&recovery(true), "ishtar").is_err(), "a device configuration that names no phone");
     }
 
@@ -145,7 +145,7 @@ mod tests {
         let size = skyward.len().max(stock.len()) + 4096;
         assert_eq!(slots(partitions(&skyward, &stock, size).path(), Slot::A).unwrap(), [Slot::A]);
         assert_eq!(slots(partitions(&skyward, &skyward, size).path(), Slot::A).unwrap(), [Slot::A, Slot::B], "an older build in the other slot");
-        assert_eq!(slots(partitions(&stock, &skyward, size).path(), Slot::A).unwrap(), [Slot::A, Slot::B], "Skyward started without being flashed");
+        assert_eq!(slots(partitions(&stock, &skyward, size).path(), Slot::A).unwrap(), [Slot::A, Slot::B], "XM KEEL started without being flashed");
         assert_eq!(slots(partitions(&stock, &stock, size).path(), Slot::B).unwrap(), [Slot::B]);
     }
 
