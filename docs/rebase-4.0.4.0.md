@@ -7,8 +7,10 @@
 
 ## 0. 结论（三句）
 
-1. **运行时不用重做。** v1.0.13 在 4.0.4.0 上已经起得来（实测进得去、`boot_completed=1`），
-   因为镜像本身是 **ramdisk-only**（v1.0.13 的 `verify.txt` 第 4 行：`kernel size: no kernel: the recovery is the ramdisk alone`），
+1. **运行时不用重做 —— 已是实测结论，不是推断。** 2026-11-23 用 v1.0.13 在 4.0.4.0 上把第 3 节
+   七条全跑了一遍，**七条全过、零行为改动**（解密挂上 `dm-9 /data f2fs rw`、TEE 八条全起、
+   458 个模块载入、八个输入节点在、`wlan0` 拿到地址）。原因是镜像本身是 **ramdisk-only**
+   （v1.0.13 的 `verify.txt` 第 4 行：`kernel size: no kernel: the recovery is the ramdisk alone`），
    内核来自 `boot` 分区（现在就是 4.0.4.0 的），模块与 HAL 二进制一律按固定挂载点
    从手机**当前**的 `vendor_dlkm` / `vendor` / `odm` / `system` / `system_dlkm` 现取。
    这是「大版本换了、recovery 却还能跑」的原因，不是它被适配过。
@@ -16,9 +18,10 @@
    `[stock]` 三行（`version` / `package` / `recovery`）决定：出包从哪个完整包里拆 stock recovery、
    资产名带哪个版本、`verify-release.py` 核对 `prop.default` 是否同名。只要不换，构建仍可重复
    （旧包还在小米服务器上），代价只有「资产名与 About 页写着 4.0.0.11，机器跑的是 4.0.4.0」。
-3. **代码要不要改，只取决于第 3 节取证。** 若 4.0.4.0 没搬动我们按名字取的东西，本轮**零代码改动**；
-   真搬了，改的也只是 `devices/bixi.toml` 的名单/路径（一个例外见 3.3：`system_dlkm` 的
-   `flatten` 视图变了要改 `skyward-modules` 的路径表，那才算代码）。
+3. **代码不用改，第 3 节已经问完了。** 取证结果见第 3 节开头的表：4.0.4.0 没有搬动我们
+   按名字取的东西，`system_dlkm` 的 `flatten` 视图也还在。本轮**零代码改动、零配置改动**
+   （唯一的非行为改动是把两句注释里的失效路径改对，见 3.2.1 与 3.4）。剩下的只有 3.8 的
+   打包基线，那是「跟随基线」的事，与能不能跑无关。
 
 ## 1. 两种「重适配」，别混为一谈
 
@@ -59,24 +62,42 @@ rec 内装整包真正走通。
   `product`/`odm`/`system_ext`/`system_dlkm`/`mi_ext` 以及 `super` 的动态分区元数据。
   → **一次成功的整包安装一定会把 recovery_a/b 写成原厂**，`keep_recovery` 的回写必须真跑过才算数。
 
-## 3. 必须取证才知道的（按风险从高到低）
+## 3. 取证结果（2026-11-23，v1.0.13 跑在 OS4.0.4.0 上）
 
-每条都写：看什么、变了会怎样、我们仓里对应哪一行。命令见 §5。
+**七条全过，没有一条需要改配置或改代码。**
 
-### 3.1 解密链路（最高风险）
+| 条目 | 上机实测 | 结论 |
+| --- | --- | --- |
+| 3.1 解密 | `/dev/block/dm-9` 挂上 `/data`，f2fs rw；日志 `trying the password kept from the last time data was opened` → `the password that opened the data partition is kept, sealed` | 通 |
+| 3.2 TEE 八条 | qseecomd 657 / qseecom@1.0-service 700 / qwesd 705 / ssgtzd 706 / keymint 707 / se_omapi 758 / weaver 785，全部起来 | 通 |
+| 3.3 模块 | 共 458 个模块载入；七个 `.ko` 都在；`goodix_core` 未载（合盖才载，正常） | 通 |
+| 3.4 触摸/显示 | event0–event7 八个节点在（`synaptics_tcm_touch` = event7）；`enable_touch_raw=0`（`[touch].writes` 生效） | 通 |
+| 3.5 WLAN | `wlan0` 拿到 `192.168.33.127`，dmesg 报 reaches the internet | 通 |
+| 3.6 分区 | `persist` → `/mnt/vendor/persist` ext4 rw；`/mnt/system` erofs ro（dm-2 `system`、dm-4 `system_ext`） | 通 |
+| 3.7 两槽 | installed system release 17、security patch `2026-10-01`、`slot_suffix=_a` | 通 |
+| 3.8 基线 | 包内 `recovery` 的 sha256 仍缺 | 待 |
 
-- **看**：密码解锁能不能打开 `/data`（`Bound::Weaver` 路径）；`/data/misc/vold` 的 protector
-  文件是否还是同布局（`user.rs` 的 `WEAVER_SLOT_LAYOUT = 1`）；`skyward --weaver` 能不能读出槽位数。
-- **变了会怎样**：密码对但打不开，或者直接报 weaver 槽读不到——这是唯一会让人「以为 recovery 坏了」的一条。
-- **对应**：`devices/bixi.toml` 的 weaver / keymint / ssgtzd / qseecomd 四条服务（`:73-165`），
-  `crates/skyward/src/credential.rs` 的 weaver 绑定。
-- **注意**：4.0.4.0 的 `/data` 是它自己迁移过的，**先确认 data 里没有未完成的 OTA 快照**再去解；不行就先备份。
+取证方法上的两点须知：recovery 里**没有 `service` 与 `ip` 命令**（`which` 皆空），所以
+「服务注册上了」只能靠 `/proc/<pid>/wchan` 停在 `binder_thread_read` 判（进了线程池等调用；
+描述缺失被 servicemanager 拒时会报错退出，不会停在那里），网络只能靠 dmesg 判。
 
-### 3.2 TEE 服务链是否注册 —— 4.0.4.0 实测（2026-11-23）
+下面每条按实测订正，未实测的字段保留旧值并注明。
+
+### 3.1 解密链路（最高风险）—— 实测：通
+
+- `/dev/block/dm-9` 挂着 `/data`，`f2fs rw`，即密码解锁把 data 打开了。
+- 日志两条连成一条链：`trying the password kept from the last time data was opened`
+  → `the password that opened the data partition is kept, sealed`。即密封密码 → weaver/keymint
+  解封 → 解密 `/data` 全链路都通，v1.0.13 在这台机上的密码解锁**没有坏**。
+- 唯一一条失败行是 user 999 的 gatekeeper：`look up android.hardware.gatekeeper@1.0::IGatekeeper/default:
+  the other side is gone` —— 已知的 SPU/VINTF 缺（issue #1），与本条无关，也不是加载器错。
+
+### 3.2 TEE 服务链是否注册 —— 实测：八条全起
 
 八条：`qseecomd` → `vendor.qti.hardware.qseecom@1.0-service` → `qwesd` → `ssgtzd` →
-`keymint` → `secure_element` → `weaver` → `se_omapi`。**七条都在、路径没变**；
-`se_omapi` 那条要改读法，见 §3.2.1。
+`keymint` → `secure_element` → `weaver` → `se_omapi`。**八条全起、路径没变**（2026-11-23 上机）：
+qseecomd 657、qseecom@1.0-service 700、qwesd 705、ssgtzd 706、keymint 707、se_omapi 758、
+weaver 785，`secure_element-service.qti` 616。`se_omapi` 的来源读法见 §3.2.1。
 
 - 服务定义全在 `/vendor/etc/init/*.rc`（**不是** `hw/` 子目录）：
   - `qseecomd.rc`：`class core`、`user root`、`group root drmrpc`、
@@ -139,22 +160,39 @@ recovery 自己的 `/system`。v1.0.13 的资产报告里就能看到它：
 已坏」这条链**不成立**。真正该问的是另一件事：这份 4.0.0.11 的二进制在 4.0.4.0 的
 `libbinder_ndk` / `libutils` 上还能不能跑（recovery 里它从 `/mnt/system/system/lib64`
 取库），以及 weaver → omapi → secure_element 这条 binder 链在 4.0.4.0 上是否仍通。
-**这只能上机看，不能从「文件在不在」推。** 判据三条，都在 recovery 里：
+**这只能上机看，不能从「文件在不在」推。** 2026-11-23 上机跑完了，四条判据都有答案：
 
-1. `ls -l /system/bin/se_omapi` —— 文件在（139136 字节）
-2. `service list | grep android.se.omapi` —— 服务注册上了
-3. `/skyward/run/recovery.log` 里 se_omapi 那条有没有被 `started`；失败时它带的是
-   加载器报错还是 binder 报错 —— 前者是 ABI 问题，后者才是服务问题
+1. **描述文件在**：`/system/etc/vintf/manifest/android.se.omapi-service.xml`，195 字节、
+   时间戳 1970（随镜像一起进来的），内容 `<name>android.se.omapi</name><version>1</version>
+   <fqname>ISecureElementService/default</fqname>`，与注册名对得上。
+2. **进程在**：`se_omapi` pid 617、root，停在 `binder_thread_read`；
+   `secure_element-service.qti` pid 616 也在。
+3. **注册上了**：recovery 里没有 `service` 工具，但停在 `binder_thread_read` 本身就是注册成功的
+   形态 —— 进了线程池等调用；若描述缺失被 servicemanager 拒，它会报错退出，不会停在那里。
+4. **没有加载器错**：se_omapi 零失败、零错误行。`libbinder_ndk.so`（153224 B）与
+   `android.hardware.secure_element-V1-ndk.so`（137344 B）都在 `/system/lib64`；
+   `weaver-nxp.xml`（175 B）与 `manifest_nxp_nfc_ese.xml`（511 B）也都挑进了 manifest 目录。
 
-#### 3.2.2 weaver 的 uid：实测是 2911，但先不改
+**结论：ABI 没漂。** 那份 4.0.0.11 的 `se_omapi` 在 4.0.4.0 的 `libbinder_ndk`/`libutils` 上跑得起来，
+**不需要搬 binder 服务端，也不需要接 `skyward-omapi` crate**。自带二进制的做法在 4.0.4.0 上继续成立。
 
-`vendor_nxp_weaver`（2911）是手机侧的实况；toml 现在写 `root`/`root`。改成 2911 之前
-要先解决节点归属：手机侧那些 `/dev/teepriv0`、`/dev/xts*` 是它的 ueventd 交给 2911 的，
-而 recovery 的 `bixi_extra/system/etc/ueventd.rc` 只给了 `/dev/nq-nci 0666 root root`，
-其余 TEE 节点是内核默认的 `root:root`。**以 2911 去开就是被拒。** 要走这条，得同时用
-`[owners]`（`main.rs` 的 `hand_over`，在模块加载之后跑）把这些节点交给
-`vendor_nxp_weaver`；节点清单要实测 `ls -l /dev/teepriv* /dev/xts*` 才有，现在没有。
-所以：**先留 root，等上机拿到节点清单再一起改**，别只改 uid。
+#### 3.2.2 weaver 的 uid：recovery 里保持 root（已定，不改）
+
+两边的节点不一样，这是关键：
+
+| | `/dev/teepriv0` | weaver 跑成谁 |
+| --- | --- | --- |
+| **Android 侧** | `system:system 0660`，context `u:object_r:mitee_client_device:s0` | `vendor_nxp_weaver`（2911），组 `nfc`/`system` |
+| **recovery 侧（实测）** | `crw------- root root 0600` | 我们给 root |
+
+recovery 里 `teepriv0` 是 root 独占的 0600，**root 靠 owner 身份直接开，不需要组、也不需要 0660**。
+所以 `devices/bixi.toml` 现在写的 `user = "root"` / `groups = ["root"]` 是对的。真改成
+`vendor_nxp_weaver`(2911) 反而得在 `[owners]` 里把 `teepriv0` chown 给它，否则开不了 ——
+**多一步，没有收益。**
+
+`/dev/xts*` 两边都**不存在**（Android 侧 `find` 也是 No such file）。`/dev/nq-nci` 在两类侧都是
+`0666`（recovery 是 `crw-rw-rw- root root`，Android 是 `nfc:nfc 0660` 但 nxp-nci 服务以 system
++ nfc 组跑），所以 secure_element 那条不受影响。
 
 ### 3.3 模块与 dlkm 路径 —— 4.0.4.0 实测（2026-11-23）
 
@@ -171,7 +209,9 @@ recovery 自己的 `/system`。v1.0.13 的资产报告里就能看到它：
 - `nxp-nci.ko` → `smcinvoke_dlkm.ko`、`mem_object.ko`、`si_core_module.ko`、
   `qseecom_proxy.ko`、`xiaomi_touch.ko`、`panel_event_notifier.ko`
 
-所以这一条**没有变化，不用改配置**。对应 `devices/bixi.toml:24-42`（`sources` 与 `load`）、
+上机结果（2026-11-23）：**共 458 个模块载入**；七个 `.ko` 全部到齐，`goodix_core.ko` 未载 ——
+它按设计合盖才 insmod（`ui.rs` 的 `load_cover_touch`），当前没加载是正常。所以这一条
+**没有变化，不用改配置**。对应 `devices/bixi.toml:24-42`（`sources` 与 `load`）、
 `crates/skyward-modules/src/lib.rs:12-19`。
 
 ### 3.4 触摸与显示参数 —— 4.0.4.0 实测（2026-11-23）
@@ -185,30 +225,32 @@ recovery 自己的 `/system`。v1.0.13 的资产报告里就能看到它：
   指错了路径，已改。
 - `/sys/module/xiaomi_touch/parameters/` **不存在** —— xiaomi_touch 没有模块参数目录，
   别照旧文档去写它。
-- 其余（`/sys/class/touch/touch_dev/enable_touch_raw`、两块屏的 ABS 范围、
-  `ro.miui.density.secondaryppi=460`、`/sys/class/qcom-haptics/lra_frequency_hz`）
-  这一轮没有实测读数，**按旧值保留**。
+- 其余两项这一轮有读数了：`enable_touch_raw` 被写成 `0`（`[touch].writes` 生效）；
+  输入节点 8 个在 —— `event0` uinput-xiaomi、`event1` gpio-keys、`event2` pmic_pwrkey、
+  `event3` pmic_resin、`event4` pmic_pwrkey_bark、`event5` pmic_pwrkey_resin_bark、
+  `event6` qcom-hv-haptics、`event7` synaptics_tcm_touch（内屏触摸，编号与旧记一致）。
+- 仍没有读数的是两块屏的 ABS 范围与 `ro.miui.density.secondaryppi=460`、
+  `/sys/class/qcom-haptics/lra_frequency_hz`，**按旧值保留**（都没搬动，因为触摸点与布局未出问题）。
 
-### 3.5 WLAN 固件与模块名
+### 3.5 WLAN 固件与模块名 —— 实测：通
 
-- **看**：`/vendor/etc/wifi/peach_v2/WCNSS_qcom_cfg.ini` 路径是否还在（**必须**是
-  `/etc/firmware/wlan/qca_cld/peach_v2/` 这个加载名）；`/mnt/vendor/persist/wlan/wlan_mac.bin` 是否还在；
-  模块名还是 `qca_cld3_peach_v2` 而不是 `peach_v3`。
-- **变了会怎样**：`Failed to probe host driver, err=-1`，`wlan0` 永不出现，「自动加入」失效。
-- **对应**：`devices/bixi.toml:210-227`。
+- `qca_cld3_peach_v2` 载入成功，`wlan0` 拿到 `192.168.33.127`；dmesg 报它 reaches the internet。
+  （recovery 里没有 `ip` 命令，网络状态只能从 dmesg 读。）
+- 固件路径与模块名**都没变**，`[wlan]` 段不用改。
 
-### 3.6 分区表与镜像
+### 3.6 分区表与镜像 —— 实测：通
 
-- **看**：`lpdump` 的分区名/尺寸；`recovery_a/b` 的尺寸是否仍 ≥ 104857600（我们的镜像正好这么大）；
-  `super`/`userdata`/`metadata` 的 extent 有没有挪。
-- **变了会怎样**：`recovery` 若被缩小到 100 MB 以下，dd 写不进去；双系统按 extent 读写 super 会错位。
-- **对应**：`skyward-vab` 的按名取分区、`skyward-systems` 的 super extent。
+- `persist` 挂上 `/mnt/vendor/persist`，ext4 rw；`/mnt/system` 是 erofs ro，`dm-2` 是 `system`、
+  `dm-4` 是 `system_ext`。分区名与挂载点都没搬动，`[partitions] mounted = ["persist"]` 不用改。
+- `lpdump` 的分区尺寸这一轮没抓；`recovery_a/b` 仍是 100 MB 的镜像，写不进去的风险未发生
+  （装包失败的病因见 §7，与分区尺寸无关）。
 
-### 3.7 两槽一致性
+### 3.7 两槽一致性 —— 实测：通
 
-- **看**：`boot_a`/`init_boot_a` 与系统版本是否同版（这次是 KSU 补丁过的 `init_boot_a`，属已知）；
-  B 槽那套是 4.0.0.11 的旧值。
-- **变了会怎样**：从 B 槽起机是旧系统 + 旧 recovery，属预期；但若哪天切槽，别把 A 槽的 4.0.4.0 与旧 init_boot 混起来（`ota-rebase.md` §7 的老坑）。
+- installed system 读得对：release **17**、security patch **2026-10-01**、`slot_suffix=_a`，
+  与 §2.1 从包里读出的 `post-sdk-level=37` / `post-security-patch-level=2026-10-01` 一致。
+- `boot_a`/`init_boot_a` 仍是 §2 记的那套（`init_boot_a` 是 KSU 补丁过的）；B 槽那套是 4.0.0.11 的旧值，
+  属预期。
 
 ### 3.8 打包基线（见 §1 A）
 
@@ -229,6 +271,11 @@ recovery 自己的 `/system`。v1.0.13 的资产报告里就能看到它：
 
 ## 5. 我要抓的数据（一次抓完，别逐条往返）
 
+2026-11-23 已按本清单跑完一遍，结果见第 3 节。清单保留，换下一个版本时照跑。
+两条口径修正留在命令里：recovery 里**没有 `service` 也没有 `ip`**，服务与网络只能靠
+`/proc/<pid>/wchan` 与 dmesg；Android 侧**不要再查 `/system/bin/se_omapi`**（它已经不在那儿了，
+且那不是我们跑的那份，见 3.2.1）。
+
 ### Android 侧（KSU root，`adb shell su -c '<cmd>'`）
 
 ```sh
@@ -240,10 +287,13 @@ ls -d /system_dlkm/* /system_dlkm/flatten/lib/modules 2>&1 | head -20
 ls -l /vendor/bin/qseecomd /vendor/bin/qwesd /vendor/bin/ssgtzd \
       /vendor/bin/hw/vendor.qti.hardware.qseecom@1.0-service \
       /vendor/bin/hw/android.hardware.security.keymint-service-qti \
+      /vendor/bin/hw/android.hardware.security.keymint-service.strongbox-nxp \
       /vendor/bin/hw/android.hardware.secure_element-service.qti \
-      /odm/bin/hw/android.hardware.weaver-service.nxp-qti /system/bin/se_omapi
+      /odm/bin/hw/android.hardware.weaver-service.nxp-qti
+# 别在这边查 /system/bin/se_omapi：4.0.4.0 的 Android 侧已经没有它（改由 com.android.se
+# 这个 app 服务）。我们跑的那份在 recovery 自己的 /system，见 3.2.1。
 ls -l /vendor/etc/wifi/peach_v2/WCNSS_qcom_cfg.ini /odm/firmware/goodix_firmware_bixi.bin \
-      /odm/lib64/libtouchreport.so /system/etc/vintf/weaver-nxp.xml \
+      /vendor/lib64/vendor.xiaomi.hw.touchfeature-V1-ndk.so \
       /mnt/system/system/lib64/libsysutils.so /mnt/system/system/lib64/libcap.so
 grep -c vendor_ssgtzd /vendor/etc/group
 ls -l /sys/class/touch/touch_dev/enable_touch_raw /sys/class/qcom-haptics/lra_frequency_hz
@@ -258,10 +308,18 @@ sha256sum /dev/block/by-name/boot_a /dev/block/by-name/init_boot_a \
 head -40 /skyward/run/recovery.log
 cat /proc/mounts | grep -E 'vendor_dlkm|system_dlkm|/vendor |/odm |/mnt/system'
 cat /proc/modules | grep -E 'synaptics|xiaomi_touch|mitee|nxp|goodix|rfkill|qca_cld'
-service list | grep -E 'keymint|weaver|secure_element|omapi|qseecom|bootcontrol'
+# recovery 里没有 service / ip 命令（which 皆空），判服务与网络要靠下面这几条
+ls -l /system/bin/se_omapi
+cat /system/etc/vintf/manifest/android.se.omapi-service.xml
+ls /system/etc/vintf/manifest/ | grep -E 'omapi|weaver|nfc'
+for p in $(pidof se_omapi secure_element-service.qti qseecomd qwesd ssgtzd \
+               android.hardware.security.keymint-service-qti \
+               android.hardware.weaver-service.nxp-qti); do \
+  echo "$p $(cat /proc/$p/status | head -2 | tr '\n' ' ') $(cat /proc/$p/wchan)"; done
+ls -l /dev/teepriv* /dev/xts* /dev/nq-nci 2>&1
+dmesg | grep -iE 'cnss|peach|wlan0' | tail -20
 cat /proc/bus/input/devices | grep -B1 -A4 -E 'goodix|synaptics'
 lpdump --slot 0 | head -60
-ip addr show wlan0; dmesg | grep -iE 'cnss|peach|wlan0' | tail -20
 dmesg | grep -E 'partitions not mounted|devices not brought up|mounted'
 ```
 
@@ -279,9 +337,11 @@ dmesg | grep -E 'partitions not mounted|devices not brought up|mounted'
 
 ## 6. 判据（什么情况才需要改代码）
 
+本轮结果落在第一行，**已经发生过**（2026-11-23 上机：七条全过）。下表保留，用作以后换版本时的分诊表。
+
 | 取证结果 | 结论 |
 | --- | --- |
-| 七个 `.ko` 都在、`flatten` 还在、HAL 八条路径都在、weaver 能解 | **零代码改动**，本轮只补文档与基线（基线可延后） |
+| **七个 `.ko` 都在、`flatten` 还在、HAL 八条路径都在、weaver 能解** ✅ 本次 | **零代码改动**，本轮只补文档与基线（基线可延后） |
 | 某个 `.ko` 换了目录/名字，但仍在四个来源内 | 改 `devices/bixi.toml` 的 `load` / `sources`，重出、重验 |
 | `system_dlkm` 不再有 `flatten` | 改 `skyward-modules/src/lib.rs` 的路径表（**这是代码**），配一条单测 |
 | HAL 二进制换目录（如 `qwesd` 搬进 `/vendor/bin/hw/`） | 改 `[[service]].path` 与其 `libraries` 顺序 |
