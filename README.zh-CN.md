@@ -8,7 +8,7 @@ XM KEEL 是使用 Rust 编写的 recovery，从零开始编写。最初源自
 [kirklin/skyward](https://github.com/kirklin/skyward)（GPL-3.0），现由 XM KEEL
 独立维护，许可证与原作者署名保留。
 
-> **小米 MIX Flip 2（`bixi`）· 1.0.4** —— 本分支把 XM KEEL 做成这台机器的版本（SM8750，Android 17，A/B + 动态分区，现役系统 `OS4.0.0.11.XOHCNXM`，出包基线 `OS4.0.0.11.XOHCNXM`）。外屏是主力屏；密码记住一次之后 `/data` 自己就开；分区镜像可以存到 U 盘；`avbctl` 改完会把写前写后的 flags 差值报回来；recovery 还能从 GitHub 发行里更新自己——**优先裸 `.img`，没有才退回 `.zip`**，并且走你选的加速源。
+> **小米 MIX Flip 2（`bixi`）· 1.0.0** —— 本分支把 XM KEEL 做成这台机器的版本（SM8750，Android 17，A/B + 动态分区，现役系统 `OS4.0.4.0.XOHCNXM`，出包基线 `OS4.0.0.11.XOHCNXM`）。外屏是主力屏；密码记住一次之后 `/data` 自己就开；分区镜像可以存到 U 盘；`avbctl` 改完会把写前写后的 flags 差值报回来；recovery 还能从 GitHub 发行里更新自己——**优先裸 `.img`，没有才退回 `.zip`**，并且走你选的加速源。
 > 完整变更、借鉴了哪些 fork 的哪些做法、以及已知限制：见 [CHANGELOG-bixi.md](CHANGELOG-bixi.md) · [Releases](https://github.com/XQAB/XM-KEEL/releases)
 > 移植的决策记录（bixi 的单一真相源）：[docs/bixi-porting.md](docs/bixi-porting.md)
 
@@ -91,22 +91,22 @@ XM KEEL 是使用 Rust 编写的 recovery，从零开始编写。最初源自
 
 | 机型 | 代号 | 测试的系统版本 |
 | --- | --- | --- |
-| 小米 MIX Flip 2 | `bixi` | OS4.0.11.XOHCNXM（Android 17） |
+| 小米 MIX Flip 2 | `bixi` | OS4.0.4.0.XOHCNXM（Android 17） |
 
 这个仓库只维护这一台机器。合上手机后点亮的外屏、外屏触摸，以及 bixi 的其他改动都在
 `main` 上，镜像在 [Releases](https://github.com/XQAB/XM-KEEL/releases)。
 
 ## 安装 XM KEEL
 
-XM KEEL 需要已解锁的 bootloader。从 [Releases](https://github.com/XQAB/XM-KEEL/releases) 下载这台机器的镜像——最新的是 `skyward-v1.0.7-bixi-OS4.0.0.11.XOHCNXM.img`，`0.32.00` 是第一版带外屏（合盖屏）的镜像，`0.37.00` 起外屏触摸在真机上验收通过——对照 `SHA256SUMS` 里的 SHA-256 校验（`sha256sum skyward-v1.0.7-bixi-OS4.0.0.11.XOHCNXM.img`），然后写入当前运行槽位的 recovery 分区：
+XM KEEL 需要已解锁的 bootloader。从 [Releases](https://github.com/XQAB/XM-KEEL/releases) 下载这台机器的镜像——最新的是 `skyward-v1.0.0-bixi-OS4.0.0.11.XOHCNXM.img`，1.0.0 已经驱动外屏（合盖屏）并接收它的触摸——对照 `SHA256SUMS` 里的 SHA-256 校验（`sha256sum skyward-v1.0.0-bixi-OS4.0.0.11.XOHCNXM.img`），然后写入当前运行槽位的 recovery 分区：
 
 ```sh
-dd if=skyward-v1.0.7-bixi-OS4.0.0.11.XOHCNXM.img of=/dev/block/by-name/recovery_a bs=1048576
+dd if=skyward-v1.0.0-bixi-OS4.0.0.11.XOHCNXM.img of=/dev/block/by-name/recovery_a bs=1048576
 ```
 
 这台机器用 `fastboot flash recovery` 刷 100MB 的镜像会在中途断链（`Write to device failed (no link)`），所以从 root shell 写——在 XM KEEL 里，或者通过 `adb`——才是可靠的方式。
 
-之后连接 WLAN，就可以在“设置”的“XM KEEL 更新”页面更新到最新版本，也可以在 XM KEEL 自己的“安装”页面安装解压出来的新版镜像。从 1.0.7 起这两条路之外还有第三条：更新页的“从内部存储刷入镜像”，挑一个放在内部存储里的 `skyward-….img`（或它那个 `.zip`），XM KEEL 会先认出这是不是本机的镜像，再写进下次启动那个槽位和另一个装有 XM KEEL 的槽位——不下载、也不挪走你的文件，和在线更新走的是同一条写盘路径。打开 **自动重新刷入 XM KEEL** 之后，在 XM KEEL 里安装的更新或刷机包覆盖 recovery 分区时，XM KEEL 会把它们刷回来；fastboot 刷入和原厂系统更新不在其中，因为它们不经过 XM KEEL。安装刚写完的分区会带着只读旗标，所以每次写入前都要先清掉它——1.0.2 会清，1.0.1 是在这里失败（`Operation not permitted`）。
+之后连接 WLAN，就可以在“设置”的“XM KEEL 更新”页面更新到最新版本，也可以在 XM KEEL 自己的“安装”页面安装解压出来的新版镜像。这两条路之外还有第三条：更新页的“从内部存储刷入镜像”，挑一个放在内部存储里的 `skyward-….img`（或它那个 `.zip`），XM KEEL 会先认出这是不是本机的镜像，再写进下次启动那个槽位和另一个装有 XM KEEL 的槽位——不下载、也不挪走你的文件，和在线更新走的是同一条写盘路径。打开 **自动重新刷入 XM KEEL** 之后，在 XM KEEL 里安装的更新或刷机包覆盖 recovery 分区时，XM KEEL 会把它们刷回来；fastboot 刷入和原厂系统更新不在其中，因为它们不经过 XM KEEL。安装刚写完的分区会带着只读旗标，所以每次写入前都要先清掉它——1.0.0 会清，更早的构建是在这里失败（`Operation not permitted`）。
 
 XM KEEL 中的 adb 是 root shell，手机上无需授权：手机处于 recovery 的时候，任何人拿到手机和数据线都能访问其中的存储。
 
@@ -166,7 +166,7 @@ target/release/keel-pack recovery \
 `bixi_extra/` 随仓库一起分发：它装着 bixi 构建在 stock recovery 之上叠的那几样
 安全元件（secure element）与 weaver 的东西，所以单纯 clone 下来就能编，不用在
 旁边再放一个目录。
-  --out target/skyward-bixi.img
+  --out target/skyward-1.0.0-bixi-OS4.0.0.11.XOHCNXM.img
 ```
 
 测试和代码检查在电脑上运行；只在手机上运行的代码按照手机目标检查：

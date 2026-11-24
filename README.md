@@ -9,8 +9,8 @@ XM KEEL is a recovery written in Rust, from scratch. It began as a fork of
 maintained independently as XM KEEL, keeping that license and the original
 authors' credit.
 
-> **MIX Flip 2 (`bixi`) · 1.0.1** — this branch builds XM KEEL for the Xiaomi MIX Flip 2
-> (SM8750, Android 17, A/B + dynamic partitions, running `OS4.0.11.XOHCNXM`, built on
+> **MIX Flip 2 (`bixi`) · 1.0.0** — this branch builds XM KEEL for the Xiaomi MIX Flip 2
+> (SM8750, Android 17, A/B + dynamic partitions, running `OS4.0.4.0.XOHCNXM`, built on
 > `OS4.0.0.11.XOHCNXM`). The cover display is the
 > primary screen, `/data` unlocks itself once the password has been kept, images can be
 > kept on a USB stick, `avbctl` flags are written with their before/after difference
@@ -103,7 +103,7 @@ read and set properties.
 
 | Device | Codename | Tested system version |
 | --- | --- | --- |
-| Xiaomi MIX Flip 2 | `bixi` | OS4.0.11.XOHCNXM (Android 17) |
+| Xiaomi MIX Flip 2 | `bixi` | OS4.0.4.0.XOHCNXM (Android 17) |
 
 This repository keeps XM KEEL for that phone only. The work on it — the cover screen that
 comes on when the phone is shut, its touch, and the rest of the bixi changes — is on
@@ -114,14 +114,13 @@ comes on when the phone is shut, its touch, and the rest of the bixi changes —
 
 XM KEEL needs an unlocked bootloader. Download the image for this phone from
 [Releases](https://github.com/XQAB/XM-KEEL/releases) — the newest one is
-`skyward-v1.0.7-bixi-OS4.0.0.11.XOHCNXM.img`, and `0.32.00` was the first version
-with the cover panel, `0.37.00` the first one whose cover touch was accepted on
-the phone — check it against the SHA-256 in `SHA256SUMS`
-(`sha256sum skyward-v1.0.7-bixi-OS4.0.0.11.XOHCNXM.img`), and write it to the recovery
+`skyward-v1.0.0-bixi-OS4.0.0.11.XOHCNXM.img`, and 1.0.0 already drives the cover
+panel and takes its touch — check it against the SHA-256 in `SHA256SUMS`
+(`sha256sum skyward-v1.0.0-bixi-OS4.0.0.11.XOHCNXM.img`), and write it to the recovery
 partition of the slot the phone runs from:
 
 ```sh
-dd if=skyward-v1.0.7-bixi-OS4.0.0.11.XOHCNXM.img of=/dev/block/by-name/recovery_a bs=1048576
+dd if=skyward-v1.0.0-bixi-OS4.0.0.11.XOHCNXM.img of=/dev/block/by-name/recovery_a bs=1048576
 ```
 
 `fastboot flash recovery` on this phone drops the link partway through a 100MB
@@ -130,7 +129,7 @@ XM KEEL itself, or over `adb` — is the way that holds.
 
 Afterwards XM KEEL updates itself over Wi-Fi from its newest release, on the
 XM KEEL update page in Settings; a newer image, unzipped, also installs from its own
-Install page. Since 1.0.7 there is a third way on that page: **Write a build kept in
+Install page. There is a third way on that page: **Write a build kept in
 internal storage** takes a `skyward-….img` (or its `.zip`) sitting in internal
 storage, checks it is this phone's build, and writes it into the slot that starts
 next and into the other slot where XM KEEL is held — nothing is downloaded and
@@ -139,8 +138,8 @@ GitHub does. With **Flash XM KEEL again** on, an update or flashable zip install
 here in XM KEEL that writes over the recovery partitions gets XM KEEL back in them.
 A fastboot flash or the phone's own system updater is not covered, as it runs
 without XM KEEL. The partitions an install has just written are left read-only, so
-XM KEEL clears that flag before every write — 1.0.2 does; 1.0.1 failed with
-`Operation not permitted` instead.
+XM KEEL clears that flag before every write — 1.0.0 does; an earlier build failed
+with `Operation not permitted` instead.
 
 adb in XM KEEL is a root shell that needs no authorization on the phone: anyone
 with the phone and a cable can reach its storage while it is in recovery.
@@ -236,7 +235,7 @@ target/release/keel-pack recovery \
   --mono resources/fonts/KirkMono-Regular.ttf \
   --mono-license resources/fonts/KirkMono-OFL.txt \
   --extra bixi_extra \
-  --out target/skyward-bixi.img
+  --out target/skyward-1.0.0-bixi-OS4.0.0.11.XOHCNXM.img
 ```
 
 `bixi_extra/` ships with this repository: it holds the secure-element and
@@ -247,7 +246,7 @@ its own files simply has no `<codename>_extra/`.
 What was packed is then read back the way the bootloader and init read it:
 
 ```sh
-tools/verify-release.py target/skyward-bixi.img \
+tools/verify-release.py target/skyward-1.0.0-bixi-OS4.0.0.11.XOHCNXM.img \
   --config devices/bixi.toml \
   --extra bixi_extra
 ```
