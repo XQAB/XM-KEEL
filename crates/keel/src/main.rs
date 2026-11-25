@@ -144,6 +144,23 @@ enum Cmd {
         #[arg(long)]
         ticks: bool,
     },
+    /// Ask the sensor service on the ADSP what it has, then watch the sensor
+    /// that measures acceleration report, all over the kernel's QRTR socket.
+    #[cfg(target_os = "android")]
+    Sns {
+        /// Names to look up; the usual acceleration names by default.
+        #[arg(long = "name")]
+        names: Vec<String>,
+        /// Reports per second to ask the sensor for.
+        #[arg(long, default_value_t = 50.0)]
+        rate: f32,
+        /// How long to watch it, in seconds.
+        #[arg(long, default_value_t = 10)]
+        seconds: u64,
+        /// Print every frame whole, in hex.
+        #[arg(long)]
+        raw: bool,
+    },
     /// Save what the panel shows, as raw RGBA files cap-000.rgba onwards.
     #[cfg(target_os = "android")]
     Capture {
@@ -243,6 +260,11 @@ fn main() -> Result<()> {
             Ok(())
         }
         Cmd::Recovery => recovery(),
+        #[cfg(target_os = "android")]
+        Cmd::Sns { names, rate, seconds, raw } => {
+            let names = if names.is_empty() { orientation::ACCEL_NAMES.map(str::to_owned).to_vec() } else { names };
+            orientation::probe(&names, rate, seconds, raw)
+        }
         Cmd::Reboot { target } => {
             let p = Power::parse(&target).ok_or_else(|| anyhow!("unknown target {target:?}"))?;
             keel_sys::power(p)
