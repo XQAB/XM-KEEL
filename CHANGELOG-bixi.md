@@ -1,9 +1,11 @@
-# XM KEEL for bixi · 1.0.10
+# XM KEEL for bixi · 1.0.0
 
-> 机型：小米 MIX Flip 2（`bixi`，SM8750 / `sun`，Android 17，A/B + 动态分区，现役系统 `OS4.0.0.11.XOHCNXM`，出包基线 `OS4.0.0.11.XOHCNXM`）
-> 上游：[kirklin/skyward](https://github.com/kirklin/skyward)；本分支：[`bixi-cover-display-v2`](https://github.com/XQAB/XM-KEEL/tree/bixi-cover-display-v2)（PR #38）
+> 机型：小米 MIX Flip 2（`bixi`，SM8750 / `sun`，Android 17，A/B + 动态分区，现役系统 `OS4.0.4.0.XOHCNXM`，出包基线 `OS4.0.4.0.XOHCNXM`）
+> 上游：[kirklin/skyward](https://github.com/kirklin/skyward)；本仓库：[`main`](https://github.com/XQAB/XM-KEEL)
 
 ## 1.0.10
+
+1.0.0 到 1.0.10 是 Skyward 编号时期的记录：XM KEEL 从 1.0.0 重新起算，下面这一节是那个时期的最后一版，功能都已经并进 1.0.0 了。
 
 1.0.9 刷上真机之后，工程链路（起机、槽位、root、data、两槽 recovery 哈希）全通，回来的全是界面问题。这一版收四条：外屏滚不动的重启页、时不时没反应的点击、外屏被截断的英文值、说不清自己在干什么的插件页。
 
