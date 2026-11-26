@@ -115,8 +115,9 @@ pd-mapper  →  adsrpcd rootpd adsp  →  sscrpcd sensorspd adsp
 | 16 | stream type | 0 = 连续周期，1 = on-change |
 | 3、4 | 间隔/上报参数 | 1 |
 
-registry 被 SSR 清空时，`gravity`（`a74398c0…/c5d45a2d…` 与 `…/c6d45a2d…`）连 `msgid 128`
-都不回，只回 ACK：属性表整块是空的，所以它连 stream type 都不可知。
+`gravity`（`a74398c0…/c5d45a2d…` 与 `…/c6d45a2d…`）这条比较特殊：`msgid 1` 只回 ACK、
+不回 128 实例，所以连 stream type 都读不出来；它发 514 回 `inner 130 code 2`。这和 accel 不同，
+accel 的属性表是完整的。
 
 ## 7. 这台机器上能读什么、不能读什么
 
@@ -128,18 +129,72 @@ registry 被 SSR 清空时，`gravity`（`a74398c0…/c5d45a2d…` 与 `…/c6d4
 | `device_orient` | `eef435f9287516a7` / `a1964b507cf7e3e0` | 16 float，恒定 `4,4,0…` |
 | accel / gravity / ori / gyro | 见 issue #5 | 514 直接回 inner 130 + code：3 / 2 / 6 / 3 |
 
-accel 的失败不是缺消息号：`libsnsapi` 全量枚举里没有任何 accel 专属 event/config，
-样本就是标准 1025 + 3×float32；它失败是因为**属性表为空**（registry 被 SSR 清空），
-配置在校验阶段就被拒。registry 修好之后需要用 `msgid 1` 复查 `attr 16`（stream_type）
-再决定用 513（连续型，f4 是 fixed32 Hz）还是 514（on-change，f4 是 varint 微秒）。
+accel 的失败不是缺消息号，也不是属性表空：四个 accel uid 的属性表是完整的（Android 侧 150 条
+全量 inventory 实测）：
+
+| attr | 值（`3846c24e`，lsm6dsv） |
+| --- | --- |
+| 0 | `lsm6dsv` |
+| 1 | `STMicro` |
+| 2 | `accel` |
+| 4 | 28676 |
+| 5 | `sns_accel.proto` |
+| 6 | rates `[30, 60, 120, 240, 480]` |
+| 7 | `[0.000598, 0.001196, 0.002393, 0.004786]` |
+| 8 | 240 |
+| 9 | `(17, 100, 190, 3)` |
+| 10 | 3 |
+| 12 | OFF × 4 |
+| 16 | 0（continuous periodic） |
+| 22 | `(3, 2, 1)` |
+| 25 | 960（量程 g） |
+
+`3c4b340b`（lsm6dso）的 rates 是 `[26, 52, 104, 208, 416]`。真凶是 `sns_accel.proto` 这个厂商私有
+类型的 **config 内层 msg id**：不在 `sns_std_sensor_config`（512），也不是 513 / 514。4 个 uid ×
+6 种组合（512 的 f3=f32、512 的 f1=nested f32、512 的 enable+f3=f32、513 on-change、514 on-change
+30、514 on-change 200）全试过：512 三条 `error 7` / 无答案，513 与 514 全是 `ack` + `inner 130`。
+recovery 与 Android 两侧结果一致。三轴放弃，外屏翻转改用 `hinge_angle`。
+
+## 7.1 recovery 里到底剩了什么（`507d820c` 实测，recovery 下 adb root）
+
+recovery 下 registry 只有 **10 条**，逐个读 `attr 2`：
+
+```
+suid / aoc / tp_hall / client_sensor / device_mode /
+camera_face_detect / camera_hand_detect / camera_qrcode_detect / camera_frame / wifi_svc
+```
+
+`hinge_angle`、`flip_status`、`ambient_light`、`tilt` 全不在。**`tp_hall` 在，而且能跑**：
+
+- `attr 0/1/2 = TP Hall / xiaomi / tp_hall`，`attr 5 = sns_std_sensor.proto`，`attr 16 = 1`（on-change）；
+- 514 打开直接回 `[1.0, 0.0, 0.0]`，是当前状态值，不报 130。
+
+所以 recovery 侧的翻转判据可能根本不需要 `hinge_angle`：`tp_hall` 是这套 registry 里唯一与开合
+有关的传感器，一次折动就能定性（`1.0` 到底是开还是合，得靠折一次才知道）。这条比"把 150 条
+registry 在 recovery 里重建出来"便宜得多。
+
+同时量到两件与老结论冲突的事：
+
+- `remoteproc-adsp` 在 `1.42 s` 就已经被内核上电（`powering up`），init 的
+  `wait /sys/kernel/boot_adsp/ssr` 在 `3.33 s` 才等到节点，紧接着又是一次
+  `powering up` —— **那一发 `write ssr 1` 是一次多余的重启**，不是上电；
+- `sscrpcd` 现在起不来：`logcat` 里每 30 秒一次
+  `Error 0x200: apps_dev_init failed for domain 0, errno Device or resource busy`。
+  `/dev/fastrpc-adsp-secure` 由 `adsrpcd` 与 `sscrpcd` 同时持有，`attachguestos` 只有一个，
+  先开的赢。registry 只有 10 条更像是**注册表根本没下载进 ADSP**（sscrpcd 没挂上），
+  而不是"SSR 把 150 条清掉了"。
 
 ## 8. 还没定的一条
 
-`init.recovery.qcom.rc` 那两行要不要整段删。取决于 **ADSP 能不能不靠这一发自己起来**：
+`init.recovery.qcom.rc` 的 `on fs` 里有这两行（第 54、55 行，MIUI `Recovery_StabilityEnhance`）：
 
-- `remoteproc1/state` 仍是 `running` → 那两行是「固件可见性 + 强制重下」的补丁，
-  可以只删 `write … ssr 1`，保留 bind 与 `wait`；
-- 变成 `offline` → 这一发同时兼着上电，得改成条件写法：
+```sh
+    wait /sys/kernel/boot_adsp/ssr
+    write /sys/kernel/boot_adsp/ssr 1
+```
+
+`remoteproc1/state` 是 `running`，dmesg 也显示内核在 `1.42 s` 已经把 ADSP 拉起来了，所以这一发
+是**多余的重启**：只删 `write … ssr 1`，保留 `wait` 就够。
 
 ```sh
 exec root root -- /system/bin/sh -c '[ "$(cat /sys/class/remoteproc/remoteproc1/state 2>/dev/null)" = "running" ] || echo 1 > /sys/kernel/boot_adsp/ssr'
@@ -148,6 +203,9 @@ exec root root -- /system/bin/sh -c '[ "$(cat /sys/class/remoteproc/remoteproc1/
 副作用评估：recovery 不跑 audio HAL（那唯一的运行时写者 `audiohalservice_qti.rc`
 的 `vendor.audio.ssr.trigger` 不生效），充电走 `charger_fstab` + 内核 `power_supply`，
 温度走内核 thermal，**删这一发对它们没有依赖**；唯一的耦合就是 ADSP 自己的固件加载。
+
+但**删了也不等于 registry 会变成 150**：现在 `sscrpcd` 是 `EBUSY` 挂不上 ADSP，
+注册表压根没下载。两步要分开验：先让 `sscrpcd` 挂上，再看 `ssr` 那一发是否还挡着。
 
 ## 9. 已知的失败路径（别重试）
 
