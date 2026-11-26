@@ -107,10 +107,8 @@ pub fn answer(data: &[u8]) -> Option<Answer> {
                     answer.accepted = first == 0;
                 }
             }
-            0x11 => {
-                if value.len() >= 2 {
-                    answer.client = Some(u16::from_le_bytes([value[0], value[1]]));
-                }
+            0x11 if value.len() >= 2 => {
+                answer.client = Some(u16::from_le_bytes([value[0], value[1]]));
             }
             _ => {}
         }
@@ -219,7 +217,7 @@ fn header(data: &[u8]) -> Option<(u8, u8, u16, &[u8])> {
     let length = u16::from_be_bytes([data[5], data[6]]) as usize;
     // The length leaves out the padding byte the sender writes before the TLV.
     let body = data.get(7..)?;
-    let body = if length + 1 <= body.len() { &body[..length + 1] } else { body };
+    let body = body.get(..=length).unwrap_or(body);
     Some((flag, transaction, message, body))
 }
 

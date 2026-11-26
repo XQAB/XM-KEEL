@@ -3,10 +3,10 @@
 //!
 //! `cargo build --release --target aarch64-unknown-linux-musl --example probe`
 
-use anyhow::Result;
-use std::time::Duration;
+#[cfg(unix)]
+fn main() -> anyhow::Result<()> {
+    use std::time::Duration;
 
-fn main() -> Result<()> {
     let mut client = keel_sensors::Client::open()?;
     println!("server: node {} port {}", client.server().0, client.server().1);
 
@@ -35,3 +35,7 @@ fn main() -> Result<()> {
     }
     Ok(())
 }
+
+/// The sensor service is a Linux socket; there is nothing to show here.
+#[cfg(not(unix))]
+fn main() {}
