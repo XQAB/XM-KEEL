@@ -1540,7 +1540,9 @@ pub fn run(cfg: &DeviceConfig, font: &Path, mono: &Path, request: bcb::Request, 
     // bootloader left it with no display the kernel can take down, the
     // panel is set up and taken down again — the one path that sends it the
     // command, and one that only lands with the phone's own panel off first.
-    if cfg.display.covers && shut_now() == Some(false) {
+    // Asked of the touch panel's driver alone: the hinge is not followed yet,
+    // and a phone that starts open has nothing for the hinge to say.
+    if cfg.display.covers && fold_status() == Some(false) {
         let cleared = match inner.darken(1) {
             Ok(true) => true,
             Ok(false) => false,
