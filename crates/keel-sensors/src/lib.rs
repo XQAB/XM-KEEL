@@ -25,7 +25,39 @@ pub mod frame;
 #[cfg(unix)]
 pub mod client;
 #[cfg(unix)]
+pub mod qmi;
+#[cfg(unix)]
 pub mod qrtr;
 
 #[cfg(unix)]
-pub use client::{ambient_light, flip_status, hinge_angle, sample, Client, Receiver, Sensor};
+pub use client::{
+    ambient_light, flip_status, hinge_angle, sample, Client, Enabled, Receiver, Sensor,
+};
+
+/// Where the sensors' service lives, as `(node, port)`.
+#[cfg(unix)]
+pub fn lookup(service: u32) -> anyhow::Result<(u32, u32)> {
+    qrtr::lookup(service)
+}
+
+/// The first message in a frame, and whether it is a sample: `(uid, values)`.
+///
+/// Both a reply and an event are read the same way, so a caller that only has
+/// bytes can still get at them.
+#[cfg(unix)]
+pub fn parse_event(buffer: &[u8]) -> Option<([u8; 16], Vec<f32>)> {
+    frame::messages(buffer)
+        .into_iter()
+        .next()
+        .map(|message| (message.suid, message.values))
+}
+
+/// The same, from a platform without the socket: the frame layout alone still
+/// decodes, which is what the host tests use.
+#[cfg(not(unix))]
+pub fn parse_event(buffer: &[u8]) -> Option<([u8; 16], Vec<f32>)> {
+    frame::messages(buffer)
+        .into_iter()
+        .next()
+        .map(|message| (message.suid, message.values))
+}

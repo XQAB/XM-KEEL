@@ -19,14 +19,19 @@ pub const SSC: u32 = 400;
 
 #[repr(C)]
 #[derive(Clone, Copy, Default, Debug)]
-pub(crate) struct Address {    family: u16,
+pub(crate) struct Address {
+    family: u16,
     node: u32,
     port: u32,
 }
 
 impl Address {
     fn at(node: u32, port: u32) -> Self {
-        Self { family: AF_QRTR as u16, node, port }
+        Self {
+            family: AF_QRTR as u16,
+            node,
+            port,
+        }
     }
 }
 
@@ -39,13 +44,23 @@ pub struct Transport {
 impl Transport {
     /// Open a socket. It does not bind: the first question gives it an address.
     pub fn open() -> Result<Self> {
-        let fd = unsafe { libc::socket(AF_QRTR, libc::SOCK_DGRAM | libc::SOCK_CLOEXEC | libc::SOCK_NONBLOCK, 0) };
+        let fd = unsafe {
+            libc::socket(
+                AF_QRTR,
+                libc::SOCK_DGRAM | libc::SOCK_CLOEXEC | libc::SOCK_NONBLOCK,
+                0,
+            )
+        };
         ensure!(fd >= 0, "open QRTR socket: {}", io::Error::last_os_error());
         let socket = unsafe { OwnedFd::from_raw_fd(fd) };
         let mut local = Address::default();
         let mut size = std::mem::size_of::<Address>() as libc::socklen_t;
         let got = unsafe { libc::getsockname(fd, (&mut local as *mut Address).cast(), &mut size) };
-        ensure!(got == 0, "read the QRTR address: {}", io::Error::last_os_error());
+        ensure!(
+            got == 0,
+            "read the QRTR address: {}",
+            io::Error::last_os_error()
+        );
         Ok(Self { socket, local })
     }
 
@@ -66,13 +81,25 @@ impl Transport {
             question.extend_from_slice(&word.to_le_bytes());
         }
         let deadline = Instant::now() + Duration::from_secs(3);
+        // An unbound socket reads back as node zero until the kernel has given
+        // it an address; this node is number one, so ask there.
+        let node = if self.local.node == 0 {
+            1
+        } else {
+            self.local.node
+        };
+        // The first send is what gives the socket an address; a receive before
+        // it is answered with EADDRNOTAVAIL.
+        self.send(Address::at(node, CONTROL), &question)?;
         let mut asked = Instant::now();
         while Instant::now() < deadline {
             if asked.elapsed() >= Duration::from_millis(250) {
-                self.send(Address::at(self.local.node, CONTROL), &question)?;
+                self.send(Address::at(node, CONTROL), &question)?;
                 asked = Instant::now();
             }
-            let Some((from, data)) = self.receive(Duration::from_millis(50))? else { continue };
+            let Some((from, data)) = self.receive(Duration::from_millis(50))? else {
+                continue;
+            };
             if from.port != CONTROL {
                 continue;
             }
@@ -101,7 +128,11 @@ impl Transport {
                 std::mem::size_of::<Address>() as libc::socklen_t,
             )
         };
-        ensure!(sent == data.len() as isize, "send to the sensor service: {}", io::Error::last_os_error());
+        ensure!(
+            sent == data.len() as isize,
+            "send to the sensor service: {}",
+            io::Error::last_os_error()
+        );
         Ok(())
     }
 
@@ -147,6 +178,20 @@ impl Transport {
 }
 
 fn words(data: &[u8]) -> Option<[u32; 5]> {
-    let words: Vec<u32> = data.as_chunks::<4>().0.iter().map(|v| u32::from_le_bytes(*v)).collect();
-    (words.len() == 5 && data.len() == 20).then(|| [words[0], words[1], words[2], words[3], words[4]])
+    let words: Vec<u32> = data
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .map(|v| u32::from_le_bytes(*v))
+        .collect();
+    (words.len() == 5 && data.len() == 20)
+        .then(|| [words[0], words[1], words[2], words[3], words[4]])
+}
+
+/// Where a service lives, as `(node, port)`, on a socket of its own.
+///
+/// This is the kernel's name service: no Android service is involved, so it
+/// works in recovery as soon as the ADSP is up.
+pub fn lookup(service: u32) -> Result<(u32, u32)> {
+    Transport::open()?.lookup(service)
 }

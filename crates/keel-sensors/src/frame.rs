@@ -4,7 +4,7 @@
 //! golden test at the bottom is a frame that was captured on a phone and
 //! answered with a real sample.
 //!
-//! The layout, as it is on the wire:
+//! A request, as it is on the wire:
 //!
 //! ```text
 //! 00 <txn:1> 00 20 <qlen:BE16>            QMI header, msgid 0x0020 big endian
@@ -15,20 +15,39 @@
 //!
 //! `qlen` counts from the TLV onwards and leaves out the padding byte before
 //! it, which is why it is one shorter than what is actually sent.
+//!
+//! An answer, as it is on the wire:
+//!
+//! ```text
+//! 04 <txn> 00 21 <len:BE16> 00           the service's reply
+//! 01 08 00 <sequence:8>                  the sequence number
+//! 02 <len:LE16> <body:LE16> <protobuf>   the protobuf, length counted twice
+//! ```
+//!
+//! and the protobuf inside it:
+//!
+//! ```text
+//! 0a 12 09 <uid low 8> 11 <uid high 8>   the sensor it is about
+//! 12 <len> 0d <message:LE32> 11 <seq:8> 1a <len> <payload>
+//! ```
+//!
+//! Events (msgid `00 22`) carry the same protobuf, so one reader takes both.
 
 /// The request message every call uses.
 const REQUEST: u16 = 0x0020;
 /// The reply to a request.
-const RESPONSE: [u8; 2] = [0x00, 0x21];
+const RESPONSE: u16 = 0x0021;
 /// An asynchronous event.
-const INDICATION: [u8; 2] = [0x00, 0x22];
+const INDICATION: u16 = 0x0022;
 
-/// A body of events, decoded.
+/// One message out of the service: which sensor, which of its messages, and
+/// the payload that message carried.
 #[derive(Clone, Debug, Default)]
-pub struct Event {
-    /// Which sensor said it, as the sixteen bytes the service uses.
+pub struct Message {
+    /// The sensor the message is about, as the sixteen bytes the service uses.
     pub suid: [u8; 16],
-    /// The sensor's own message number, e.g. 1025 for a sample.
+    /// The sensor's own message number, e.g. 1025 for a sample, 130 for a
+    /// status.
     pub message: u32,
     /// The payload the message carried, as it was on the wire.
     pub payload: Vec<u8>,
@@ -36,7 +55,7 @@ pub struct Event {
     pub values: Vec<f32>,
 }
 
-/// What the service answered a request with.
+/// What the transport acknowledged a request with.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Answer {
     pub transaction: u8,
@@ -48,9 +67,16 @@ pub struct Answer {
 /// Build one request: the sensor's uid, its message number, the payload that
 /// message takes, and an optional second body.
 ///
-/// The tail is a client id that configuration requests need and registry
-/// queries must not carry: with it, the lookup is answered `INVALID_TYPE`.
-pub fn request(transaction: u8, suid: [u8; 16], message: u32, payload: &[u8], extra: Option<&[u8]>, with_tail: bool) -> Vec<u8> {
+/// The tail is a client id that configuration requests carry and registry
+/// queries can leave out; on this device the registry answers either way.
+pub fn request(
+    transaction: u8,
+    suid: [u8; 16],
+    message: u32,
+    payload: &[u8],
+    extra: Option<&[u8]>,
+    with_tail: bool,
+) -> Vec<u8> {
     let mut body = Vec::with_capacity(24 + payload.len() + extra.map_or(0, |e| e.len() + 2));
     field_bytes(&mut body, 1, &uid(suid));
     body.push(0x15);
@@ -89,111 +115,162 @@ pub fn uid(suid: [u8; 16]) -> Vec<u8> {
     out
 }
 
-/// The answer a reply frame carries, when the frame is one.
+/// The acknowledgement a reply frame carries, when the frame is one.
+///
+/// This is the transport's own answer, `result` and `error`, and it comes
+/// before whatever the sensor itself says about the request.
 pub fn answer(data: &[u8]) -> Option<Answer> {
-    let (flag, _, message, body) = header(data)?;
-    if flag != 0x04 || message.to_be_bytes() != RESPONSE {
+    if data.first() != Some(&0x02) {
         return None;
     }
-    let mut answer = Answer { transaction: data[1], ..Answer::default() };
-    for (tag, _, value) in fields(body).ok()? {
-        match tag {
-            0x02 => {
-                // result, then error, both little endian 16-bit.
-                if value.len() >= 4 {
-                    answer.accepted = u16::from_le_bytes([value[0], value[1]]) == 0;
-                    answer.error = u16::from_le_bytes([value[2], value[3]]);
-                } else if let Some(&first) = value.first() {
-                    answer.accepted = first == 0;
-                }
-            }
-            0x11 if value.len() >= 2 => {
-                answer.client = Some(u16::from_le_bytes([value[0], value[1]]));
-            }
-            _ => {}
-        }
-    }
+    // `02 04 00` and then the four bytes of result and error. The bytes before
+    // it are the header and, sometimes, a pad, and they are not always the same
+    // count, so the body is found rather than counted.
+    let at = (4..data.len().min(12)).find(|&at| {
+        data[at] == 0x02 && data.get(at + 1) == Some(&0x04) && data.get(at + 2) == Some(&0x00)
+    })?;
+    let value = data.get(at + 3..at + 7)?;
+    let mut answer = Answer {
+        transaction: data[1],
+        ..Answer::default()
+    };
+    answer.accepted = u16::from_le_bytes([value[0], value[1]]) == 0;
+    answer.error = u16::from_le_bytes([value[2], value[3]]);
     Some(answer)
 }
 
-/// Every event in one frame.
-pub fn events(data: &[u8]) -> Vec<Event> {
-    let mut events = Vec::new();
-    let Some((flag, _, message, body)) = header(data) else { return events };
-    if flag != 0x04 || message.to_be_bytes() != INDICATION {
-        return events;
+/// Every message in one frame: a reply or an event, read the same way.
+pub fn messages(data: &[u8]) -> Vec<Message> {
+    let mut messages = Vec::new();
+    let Some((flag, _, message, body)) = header(data) else {
+        return messages;
+    };
+    if flag != 0x04 || (message != RESPONSE && message != INDICATION) {
+        return messages;
     }
-    let Ok(tlvs) = fields(body) else { return events };
-    for (tag, _, value) in tlvs {
-        if tag != 0x02 {
-            continue;
-        }
-        let body = strip_length(value);
-        let Ok(envelope) = fields(body) else { continue };
-        let Some(suid) = envelope.iter().find(|&&(t, w, _)| t == 1 && w == 2).and_then(|&(_, _, v)| parse_uid(v)) else { continue };
-        for &(_, _, value) in envelope.iter().filter(|&&(t, _, _)| t == 2) {
-            let Ok(inner) = fields(value) else { continue };
-            let message = inner
-                .iter()
-                .find(|&&(t, w, v)| t == 1 && (w == 5 || (w == 0 && v.len() == 4)))
-                .map(|&(_, _, v)| u32::from_le_bytes(v[..4].try_into().unwrap()))
-                .unwrap_or_default();
-            let payload = inner.iter().find(|&&(t, _, _)| t == 3).map(|&(_, _, v)| v.to_vec()).unwrap_or_default();
-            let values = floats(&payload);
-            events.push(Event { suid, message, payload, values });
-        }
-    }
-    events
-}
-
-/// The floats a payload holds: field 1, either packed or one per field.
-pub fn floats(data: &[u8]) -> Vec<f32> {
-    let Ok(parsed) = fields(data) else { return Vec::new() };
-    parsed
+    let protobuf = tlvs(body)
+        .into_iter()
+        .find(|&(tag, _)| tag == 0x02)
+        .map(|(_, value)| value);
+    let Some(protobuf) = protobuf else {
+        return messages;
+    };
+    let Ok(envelope) = fields(protobuf) else {
+        return messages;
+    };
+    let suid = envelope
         .iter()
-        .filter(|&&(tag, wire, value)| tag == 1 && matches!(wire, 2 | 5) && value.len() % 4 == 0)
-        .flat_map(|&(_, _, value)| value.as_chunks::<4>().0.iter().map(|v| f32::from_le_bytes(*v)))
-        .collect()
+        .find(|&&(tag, wire, _)| tag == 1 && wire == 2)
+        .and_then(|&(_, _, value)| parse_uid(value))
+        .unwrap_or_default();
+    for &(_, _, value) in envelope.iter().filter(|&&(tag, _, _)| tag == 2) {
+        let Ok(inner) = fields(value) else { continue };
+        let message = inner
+            .iter()
+            .find(|&&(tag, wire, value)| tag == 1 && (wire == 5 || (wire == 0 && value.len() == 4)))
+            .map(|&(_, _, value)| u32::from_le_bytes(value[..4].try_into().unwrap()))
+            .unwrap_or_default();
+        let payload = inner
+            .iter()
+            .find(|&&(tag, _, _)| tag == 3)
+            .map(|&(_, _, value)| value.to_vec())
+            .unwrap_or_default();
+        let values = floats(&payload);
+        messages.push(Message {
+            suid,
+            message,
+            payload,
+            values,
+        });
+    }
+    messages
 }
 
-/// Every name and uid pair a registry listing carries.
-pub fn names(data: &[u8]) -> Vec<(String, [u8; 16])> {
-    let Ok(parsed) = fields(data) else { return Vec::new() };
-    let mut pairs = Vec::new();
+/// Every entry of a registry listing: a name when the query carried one, and
+/// the uid it stands for.
+pub fn entries(data: &[u8]) -> Vec<(Option<String>, [u8; 16])> {
+    let Ok(parsed) = fields(data) else {
+        return Vec::new();
+    };
+    let mut out = Vec::new();
     let mut pending: Option<String> = None;
     for (_, wire, value) in parsed {
         if wire != 2 {
             continue;
         }
+        // A bare uid, as a listing sends them: `09 <low 8> 11 <high 8>`.
         if let Some(suid) = parse_uid(value) {
-            if let Some(name) = pending.take() {
-                pairs.push((name, suid));
-            }
+            out.push((pending.take(), suid));
             continue;
         }
-        // A nested entry of its own, name first and uid second.
-        let Ok(inner) = fields(value) else { continue };
-        if let Some(name) = inner.iter().find_map(|&(t, w, v)| (t == 1 && w == 2 && printable(v)).then(|| String::from_utf8_lossy(v).into_owned())) {
-            if let Some(suid) = inner.iter().find_map(|&(t, w, v)| (t == 2 && w == 2).then(|| parse_uid(v)).flatten()) {
-                pairs.push((name, suid));
-                pending = None;
-                continue;
+        // An entry of its own, a name and then a uid.
+        let Ok(inner) = fields(value) else {
+            // A name on its own, with its uid in the field after it.
+            if printable(value) {
+                pending = Some(String::from_utf8_lossy(value).into_owned());
             }
-            pending = Some(name);
             continue;
-        }
-        if printable(value) {
-            pending = Some(String::from_utf8_lossy(value).into_owned());
+        };
+        let name = inner
+            .iter()
+            .find(|&&(tag, wire, _)| tag == 1 && wire == 2)
+            .map(|&(_, _, value)| String::from_utf8_lossy(value).into_owned())
+            .filter(|name| !name.is_empty());
+        let suid = inner
+            .iter()
+            .find(|&&(tag, wire, _)| tag == 2 && wire == 2)
+            .and_then(|&(_, _, value)| parse_uid(value));
+        if let Some(suid) = suid {
+            out.push((name, suid));
         }
     }
-    pairs
+    out
+}
+
+/// The first integer a payload holds, which is what a status carries: the
+/// reason the sensor will not run.
+pub fn first_int(data: &[u8]) -> Option<u64> {
+    let parsed = fields(data).ok()?;
+    let &(_, wire, value) = parsed.iter().find(|&&(tag, _, _)| tag == 1)?;
+    match wire {
+        0 => {
+            let mut rest = value;
+            varint_read(&mut rest)
+        }
+        5 => value
+            .get(..4)
+            .map(|head| u32::from_le_bytes(head.try_into().unwrap()) as u64),
+        _ => None,
+    }
+}
+
+/// The floats a payload holds: field 1, either packed or one per field.
+pub fn floats(data: &[u8]) -> Vec<f32> {
+    let Ok(parsed) = fields(data) else {
+        return Vec::new();
+    };
+    parsed
+        .iter()
+        .filter(|&&(tag, wire, value)| tag == 1 && matches!(wire, 2 | 5) && value.len() % 4 == 0)
+        .flat_map(|&(_, _, value)| {
+            value
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .map(|v| f32::from_le_bytes(*v))
+        })
+        .collect()
 }
 
 /// The uid inside a message, from its two fixed 64-bit fields.
 pub fn parse_uid(data: &[u8]) -> Option<[u8; 16]> {
     let fields = fields(data).ok()?;
-    let low = fields.iter().find(|&&(t, w, v)| t == 1 && w == 1 && v.len() == 8)?;
-    let high = fields.iter().find(|&&(t, w, v)| t == 2 && w == 1 && v.len() == 8)?;
+    let low = fields
+        .iter()
+        .find(|&&(tag, wire, value)| tag == 1 && wire == 1 && value.len() == 8)?;
+    let high = fields
+        .iter()
+        .find(|&&(tag, wire, value)| tag == 2 && wire == 1 && value.len() == 8)?;
     let mut suid = [0u8; 16];
     suid[..8].copy_from_slice(low.2);
     suid[8..].copy_from_slice(high.2);
@@ -207,33 +284,65 @@ pub fn uid_text(suid: [u8; 16]) -> String {
     format!("{low:016x}/{high:016x}")
 }
 
+/// The frame's header: flag, transaction, message, and the body that follows.
+///
+/// The body is found rather than counted: the length the header declares and
+/// the pad around it are not placed the same way in every frame the service
+/// sends, so the body is taken from the `01 08 00` every body begins with.
 fn header(data: &[u8]) -> Option<(u8, u8, u16, &[u8])> {
-    if data.len() < 8 {
+    if data.len() < 10 {
         return None;
     }
     let flag = data[0];
     let transaction = data[1];
-    let message = u16::from_be_bytes([data[3], data[4]]);
-    let length = u16::from_be_bytes([data[5], data[6]]) as usize;
-    // The length leaves out the padding byte the sender writes before the TLV.
-    let body = data.get(7..)?;
-    let body = body.get(..=length).unwrap_or(body);
-    Some((flag, transaction, message, body))
+    let message = u16::from_be_bytes([data[2], data[3]]);
+    let at = (4..data.len().min(12)).find(|&at| {
+        data[at] == 0x01 && data.get(at + 1) == Some(&0x08) && data.get(at + 2) == Some(&0x00)
+    })?;
+    Some((flag, transaction, message, &data[at..]))
 }
 
-/// A value that may carry its own two-byte length, as replies do.
-fn strip_length(value: &[u8]) -> &[u8] {
-    if value.len() >= 3 {
-        let length = u16::from_le_bytes([value[0], value[1]]) as usize;
-        if length + 2 <= value.len() {
-            return &value[2..length + 2];
+/// The TLVs of a body, whose lengths are little endian and whose second tag
+/// counts its own two-byte length before the protobuf.
+fn tlvs(body: &[u8]) -> Vec<(u8, &[u8])> {
+    let mut out = Vec::new();
+    let mut at = 0;
+    while at + 3 <= body.len() {
+        let tag = body[at];
+        if tag == 0 {
+            at += 1;
+            continue;
         }
+        let length = u16::from_le_bytes([body[at + 1], body[at + 2]]) as usize;
+        let Some(value) = body.get(at + 3..at + 3 + length) else {
+            break;
+        };
+        let value = if tag == 0x02 {
+            // A protobuf is counted once more, two bytes inside the length; an
+            // acknowledgement's four bytes of result and error are not.
+            match value
+                .get(..2)
+                .map(|head| u16::from_le_bytes([head[0], head[1]]) as usize)
+            {
+                Some(inner) if inner + 2 == value.len() => &value[2..],
+                _ => value,
+            }
+        } else {
+            value
+        };
+        out.push((tag, value));
+        at += 3 + length;
     }
-    value
+    out
 }
 
+/// Whether a value reads as a name: letters, digits, and the separators these
+/// names use.
 fn printable(value: &[u8]) -> bool {
-    !value.is_empty() && value.iter().all(|b| b.is_ascii_graphic() || *b == b' ' || *b == b'_')
+    !value.is_empty()
+        && value
+            .iter()
+            .all(|byte| byte.is_ascii_graphic() || *byte == b' ' || *byte == b'_')
 }
 
 fn field_bytes(out: &mut Vec<u8>, tag: u8, value: &[u8]) {
@@ -288,7 +397,8 @@ fn fields(mut data: &[u8]) -> anyhow::Result<Vec<(u8, u8, &[u8])>> {
                 data = rest;
             }
             2 => {
-                let length = varint_read(&mut data).ok_or_else(|| anyhow::anyhow!("short length"))? as usize;
+                let length =
+                    varint_read(&mut data).ok_or_else(|| anyhow::anyhow!("short length"))? as usize;
                 if length > data.len() {
                     anyhow::bail!("short field body");
                 }
@@ -317,13 +427,21 @@ mod tests {
     /// A frame captured on the phone: inner 513 at 10 Hz for the accelerometer,
     /// answered with an ACK and two error events.
     const CAPTURED: &str = "00010020003100012a0028000a120988ea9c0b4ec2463811aba0d340e8d2eb5815010200001a040801100122070a050d0000204110010001";
+    /// The reply the phone gave to a by-name query for `registry`.
+    const LOOKUP: &str = "04010022005400010800460400000000000002460044000a1209abababababababab11abababababababab122e0d000300001141752ce5220000001a1e0a08726567697374727912120975221e70b441255e1159277f00a75427e1";
+    /// The reply the phone gave when the hinge was turned on: a sample, not a
+    /// status.
+    const HINGE: &str = "041c0021004e0001080070040000000000000240003e000a1209a3b53fe2753556e11112624a343a91e37212280d01040000113d9d4677230000001a180a14000033439a9dd5ba0000008000000040000000001003";
 
     fn hex(data: &[u8]) -> String {
         data.iter().map(|b| format!("{b:02x}")).collect()
     }
 
     fn bytes(text: &str) -> Vec<u8> {
-        (0..text.len()).step_by(2).map(|i| u8::from_str_radix(&text[i..i + 2], 16).unwrap()).collect()
+        (0..text.len())
+            .step_by(2)
+            .map(|i| u8::from_str_radix(&text[i..i + 2], 16).unwrap())
+            .collect()
     }
 
     /// The uid as it appears in the capture: low eight, then high eight.
@@ -359,16 +477,36 @@ mod tests {
     }
 
     #[test]
+    fn a_lookup_answer_names_the_uid_it_resolved() {
+        let messages = messages(&bytes(LOOKUP));
+        assert_eq!(messages.len(), 1);
+        let message = &messages[0];
+        assert_eq!(message.message, 768);
+        let entries = entries(&message.payload);
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].0.as_deref(), Some("registry"));
+        assert_eq!(uid_text(entries[0].1), "5e2541b4701e2275/e12754a7007f2759");
+    }
+
+    #[test]
     fn a_sample_reads_as_floats() {
-        // 1025 with three floats and a status, as the light sensor sends it.
-        let mut payload = Vec::new();
-        let mut packed = Vec::new();
-        packed.extend_from_slice(&1.667f32.to_le_bytes());
-        packed.extend_from_slice(&0f32.to_le_bytes());
-        packed.extend_from_slice(&0f32.to_le_bytes());
-        field_bytes(&mut payload, 1, &packed);
-        payload.extend_from_slice(&[0x10, 0x03]);
-        assert_eq!(floats(&payload), vec![1.667, 0.0, 0.0]);
+        let messages = messages(&bytes(HINGE));
+        assert_eq!(messages.len(), 1);
+        assert_eq!(messages[0].message, 1025);
+        assert_eq!(
+            uid_text(messages[0].suid),
+            "e1563575e23fb5a3/72e3913a344a6212"
+        );
+        assert_eq!(messages[0].values[0], 179.0);
+    }
+
+    #[test]
+    fn a_status_is_not_a_sample() {
+        let refused = "040300210038000108007004000000000000022a0028000a120988ea9c0b4ec2463811aba0d340e8d2eb5812120d820000001121f1ca5f230000001a020803";
+        let messages = messages(&bytes(refused));
+        assert_eq!(messages.len(), 1);
+        assert_eq!(messages[0].message, 130);
+        assert!(messages[0].values.is_empty());
     }
 
     #[test]
