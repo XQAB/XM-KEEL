@@ -82,14 +82,41 @@ pd-mapper  →  adsrpcd rootpd adsp  →  sscrpcd sensorspd adsp
   `result=1 / error=7`（POLICY）——这条岔路踩了很久，和尾 TLV 无关；
 - **尾 TLV 只是 per-request 开关**，两种都能答：by-name 的 61 字节（无尾）与 65 字节（带尾）
   换来同一份 91 字节答案；配置类按 HAL 的做法带上；
-- **空名字 = 整张 registry**：一次回复 3065 字节、150 条 uid，**名字是空的**（名字要靠逐个
-  by-name 查询去换），所以「列全部传感器」是一次往返 + 几次按名解析；
+- **空名字 = 整张 registry**：一次回复 3065 字节、150 条 uid，**名字是空的**（名字要靠 `msgid 1`
+  读 `attr 2` 补），所以「列全部传感器」是一次往返；
 - 回复帧 `04 <txn> 00 21`：`01 08 00 <ind>` + `02 <len> <sublen> <pb>`，
   pb 里 f1 = suid、f2 = `0d <msgid:LE32> 11 <seq> 1a <len> <payload>`；
   **frame 头里声明的长度与 pad 的位置并不统一**，所以实现里是按 `01 08 00` 找体，而不是按长度切；
+- **回帧头里的 `txn` 是 ADSP 自己的计数器，不回显请求的 `txn`**：同一个发问连发几次，答案的 `txn`
+  是 1、3、5、7 这样自己往上走。所以答案只能按「inner msgid + 体里的 suid」配对，按 `txn` 配对
+  会把上一问的答案当成本问的答案（实测把 gravity 的状态码记到 ori 头上，accel 也「读到」了别人
+  的样本）。配对失败就是 `watch` 里串传感器。
 - 配置的答案就是第一个样本：能跑的传感器回 inner **1025**（payload 里 `0a <len>` 是 packed
   float32，不缩放，原值）；不能跑的回 inner **130** + 一个 code（这台机：accel 3、gravity 2、
   ori 6、gyro 3）。on-change 类传感器之后只在数值变化时才再发，静止时收不到第二个样本。
+
+## 6.1 属性表（`msgid 1`）
+
+请求体是 `08 01 10 00`，**第二体必须是空的存在（`22 00`）**：给 `None`（连 `22 00` 都不写）时
+150 条 uid 一律回 `error 7`（POLICY）。答案 `msgid 128`，每条是
+`0a <len> 08 <id> 12 <len> <value>`，`value` 本身是 `0a <len> <one of …>`：
+
+- 字符串：`12 <len> <text>`（厂商的 16 字节名字后面带一个 `00` 填充，取到第一个不可打印字节为止）；
+- 数字：`21 <8 字节 LE>`（field 4，wire 1）或 `28 <1 字节>`（field 5，varint）。
+
+这台机上读出来的编号：
+
+| id | 含义 | 例（`hinge_angle`） |
+| --- | --- | --- |
+| 0 | 厂商私有名 | `oem_hinge_angle` |
+| 1 | 厂商 | `XiaoMi(V3.2)` |
+| 2 | **服务用的名字** | `hinge_angle` |
+| 5 | data type | `sns_std_sensor.proto` |
+| 16 | stream type | 0 = 连续周期，1 = on-change |
+| 3、4 | 间隔/上报参数 | 1 |
+
+registry 被 SSR 清空时，`gravity`（`a74398c0…/c5d45a2d…` 与 `…/c6d45a2d…`）连 `msgid 128`
+都不回，只回 ACK：属性表整块是空的，所以它连 stream type 都不可知。
 
 ## 7. 这台机器上能读什么、不能读什么
 

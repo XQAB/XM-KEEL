@@ -227,6 +227,112 @@ pub fn entries(data: &[u8]) -> Vec<(Option<String>, [u8; 16])> {
     out
 }
 
+/// One attribute of a sensor: its number, and the value message as it came.
+///
+/// The numbers this project uses: 1 is the vendor's own name, 2 is the name the
+/// service lists the sensor under, 16 is the stream type (0 continuous, 1
+/// on-change), 17 is the report interval.
+#[derive(Clone, Debug, Default)]
+pub struct Attribute {
+    pub id: u32,
+    pub value: Vec<u8>,
+}
+
+impl Attribute {
+    /// The body of the value: `0a <len> <one of a string, a number>`.
+    fn body(&self) -> Option<Vec<(u8, u8, &[u8])>> {
+        let outer = fields(&self.value).ok()?;
+        let inner = outer.iter().find(|&&(tag, _, _)| tag == 1)?;
+        fields(inner.2).ok()
+    }
+
+    /// The text a value carries, for the attributes that are names.
+    ///
+    /// The vendor's strings are recorded as `12 <len> <text>`; the two bytes
+    /// that follow a sixteen-byte one are padding, so a string is cut at the
+    /// first byte that cannot be text.
+    pub fn text(&self) -> Option<String> {
+        let body = self.body()?;
+        let text = body
+            .iter()
+            .find(|&&(tag, wire, _)| tag == 2 && wire == 2)?
+            .2;
+        let cut = text
+            .iter()
+            .position(|&byte| !printable(&[byte]))
+            .unwrap_or(text.len());
+        if cut == 0 {
+            return None;
+        }
+        Some(String::from_utf8_lossy(&text[..cut]).into_owned())
+    }
+
+    /// The number a value carries, for the attributes that are counts.
+    ///
+    /// The body writes a count as `21 <eight bytes>` (field 4, wire 1) or
+    /// `28 <one byte>` (field 5, varint).
+    pub fn int(&self) -> Option<u64> {
+        let body = self.body()?;
+        let value = body
+            .iter()
+            .find(|&&(_, wire, _)| matches!(wire, 0 | 1 | 5))?;
+        match value.1 {
+            0 => {
+                let mut rest = value.2;
+                varint_read(&mut rest)
+            }
+            1 => Some(u64::from_le_bytes(value.2.get(..8)?.try_into().ok()?)),
+            5 => value
+                .2
+                .get(..4)
+                .map(|head| u32::from_le_bytes(head.try_into().unwrap()) as u64),
+            _ => None,
+        }
+    }
+}
+
+/// The attributes a sensor answered with: `0a <len> 08 <id> 12 <len> <value>`.
+///
+/// The request has to carry an empty second body (`22 00`); without it every
+/// sensor answers `error 7`, which is why the client always sends one.
+pub fn attributes(data: &[u8]) -> Vec<Attribute> {
+    let Ok(parsed) = fields(data) else {
+        return Vec::new();
+    };
+    let mut out = Vec::new();
+    for (tag, wire, value) in parsed {
+        if tag != 1 || wire != 2 {
+            continue;
+        }
+        let Ok(inner) = fields(value) else { continue };
+        let Some(id) = inner
+            .iter()
+            .find(|&&(tag, wire, _)| tag == 1 && matches!(wire, 0 | 5))
+            .and_then(|&(_, wire, raw)| {
+                if wire == 0 {
+                    let mut rest = raw;
+                    varint_read(&mut rest)
+                } else {
+                    raw.get(..4)
+                        .map(|head| u32::from_le_bytes(head.try_into().unwrap()) as u64)
+                }
+            })
+        else {
+            continue;
+        };
+        let value = inner
+            .iter()
+            .find(|&&(tag, _, _)| tag == 2)
+            .map(|&(_, _, value)| value.to_vec())
+            .unwrap_or_default();
+        out.push(Attribute {
+            id: id as u32,
+            value,
+        });
+    }
+    out
+}
+
 /// The first integer a payload holds, which is what a status carries: the
 /// reason the sensor will not run.
 pub fn first_int(data: &[u8]) -> Option<u64> {
@@ -514,5 +620,24 @@ mod tests {
         let suid = captured_uid();
         assert_eq!(parse_uid(&uid(suid)), Some(suid));
         assert_eq!(uid_text(suid), "3846c24e0b9cea88/58ebd2e840d3a0ab");
+    }
+
+    #[test]
+    fn a_vendor_name_is_read_off_an_attribute() {
+        // The hinge's attribute 0, as the phone wrote it: a sixteen-byte string
+        // with one padding byte behind it.
+        let value = bytes("0a1212106f656d5f68696e67655f616e676c6500");
+        let attribute = Attribute { id: 0, value };
+        assert_eq!(attribute.text().as_deref(), Some("oem_hinge_angle"));
+        assert_eq!(attribute.int(), None);
+    }
+
+    #[test]
+    fn a_stream_type_is_read_off_an_attribute() {
+        // The hinge's attribute 16: one, written as field 4 on the wire.
+        let value = bytes("0a09210100000000000000");
+        let attribute = Attribute { id: 16, value };
+        assert_eq!(attribute.int(), Some(1));
+        assert_eq!(attribute.text(), None);
     }
 }

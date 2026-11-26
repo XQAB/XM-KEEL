@@ -18,6 +18,8 @@ use std::time::{Duration, Instant};
 use crate::frame::{self, Answer, Message};
 use crate::qrtr::{Transport, SSC};
 
+/// The attributes of a sensor: its names, its stream type, its interval.
+const ATTRIBUTES: u32 = 1;
 /// The by-name message: resolve a name to a uid, or list every uid.
 const BY_NAME: u32 = 512;
 /// A configuration a continuous sensor takes.
@@ -26,26 +28,16 @@ const SENSOR_CONFIG: u32 = 513;
 const ON_CHANGE_CONFIG: u32 = 514;
 /// A sample.
 const SENSOR_EVENT: u32 = 1025;
+/// The listing a by-name query is answered with.
+const SENSOR_LIST: u32 = 768;
+/// The attribute table a query is answered with.
+const SENSOR_ATTRIBUTES: u32 = 128;
 /// A status: the sensor will not run, and this is why.
 const SENSOR_STATUS: u32 = 130;
 /// The batching hint a configuration carries: one millisecond.
 const BATCH: [u8; 5] = [0x0a, 0x03, 0x08, 0xe8, 0x07];
 /// The uid a by-name query is asked under; no sensor owns this one.
 const NOBODY: [u8; 16] = [0xab; 16];
-/// The sensors this project reads by name, so a listing can name them. SSC's
-/// own listing carries uids only; the names are what a by-name query resolves.
-const ROSTER: [&str; 9] = [
-    "registry",
-    "accel",
-    "gravity",
-    "ori",
-    "gyro",
-    "hinge_angle",
-    "flip_status",
-    "ambient_light",
-    "device_orient",
-];
-
 /// A sensor the service knows, with the uid it answers under.
 #[derive(Clone, Debug)]
 pub struct Sensor {
@@ -95,6 +87,11 @@ impl Client {
 
     /// One request, sent under a uid, and the message that answers it.
     ///
+    /// The service numbers its replies with its own counter, so an answer is
+    /// recognised by the message id it carries; `expected` is what this
+    /// question may legitimately be answered with, and anything else that
+    /// arrives meanwhile is left alone.
+    ///
     /// The trailing client id is a switch because it is not always wanted: a
     /// registry query is answered differently with it in some builds.
     pub fn ask(
@@ -104,6 +101,7 @@ impl Client {
         payload: &[u8],
         extra: Option<&[u8]>,
         with_tail: bool,
+        expected: &[u32],
     ) -> Result<Message> {
         self.transaction = self.transaction.wrapping_add(1);
         let transaction = self.transaction;
@@ -125,7 +123,13 @@ impl Client {
                 acknowledgement = Some(answer);
                 continue;
             }
-            if let Some(message) = frame::messages(&data).into_iter().next() {
+            // The service numbers its own replies, so the answer is matched by
+            // the message it carries, not by the transaction that was sent.
+            let messages = frame::messages(&data);
+            if let Some(message) = messages.into_iter().find(|message| {
+                (expected.is_empty() || expected.contains(&message.message))
+                    && (suid == NOBODY || message.suid == suid)
+            }) {
                 return Ok(message);
             }
         }
@@ -135,11 +139,11 @@ impl Client {
         }
     }
 
-    /// Every uid the registry has.
+    /// Every uid the registry has, in one round trip.
     ///
-    /// An empty name is the whole listing; it comes back as one reply carrying
-    /// every uid, without names. The few this project reads by name are then
-    /// resolved so the listing can show them.
+    /// An empty name is the whole listing, and it carries uids only: SSC's
+    /// listing has no names in it. A name is what `describe` reads off a
+    /// sensor's attributes, or what `named` resolves from a name.
     pub fn list(&mut self) -> Result<Vec<Sensor>> {
         let query = by_name("", false);
         let answer = self.ask(
@@ -148,13 +152,14 @@ impl Client {
             &[0x08, 0x01, 0x10, 0x00],
             Some(&query),
             true,
+            &[SENSOR_LIST],
         )?;
         ensure!(
-            answer.message == 768 || answer.message == BY_NAME,
+            answer.message == SENSOR_LIST || answer.message == BY_NAME,
             "the registry answered {} instead of a listing",
             answer.message
         );
-        let mut sensors: Vec<Sensor> = frame::entries(&answer.payload)
+        let sensors: Vec<Sensor> = frame::entries(&answer.payload)
             .into_iter()
             .map(|(name, suid)| Sensor {
                 name: name.unwrap_or_default(),
@@ -162,22 +167,44 @@ impl Client {
             })
             .collect();
         ensure!(!sensors.is_empty(), "the registry listed nothing");
-
-        for name in ROSTER {
-            for resolved in self.named(name)? {
-                match sensors
-                    .iter_mut()
-                    .find(|sensor| sensor.suid == resolved.suid)
-                {
-                    Some(sensor) => sensor.name = resolved.name,
-                    None => sensors.push(resolved),
-                }
-            }
-        }
         Ok(sensors)
     }
 
-    /// The sensors one name resolves to. A name can stand for two uids, as the
+    /// A sensor's attributes: the vendor's name, the service's name, the stream
+    /// type and the rest.
+    ///
+    /// The request carries an empty second body; without it every sensor
+    /// answers `error 7`.
+    pub fn attributes(&mut self, suid: [u8; 16]) -> Result<Vec<frame::Attribute>> {
+        let answer = self.ask(
+            suid,
+            ATTRIBUTES,
+            &[0x08, 0x01, 0x10, 0x00],
+            Some(&[]),
+            false,
+            &[SENSOR_ATTRIBUTES, SENSOR_STATUS],
+        )?;
+        ensure!(
+            answer.message != SENSOR_STATUS,
+            "the sensor {} has no attributes",
+            frame::uid_text(suid)
+        );
+        Ok(frame::attributes(&answer.payload))
+    }
+
+    /// The name the service lists a sensor under, read off its attributes.
+    ///
+    /// That is attribute 2; attribute 1 is the vendor's own name.
+    pub fn describe(&mut self, suid: [u8; 16]) -> Result<String> {
+        self.attributes(suid)?
+            .into_iter()
+            .find(|attribute| attribute.id == 2)
+            .and_then(|attribute| attribute.text())
+            .with_context(|| format!("the sensor {} has no name", frame::uid_text(suid)))
+    }
+
+    /// The sensors one name resolves to, which can be none: a name this phone
+    /// does not have is not an error. A name can stand for two uids, as the
     /// hinge does: one per side.
     pub fn named(&mut self, name: &str) -> Result<Vec<Sensor>> {
         let query = by_name(name, true);
@@ -187,6 +214,7 @@ impl Client {
             &[0x08, 0x01, 0x10, 0x00],
             Some(&query),
             true,
+            &[SENSOR_LIST],
         )?;
         let mut sensors = Vec::new();
         for (entry, suid) in frame::entries(&answer.payload) {
@@ -201,7 +229,7 @@ impl Client {
         Ok(sensors)
     }
 
-    /// The first sensor one name resolves to, or the second if `second` is set.
+    /// The first sensor one name resolves to.
     pub fn find(&mut self, name: &str) -> Result<Sensor> {
         self.named(name)?
             .into_iter()
@@ -218,7 +246,14 @@ impl Client {
         let mut payload = vec![0x08, 0x01, 0x10, 0x01];
         payload.push(0x1d);
         payload.extend_from_slice(&rate_hz.to_le_bytes());
-        let answer = self.ask(suid, ON_CHANGE_CONFIG, &payload, Some(&BATCH), true)?;
+        let answer = self.ask(
+            suid,
+            ON_CHANGE_CONFIG,
+            &payload,
+            Some(&BATCH),
+            true,
+            &[SENSOR_EVENT, SENSOR_STATUS],
+        )?;
         if answer.message == SENSOR_STATUS {
             let code = frame::first_int(&answer.payload).unwrap_or_default();
             bail!(
@@ -254,6 +289,7 @@ impl Client {
             &[0x08, 0x01, 0x10, 0x01],
             Some(&extra),
             true,
+            &[SENSOR_EVENT, SENSOR_STATUS],
         )?;
         if answer.message == SENSOR_STATUS {
             let code = frame::first_int(&answer.payload).unwrap_or_default();
@@ -353,6 +389,7 @@ impl<'a> Receiver<'a> {
             &payload,
             Some(&BATCH),
             true,
+            &[SENSOR_EVENT, SENSOR_STATUS],
         )?;
         Ok(())
     }
