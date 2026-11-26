@@ -20,6 +20,7 @@
 //! A restart clears the registry, and nothing on the application processor can
 //! put it back; see `docs/sensors-in-recovery.md`.
 
+pub mod flip;
 pub mod fold;
 pub mod frame;
 
@@ -32,6 +33,7 @@ pub mod qmi;
 #[cfg(unix)]
 pub mod qrtr;
 
+pub use flip::FlipController;
 pub use fold::{fold, Reading, FOLDED_BELOW, OPEN_ABOVE};
 
 #[cfg(unix)]

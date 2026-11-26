@@ -162,7 +162,7 @@ const NORMAL_MAX: [(&str, &str); 3] = [
 /// Whether the phone is shut, as its inner touch panel's driver reports it
 /// from the fold sensor it follows: "capfold_status: 1" open, "0" shut.
 /// Nothing is reported where the driver is not there.
-fn shut_now() -> Option<bool> {
+fn fold_status() -> Option<bool> {
     let nodes = fs::read_dir("/sys/devices/platform").ok()?;
     for node in nodes.flatten() {
         let name = node.file_name();
@@ -174,6 +174,18 @@ fn shut_now() -> Option<bool> {
         return Some(last.trim_end_matches(',') == "0");
     }
     None
+}
+
+/// Whether the phone is shut, by whichever source can say so.
+///
+/// The touch panel's driver is asked first because it is a place in the device
+/// tree, read for nothing; the hinge on the ADSP is asked when that driver is
+/// not there, which is the case in a recovery that starts the sensor service
+/// itself. The hinge only says shut or open once it has seen the phone move:
+/// a phone lying still since the start answers nothing, and the pages stay on
+/// the screen they opened on.
+fn shut_now(flip: &keel_sensors::FlipController) -> Option<bool> {
+    fold_status().or_else(|| flip.folded())
 }
 
 /// Hand the cover screen's digitizer to the kernel once its panel is lit.
@@ -1630,6 +1642,11 @@ pub fn run(cfg: &DeviceConfig, font: &Path, mono: &Path, request: bcb::Request, 
     // before them are out of date.
     let readings = Readings::start(cfg)?;
     let mut read_at = Instant::now();
+    // The hinge follows the phone being shut, for the cover screen to go to
+    // when the inner panel's driver has nothing to say. Its own thread does
+    // the reading: a service that is down leaves the answer absent and the
+    // loop running.
+    let flip = keel_sensors::FlipController::start();
     let mut installer: Option<Installer> = None;
     // Whether the panel's frame memory has been blacked out for an off
     // panel; cleared once a real frame is shown again.
@@ -2003,7 +2020,7 @@ pub fn run(cfg: &DeviceConfig, font: &Path, mono: &Path, request: bcb::Request, 
         // other, the screen they leave going dark first, as the display
         // processor is never asked to run both at once.
         if cfg.display.covers {
-            if let Some(shut) = shut_now() {
+            if let Some(shut) = shut_now(&flip) {
                 if shut != shut_state {
                     if shut && !cover_broken {
                         backlight.show(None)?;

@@ -18,6 +18,7 @@ keel-modules = { path = "../keel-modules" }
 keel-info = { path = "../keel-info" }
 keel-install = { path = "../keel-install" }
 keel-sys = { path = "../keel-sys" }
+keel-sensors = { path = "../keel-sensors" }
 keel-lp = { path = "../keel-lp" }
 
 [dev-dependencies]

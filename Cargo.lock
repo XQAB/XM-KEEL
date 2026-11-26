@@ -1355,6 +1355,7 @@ dependencies = [
  "keel-modules",
  "keel-mtp",
  "keel-net",
+ "keel-sensors",
  "keel-sys",
  "keel-systems",
  "keel-ui",
