@@ -77,20 +77,29 @@ pd-mapper  →  adsrpcd rootpd adsp  →  sscrpcd sensorspd adsp
   回复 `cmd=4` → `node 5, port 0x12`；
 - 请求帧：`00 <txn> 00 20 <len:BE16>` + `00 01 <tlvlen:LE16> <pblen:LE16>` + protobuf + 可选尾 `10 01 00 01`；
   msgid 与 `len` 是大端，TLV 那两个长度是小端；
-- **尾 TLV 是 per-request 开关**：配置类要带，`registry` 的 by-name 查询**不能带**
-  （带了回 `error 2 / INVALID_TYPE`，实测 65 字节 vs 61 字节）；
-- 事件帧：`04 <txn> 00 22 <len:BE16>` + `01 08 00 <ind>` + `02 <len> <pb>`；
-  pb 里 f1 = suid 18 字节，f3.f1 = packed float32 数组（不缩放，原值）。
+- **by-name 查询的名字在第二体的 `field 2` 里，不是 `field 1`**：HAL 的实帧是
+  `22 <len> 12 <len> 0a <len> <name> 10 01 18 00`。放在 `field 1`（`0a <len> <name>`）一律回
+  `result=1 / error=7`（POLICY）——这条岔路踩了很久，和尾 TLV 无关；
+- **尾 TLV 只是 per-request 开关**，两种都能答：by-name 的 61 字节（无尾）与 65 字节（带尾）
+  换来同一份 91 字节答案；配置类按 HAL 的做法带上；
+- **空名字 = 整张 registry**：一次回复 3065 字节、150 条 uid，**名字是空的**（名字要靠逐个
+  by-name 查询去换），所以「列全部传感器」是一次往返 + 几次按名解析；
+- 回复帧 `04 <txn> 00 21`：`01 08 00 <ind>` + `02 <len> <sublen> <pb>`，
+  pb 里 f1 = suid、f2 = `0d <msgid:LE32> 11 <seq> 1a <len> <payload>`；
+  **frame 头里声明的长度与 pad 的位置并不统一**，所以实现里是按 `01 08 00` 找体，而不是按长度切；
+- 配置的答案就是第一个样本：能跑的传感器回 inner **1025**（payload 里 `0a <len>` 是 packed
+  float32，不缩放，原值）；不能跑的回 inner **130** + 一个 code（这台机：accel 3、gravity 2、
+  ori 6、gyro 3）。on-change 类传感器之后只在数值变化时才再发，静止时收不到第二个样本。
 
 ## 7. 这台机器上能读什么、不能读什么
 
 | 传感器 | uid（低/高） | 结果 |
 | --- | --- | --- |
-| `ambient_light` | `088285bf47d64e7d` / `b71d3ab9d3c58e2d` | 3 float（lux） |
-| `hinge_angle` | `a3b53fe2753556e1` / `12624a343a91e372` | 5 float，`[0]` 角度 |
+| `ambient_light` | `088285bf47d64e7d` / `b71d3ab9d3c58e2d` | 3 float（lux），实测 25.2 |
+| `hinge_angle` | `a3b53fe2753556e1` / `12624a343a91e372` | 5 float，`[0]` 角度，实测 179.0 |
 | `flip_status` | `191b30ebf1194817` / `95682728dd533367` | 12 float，`[1]` = 179.0 |
 | `device_orient` | `eef435f9287516a7` / `a1964b507cf7e3e0` | 16 float，恒定 `4,4,0…` |
-| accel / gravity / gyro | — | 512/513/514 只回 inner 130（`INVALID_VALUE`/`NOT_SUPPORTED`） |
+| accel / gravity / ori / gyro | 见 issue #5 | 514 直接回 inner 130 + code：3 / 2 / 6 / 3 |
 
 accel 的失败不是缺消息号：`libsnsapi` 全量枚举里没有任何 accel 专属 event/config，
 样本就是标准 1025 + 3×float32；它失败是因为**属性表为空**（registry 被 SSR 清空），
