@@ -332,12 +332,17 @@ impl Client {
     /// Turn a named sensor on and hand back a receiver for its samples.
     pub fn read(&mut self, name: &str, rate_hz: u32) -> Result<Receiver<'_>> {
         let sensor = self.find(name)?;
+        self.read_sensor(&sensor, rate_hz)
+    }
+
+    /// Turn one sensor on, by uid, and hand back a receiver for its samples.
+    pub fn read_sensor(&mut self, sensor: &Sensor, rate_hz: u32) -> Result<Receiver<'_>> {
         let enabled = self
             .enable(sensor.suid, rate_hz)
-            .with_context(|| format!("turn on {}", frame::uid_text(sensor.suid)))?;
+            .with_context(|| format!("turn on {}", sensor.uid()))?;
         Ok(Receiver {
             client: self,
-            sensor,
+            sensor: sensor.clone(),
             rate: rate_hz,
             queued: Some(enabled.sample),
         })
@@ -376,6 +381,15 @@ impl<'a> Receiver<'a> {
             }
         }
         Ok(None)
+    }
+
+    /// Ask the service whether this sensor is still there.
+    ///
+    /// An on-change sensor sends nothing while the phone is still, so silence
+    /// is not death; one attribute query is, and it comes back in one round
+    /// trip. This is what the long-running reader uses to tell the two apart.
+    pub fn ping(&mut self) -> Result<()> {
+        self.client.attributes(self.sensor.suid).map(|_| ())
     }
 
     /// Turn the sensor back off.

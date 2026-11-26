@@ -20,19 +20,26 @@
 //! A restart clears the registry, and nothing on the application processor can
 //! put it back; see `docs/sensors-in-recovery.md`.
 
+pub mod fold;
 pub mod frame;
 
 #[cfg(unix)]
 pub mod client;
 #[cfg(unix)]
+pub mod hinge;
+#[cfg(unix)]
 pub mod qmi;
 #[cfg(unix)]
 pub mod qrtr;
+
+pub use fold::{fold, Reading, FOLDED_BELOW, OPEN_ABOVE};
 
 #[cfg(unix)]
 pub use client::{
     ambient_light, flip_status, hinge_angle, sample, Client, Enabled, Receiver, Sensor,
 };
+#[cfg(unix)]
+pub use hinge::Hinge;
 
 /// Where the sensors' service lives, as `(node, port)`.
 #[cfg(unix)]
