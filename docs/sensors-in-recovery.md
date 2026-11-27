@@ -21,6 +21,29 @@
    `on fs` 段（小米 `Recovery_StabilityEnhance`）那一发 `write /sys/kernel/boot_adsp/ssr`
    是音频子系统的重启开关，写它**不带来 registry，也不带走 registry**；何况
    `vendor.sensors` 这个 service 在 rc 里是 `disabled`，冷启动本来就没有人起它。
+4. **这套 daemon 链不是外屏切换的前置条件。** 换屏判据先读触摸驱动
+   （`/sys/devices/platform/synaptics_tcm*/capfold_status`，设备树里的文件，不经 ADSP），
+   拿不到才问 ADSP 上的 hinge。零改动冷启动实测（什么都不敲，只读轮询）：
+
+   ```
+   up=26s  fold=[capfold_status: 0]  goodix=1  p0=0  p1=819
+   up=32s  同上
+   up=92s  同上
+   ```
+
+   这时 `pd-mapper`、`adsprpcd`、`sscrpcd` 一个都没起，`/proc/misc` 里没有 fastrpc 项，
+   `/vendor/dsp` 没挂、`/persist` 没 bind——`fold=0`、内屏灭（`p0=0`）、外屏亮
+   （`p1=819`）、外屏触摸驱动已加载（`goodix=1`）全部成立。所以 §5.1 那六步解决的是
+   「触摸驱动不给答案时没有第二个判断来源」，不是「外屏才能切」。
+
+## 0.1 这次改动在换屏路径里的位置
+
+`crates/keel/src/ui.rs` 里 `shut_now(&flip)` 是 `fold_status().or_else(|| flip.folded())`：
+
+- 第一来源是触摸驱动，`fold_status()` 直接读 sysfs，**今天就能用，不依赖本文任何一步**；
+- 第二来源才是 `hinge_angle`，只有驱动文件读不到（或内容不认识）时才被问到；
+- `sensors::bring_up()` 因此是 best-effort 的**兜底**，失败只写 kmsg、不影响启动，
+  更不能被写成「外屏切换的前置条件」——不然以后读代码的人会以为换屏依赖 ADSP。
 
 ## 1. 判定顺序（按这个顺序查，别跳）
 
@@ -84,12 +107,15 @@ minor，也不无条件 `mknod`：先看 `/dev/fastrpc-adsp-secure` 在不在，
 ## 5. 进程顺序
 
 ```
-pd-mapper  →  adsrpcd rootpd adsp  →  sscrpcd sensorspd adsp
+pd-mapper  →  adsprpcd rootpd adsp  →  sscrpcd sensorspd adsp
 ```
 
 - `pd-mapper` 先把 ADSP 上的 protection domain 映射做完，`sscrpcd` 才能打开 listener；
-- **bixi 的 recovery 里根本没有 `adsrpcd`**（`/vendor/bin` 只有 `pd-mapper`、`sscrpcd`），
-  这一环是可选的：本机不起它，registry 照样 142；
+- **名字是 `adsprpcd`，不是 `adsrpcd`**（少一个 p 就是另一个不存在的路径；`/vendor/bin` 里
+  实际有 `adsprpcd` 与 `audioadsprpcd`）。这一环是可选的：本机 A/B 里它是**路径不存在、
+  被静默跳过**跑完的，registry 照样 142——也就是说 bixi 上 `pd-mapper` + `sscrpcd` 就够；
+  早期版本把名字写错成 `adsrpcd` 并靠 `needed: false` 静默跳过，日志干净得像一切正常，
+  `sensors.rs` 现在对「程序不存在」无论 optional 与否都写一条 kmsg；
 - `sscrpcd` 只是 fastrpc listener 的宿主，**它不提供注册表**：停掉它再读，样本照旧；
 - 三个都以 `setsid` 起在自己会话里，recovery 退出或 adb 断线都不带走它们。
 
@@ -102,7 +128,7 @@ insmod /vendor/lib/modules/frpc-adsprpc.ko
 # 节点：没有才建，minor 从 /proc/misc 读（见 §4）
 cp ld.config.txt /linkerconfig/ld.config.txt
 setsid /vendor/bin/pd-mapper              >/dev/null 2>&1 &   sleep 1
-setsid /vendor/bin/adsrpcd rootpd adsp    >/dev/null 2>&1 &   sleep 2   # 没有这个二进制就跳过
+setsid /vendor/bin/adsprpcd rootpd adsp   >/dev/null 2>&1 &   sleep 2   # 没有这个二进制就跳过，跳过了也写 kmsg
 setsid /vendor/bin/sscrpcd sensorspd adsp >/dev/null 2>&1 &
 ```
 
@@ -119,7 +145,9 @@ setsid /vendor/bin/sscrpcd sensorspd adsp >/dev/null 2>&1 &
 那节点是音频子系统的重启开关，**recovery 里一行都不要写**；等 5 秒就够。
 
 这套顺序编成了 `crates/keel/src/sensors.rs` 的 `bring_up()`：起屏之后、`FlipController::start()`
-之前调用一次，每一步 best-effort（失败只写 kmsg），服务已经在答就直接返回。
+之前调用一次，每一步 best-effort（失败只写 kmsg），服务已经在答就直接返回。它的定位是
+**给换屏一个第二判据**（见 §0.1）：触摸驱动在的时候用驱动，驱动不在或答不上来时才有它，
+它不决定外屏能不能亮。
 
 ## 6. 协议（客户端部分，`crates/keel-sensors/src/frame.rs`）
 
@@ -231,7 +259,7 @@ registry 在 recovery 里重建出来"便宜得多。
   `powering up`。但后来的 A/B 表明：**这一发写不写，registry 都一样**（§5.1）；
 - 当时那块机器上 `sscrpcd` 起不来：`logcat` 里每 30 秒一次
   `Error 0x200: apps_dev_init failed for domain 0, errno Device or resource busy`，
-  `/dev/fastrpc-adsp-secure` 由 `adsrpcd` 与 `sscrpcd` 同时持有，`attachguestos` 只有一个。
+  `/dev/fastrpc-adsp-secure` 由 `adsprpcd` 与 `sscrpcd` 同时持有，`attachguestos` 只有一个。
   **10 条就是"sscrpcd 没挂上"的样子**：把环境铺好、只起 daemon 能到 31 条，daemon 挂上 ADSP
   才到 140 上下，142 是这台机器的满值。
 

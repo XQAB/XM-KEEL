@@ -10,7 +10,7 @@
 //! 3. the fastrpc module loaded,
 //! 4. the node it publishes, made with the minor the kernel actually gave,
 //! 5. the linker namespace written, which the daemons start under,
-//! 6. `pd-mapper`, then `adsrpcd` (where the phone has it), then `sscrpcd`.
+//! 6. `pd-mapper`, then `adsprpcd` (where the phone has it), then `sscrpcd`.
 //!
 //! With the mounts alone the ADSP answers with 31 uids and no hinge; once the
 //! daemons are up the registry fills in within a couple of seconds and the
@@ -70,7 +70,7 @@ struct Daemon {
 
 const DAEMONS: [Daemon; 3] = [
     Daemon { program: "/vendor/bin/pd-mapper", args: &[], settle: 1, needed: true },
-    Daemon { program: "/vendor/bin/adsrpcd", args: &["rootpd", "adsp"], settle: 2, needed: false },
+    Daemon { program: "/vendor/bin/adsprpcd", args: &["rootpd", "adsp"], settle: 2, needed: false },
     Daemon { program: "/vendor/bin/sscrpcd", args: &["sensorspd", "adsp"], settle: 0, needed: true },
 ];
 
@@ -287,9 +287,13 @@ fn start_daemon(daemon: &Daemon) -> Result<()> {
         return Ok(());
     }
     if !Path::new(daemon.program).exists() {
+        // Said out loud either way: a daemon named wrong is skipped exactly
+        // like one the phone does not carry, and silence would hide the typo.
+        let missing = format!("{} is not on this phone", daemon.program);
         if daemon.needed {
-            bail!("{} is not there", daemon.program);
+            bail!("{}", missing);
         }
+        let _ = keel_sys::kmsg(&format!("sensors: {}, skipped", missing));
         return Ok(());
     }
     // In a session of its own: a recovery that ends does not take the daemon
@@ -354,5 +358,28 @@ mod tests {
         assert!(LINKER_CONFIG.contains("/mnt/system/system/lib64/bootstrap"));
         assert!(LINKER_CONFIG.contains("/odm/${LIB}"));
         assert!(LINKER_CONFIG.ends_with('\n'), "the file ends with a newline, as the phone's does");
+    }
+
+    #[test]
+    fn the_daemons_are_named_as_the_phone_names_them() {
+        // `adsrpcd` is not a program: the phone's file is `adsprpcd`, and a
+        // misspelt path is skipped without a word. The spelling is pinned here
+        // so it cannot drift back.
+        assert_eq!(name_of(DAEMONS[0].program), "pd-mapper");
+        assert_eq!(name_of(DAEMONS[1].program), "adsprpcd");
+        assert_eq!(name_of(DAEMONS[2].program), "sscrpcd");
+        for daemon in DAEMONS {
+            assert_eq!(Path::new(daemon.program).parent(), Some(Path::new("/vendor/bin")));
+        }
+    }
+
+    #[test]
+    fn an_absent_optional_daemon_is_skipped_rather_than_failing() {
+        // A program the phone does not carry must not fail the chain ...
+        let absent = Daemon { program: "/vendor/bin/adsprpcd-not-this-build", args: &[], settle: 0, needed: false };
+        assert!(start_daemon(&absent).is_ok());
+        // ... and one the chain cannot do without must say so.
+        let absent = Daemon { program: "/vendor/bin/sscrpcd-not-this-build", args: &[], settle: 0, needed: true };
+        assert!(start_daemon(&absent).is_err());
     }
 }

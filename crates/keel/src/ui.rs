@@ -177,14 +177,16 @@ fn fold_status() -> Option<bool> {
     None
 }
 
-/// Whether the phone is shut, by whichever source can say so.
+/// Whether the phone is shut, from whichever source can say so.
 ///
-/// The touch panel's driver is asked first because it is a place in the device
-/// tree, read for nothing; the hinge on the ADSP is asked when that driver is
-/// not there, which is the case in a recovery that starts the sensor service
-/// itself. The hinge only says shut or open once it has seen the phone move:
-/// a phone lying still since the start answers nothing, and the pages stay on
-/// the screen they opened on.
+/// The touch panel's driver is asked first: it is a place in the device tree,
+/// read for nothing, and it is there on a cold recovery before any sensor
+/// daemon runs. The hinge on the ADSP is the second source, taken when the
+/// driver cannot answer — the page turning does not wait on the sensor
+/// service, and `sensors::bring_up()` is best effort for exactly this: a
+/// second opinion, not a precondition. The hinge only says shut or open once
+/// it has seen the phone move: a phone lying still since the start answers
+/// nothing, and the pages stay on the screen they opened on.
 fn shut_now(flip: &keel_sensors::FlipController) -> Option<bool> {
     fold_status().or_else(|| flip.folded())
 }
