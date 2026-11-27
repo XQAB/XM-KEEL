@@ -1,4 +1,4 @@
-# XM KEEL for bixi · 1.0.0
+# XM KEEL for bixi · 1.1.0
 
 > 机型：小米 MIX Flip 2（`bixi`，SM8750 / `sun`，Android 17，A/B + 动态分区，现役系统 `OS4.0.4.0.XOHCNXM`，出包基线 `OS4.0.4.0.XOHCNXM`）
 > 上游：[kirklin/skyward](https://github.com/kirklin/skyward)；本仓库：[`main`](https://github.com/XQAB/XM-KEEL)
