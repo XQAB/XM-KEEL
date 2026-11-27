@@ -148,7 +148,8 @@ enum Cmd {
         ticks: bool,
     },
     /// Ask the sensor service on the ADSP what it has, then watch the sensor
-    /// that measures acceleration report, all over the kernel's QRTR socket.
+    /// that answered report, all over the kernel's QRTR socket. A diagnostic
+    /// only: recovery cannot read gravity, so no page is turned by it.
     #[cfg(target_os = "android")]
     Sns {
         /// Names to look up; the usual acceleration names by default.

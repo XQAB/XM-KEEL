@@ -1,22 +1,30 @@
-//! A nonblocking Qualcomm SSC client, for the direction the phone is held in.
+//! A nonblocking Qualcomm SSC client, for asking the sensor service what it
+//! has — used by `keelbin sns`, and nothing else.
 //!
 //! No Android framework and no sensor HAL is needed: the kernel's QRTR
 //! sockets reach the sensors' protection domain on the ADSP directly, and only
-//! the small part of protobuf the sensor service speaks is parsed here.
-//! `pd-mapper` has to be running, or the ADSP never loads that domain.
+//! the small part of protobuf the sensor service speaks is parsed here. The
+//! `pd-mapper` chain has to be running, or the ADSP never loads that domain;
+//! in recovery `crate::sensors::bring_up()` starts it.
 //!
-//! Not used on the phone this was written for: on `bixi` (Xiaomi MIX Flip 2,
-//! SM8750) the ADSP does publish SSC at node 5 port 18 once `pd-mapper` runs,
-//! and it answers these lookups, but every acceleration name comes back with
-//! no sensor UID — the accelerometer is served by Qualcomm's QSH/QESDK stack
-//! instead, which needs the vendor sensor HAL and its linker namespace. The
-//! code is kept because it is the shortest path to gravity on a phone whose
-//! sensors are on plain SSC.
-#![allow(dead_code)]
+//! **This is a diagnostic now, not an orientation source.** Recovery has no
+//! gravity to turn the pages by, and that is measured, not assumed: on bixi
+//! (Xiaomi MIX Flip 2, SM8750) the accelerometer refuses every configuration
+//! code the service accepts (514 acknowledged, then refused with code 5; 512
+//! refused with `error 7`), `gravity` is refused with code 2, `gyro` with 3,
+//! `orientation` with 6, `tilt` is acknowledged and never answers (0 samples),
+//! `device_orient` produces one fixed `[4, 4, 0 …]` in ten minutes of turning
+//! the phone, and `screen_down` only knows the phone lying face down. The kernel
+//! has no way around it either: recovery carries no `i2c-dev.ko` and no
+//! `spidev.ko`, and `/sys/class/sensors` does not exist.
+//!
+//! So nothing here decides how the pages are turned. The cover screen is
+//! driven by the hinge (`keel_sensors::Hinge`) and by the touch driver's
+//! `capfold_status`, and the 180° turn stays a switch on the settings page.
 
 use anyhow::{bail, ensure, Context, Result};
 use std::io;
-use std::os::fd::{AsRawFd, FromRawFd, OwnedFd, RawFd};
+use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
 use std::time::{Duration, Instant};
 
 /// The socket family the kernel gives QRTR, not yet in libc.
@@ -27,7 +35,9 @@ const CONTROL: u32 = 0xffff_fffe;
 const SSC: u32 = 400;
 /// The UID the sensor service answers lookups under.
 const LOOKUP: [u64; 2] = [0xabab_abab_abab_abab; 2];
-/// How phones name the sensor that reports acceleration.
+/// How phones name the sensor that reports acceleration. The names are still
+/// asked (they are what `sns` looks for), but on bixi none of them can be
+/// configured — see the module note.
 pub const ACCEL_NAMES: [&str; 5] = ["accel", "accelerometer", "gravity", "linear_accel", "device_orientation"];
 
 #[repr(C)]
@@ -38,46 +48,11 @@ struct Address {
     port: u32,
 }
 
-/// Where the phone is held, from the acceleration it feels.
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub enum Direction {
-    #[default]
-    Flat,
-    Portrait,
-    UpsideDown,
-    LandscapeLeft,
-    LandscapeRight,
-}
-
-impl Direction {
-    fn of(sample: [f32; 3]) -> Self {
-        // Gravity, not motion: the phone lying flat is the only case where
-        // neither axis clearly wins.
-        let [x, y, _] = sample;
-        const FLAT: f32 = 3.0;
-        if x.abs() < FLAT && y.abs() < FLAT {
-            Self::Flat
-        } else if y <= -FLAT {
-            Self::Portrait
-        } else if y >= FLAT {
-            Self::UpsideDown
-        } else if x <= -FLAT {
-            Self::LandscapeLeft
-        } else {
-            Self::LandscapeRight
-        }
-    }
-}
-
 struct Connection {
     socket: OwnedFd,
     local: Address,
     server: Option<Address>,
-    sensor: Option<[u64; 2]>,
     transaction: u16,
-    heard: Instant,
-    /// How many messages have been described to the log so far.
-    notes: u32,
 }
 
 impl Connection {
@@ -89,7 +64,7 @@ impl Connection {
         let mut size = std::mem::size_of::<Address>() as libc::socklen_t;
         let got = unsafe { libc::getsockname(fd, (&mut local as *mut Address).cast(), &mut size) };
         ensure!(got == 0, "read QRTR address: {}", io::Error::last_os_error());
-        let connection = Self { socket, local, server: None, sensor: None, transaction: 0, heard: Instant::now(), notes: 0 };
+        let connection = Self { socket, local, server: None, transaction: 0 };
         let lookup = [10u32, SSC, 0, 0, 0].into_iter().flat_map(u32::to_le_bytes).collect::<Vec<_>>();
         connection.send(Address { family: AF_QRTR as u16, node: local.node, port: CONTROL }, &lookup)?;
         Ok(connection)
@@ -128,212 +103,6 @@ impl Connection {
             self.server.context("SSC has no address")?,
             &request_full(self.transaction as u8, uid, message, payload, extra, with_tail),
         )
-    }
-
-    fn read(&mut self) -> Result<Vec<[f32; 3]>> {
-        let mut samples = Vec::new();
-        // Bound the work of a frame even if the service floods this socket.
-        for _ in 0..128 {
-            let mut buffer = [0u8; 65536];
-            let mut from = Address::default();
-            let mut size = std::mem::size_of::<Address>() as libc::socklen_t;
-            let n = unsafe {
-                libc::recvfrom(
-                    self.socket.as_raw_fd(),
-                    buffer.as_mut_ptr().cast(),
-                    buffer.len(),
-                    0,
-                    (&mut from as *mut Address).cast(),
-                    &mut size,
-                )
-            };
-            if n < 0 {
-                let error = io::Error::last_os_error();
-                if error.kind() == io::ErrorKind::WouldBlock {
-                    break;
-                }
-                if error.kind() == io::ErrorKind::Interrupted {
-                    continue;
-                }
-                return Err(error).context("receive SSC data");
-            }
-            let data = &buffer[..n as usize];
-            if from.port == CONTROL {
-                if data.len() != 20 {
-                    continue;
-                }
-                let words: Vec<_> = data.as_chunks::<4>().0.iter().map(|v| u32::from_le_bytes(*v)).collect();
-                if words[0] == 4 && words[1] != SSC {
-                    let _ = keel_sys::kmsg(&format!(
-                        "orientation: service {} is at node {} port {}",
-                        words[1], words[3], words[4]
-                    ));
-                    continue;
-                }
-                if words[1] != SSC {
-                    continue;
-                }
-                if words[0] == 5 {
-                    bail!("the sensor service stopped");
-                }
-                if words[0] == 4 && self.server.is_none() {
-                    self.server = Some(Address { family: AF_QRTR as u16, node: words[3], port: words[4] });
-                    let _ = keel_sys::kmsg(&format!("orientation: SSC is at node {} port {}", words[3], words[4]));
-                    // Ask under every name a phone gives the sensor that measures
-                    // acceleration, and take the first one the service knows.
-                    for name in ACCEL_NAMES {
-                        let mut query = Vec::new();
-                        bytes(&mut query, 1, name.as_bytes());
-                        query.extend_from_slice(&[0x10, 1, 0x18, 1]);
-                        self.request(LOOKUP, 512, &query)?;
-                    }
-                }
-                continue;
-            }
-            if !self.server.is_some_and(|s| s.node == from.node && s.port == from.port) {
-                continue;
-            }
-            if self.notes < 10 {
-                self.notes += 1;
-                let head: Vec<String> =
-                    data.iter().take(40).map(|b| format!("{b:02x}")).collect();
-                let _ = keel_sys::kmsg(&format!("orientation: raw {} bytes, {}", data.len(), head.join("")));
-            }
-            for (uid, message, payload) in events(data)? {
-                if self.notes < 24 {
-                    self.notes += 1;
-                    let _ = keel_sys::kmsg(&format!(
-                        "orientation: uid {:x}/{:x} message {message} payload {} bytes",
-                        uid[0],
-                        uid[1],
-                        payload.len()
-                    ));
-                }
-                if uid == LOOKUP && message == 768 && self.sensor.is_none() {
-                    let fields = fields(payload)?;
-                    let names: Vec<_> = fields
-                        .iter()
-                        .filter(|&&(tag, wire, _)| tag == 1 && wire == 2)
-                        .map(|&(_, _, value)| String::from_utf8_lossy(value).into_owned())
-                        .collect();
-                    let uid = fields
-                        .iter()
-                        .find_map(|&(tag, wire, value)| (tag == 2 && wire == 2).then(|| sensor_uid(value).ok()).flatten());
-                    let _ = keel_sys::kmsg(&format!("orientation: suid reply names {names:?} uid {uid:?}"));
-                    if let Some(uid) = uid {
-                        self.sensor = Some(uid);
-                        let mut config = vec![0x0d]; // sns_std_sensor_config.sample_rate
-                        config.extend_from_slice(&10f32.to_le_bytes());
-                        self.request(uid, 513, &config)?;
-                    }
-                } else if Some(uid) == self.sensor && message == 1025 {
-                    samples.push(acceleration(payload)?);
-                    self.heard = Instant::now();
-                }
-            }
-        }
-        ensure!(self.heard.elapsed() < Duration::from_secs(10), "the sensor service stopped reporting");
-        Ok(samples)
-    }
-}
-
-/// Watch the phone's direction and keep the pages turned to it.
-pub struct Sensor {
-    connection: Option<Connection>,
-    direction: Direction,
-    next_try: Instant,
-    next_log: Instant,
-}
-
-impl Default for Sensor {
-    fn default() -> Self {
-        Self { connection: None, direction: Direction::default(), next_try: Instant::now(), next_log: Instant::now() }
-    }
-}
-
-impl Sensor {
-    /// The raw descriptor to wait on, once the service is found.
-    pub fn fd(&self) -> Option<RawFd> {
-        self.connection.as_ref().map(|s| s.socket.as_raw_fd())
-    }
-
-    /// Take in what the service sent. Returns the direction when it changed.
-    pub fn read(&mut self) -> Option<Direction> {
-        if self.connection.is_none() {
-            if Instant::now() < self.next_try {
-                return None;
-            }
-            match Connection::open() {
-                Ok(connection) => self.connection = Some(connection),
-                Err(e) => {
-                    let _ = keel_sys::kmsg(&format!("orientation: {e:#}; retry in 5 seconds"));
-                    self.next_try = Instant::now() + Duration::from_secs(5);
-                    return None;
-                }
-            }
-        }
-        let result = self.connection.as_mut().map(|c| c.read());
-        match result {
-            Some(Ok(samples)) => {
-                let mut changed = None;
-                for sample in samples {
-                    let next = Direction::of(sample);
-                    if Instant::now() >= self.next_log {
-                        let _ = keel_sys::kmsg(&format!(
-                            "orientation: x {:.1} y {:.1} z {:.1} -> {next:?}",
-                            sample[0], sample[1], sample[2]
-                        ));
-                        self.next_log = Instant::now() + Duration::from_millis(300);
-                    }
-                    if next != self.direction && next != Direction::Flat {
-                        self.direction = next;
-                        changed = Some(next);
-                    }
-                }
-                changed
-            }
-            Some(Err(e)) => {
-                let _ = keel_sys::kmsg(&format!("orientation: {e:#}; retry in 5 seconds"));
-                self.connection = None;
-                self.next_try = Instant::now() + Duration::from_secs(5);
-                None
-            }
-            None => None,
-        }
-    }
-}
-
-/// Start watching the phone's direction. The protection-domain mapper has to
-/// be running before the ADSP loads the sensors' domain, so it is started
-/// first when nothing else has.
-pub fn start() {
-    let _ = std::thread::Builder::new().name("orientation".into()).spawn(|| {
-        start_mapper();
-        let mut sensor = Sensor::default();
-        loop {
-            let _ = sensor.read();
-            std::thread::sleep(Duration::from_millis(30));
-        }
-    });
-}
-
-fn start_mapper() {
-    let running = std::fs::read_dir("/proc").is_ok_and(|entries| {
-        entries.flatten().any(|entry| {
-            std::fs::read_to_string(entry.path().join("cmdline")).is_ok_and(|line| line.contains("pd-mapper"))
-        })
-    });
-    if running {
-        return;
-    }
-    match std::process::Command::new("/vendor/bin/pd-mapper").spawn() {
-        Ok(_) => {
-            let _ = keel_sys::kmsg("orientation: started pd-mapper");
-            std::thread::sleep(Duration::from_secs(1));
-        }
-        Err(e) => {
-            let _ = keel_sys::kmsg(&format!("orientation: pd-mapper is not started: {e}"));
-        }
     }
 }
 
@@ -391,19 +160,6 @@ fn sensor_uid(data: &[u8]) -> Result<[u64; 2]> {
             .context("missing sensor UID")
     };
     Ok([word(1)?, word(2)?])
-}
-
-fn acceleration(data: &[u8]) -> Result<[f32; 3]> {
-    let mut values = Vec::new();
-    for (tag, wire, value) in fields(data)? {
-        if tag != 1 {
-            continue;
-        }
-        ensure!(wire == 2 || wire == 5, "invalid acceleration field");
-        ensure!(value.len() % 4 == 0, "short acceleration float");
-        values.extend(value.as_chunks::<4>().0.iter().map(|v| f32::from_le_bytes(*v)));
-    }
-    values.try_into().map_err(|_| anyhow::anyhow!("acceleration needs three axes"))
 }
 
 type SensorEvent<'a> = ([u64; 2], u32, &'a [u8]);
@@ -826,11 +582,7 @@ pub fn probe(names: &[String], rate: f32, seconds: u64, raw: bool) -> Result<()>
         let values = floats(payload);
         samples += 1;
         if values.len() == 3 {
-            let sample = [values[0], values[1], values[2]];
-            println!(
-                "accel: {:>8.2} {:>8.2} {:>8.2} {:?}",
-                sample[0], sample[1], sample[2], Direction::of(sample)
-            );
+            println!("accel: {:>8.2} {:>8.2} {:>8.2}", values[0], values[1], values[2]);
         } else {
             println!("sample: {values:?}");
         }
