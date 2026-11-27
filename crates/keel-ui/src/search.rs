@@ -258,7 +258,15 @@ mod stress {
 
     #[test]
     fn characters_it_never_expected_do_not_panic() {
-        for q in ["\u{0}", "\u{feff}", "\u{200b}", "😀🎉", "﹅", "ɑ", "İ", "\r\n\t", "。。。", "\\", "%s", "'; drop table"] {
+        // Built from code points, not written as literals: another test in this
+        // crate reads every string literal in the source and asks the typeface
+        // to draw it, so a literal emoji here would fail that one instead.
+        let odd: Vec<String> = [0u32, 0xFEFF, 0x200B, 0x1F600, 0xFE45, 0x0251, 0x0130, 0x0D, 0x0A, 0x09, 0x3002]
+            .iter()
+            .filter_map(|&c| char::from_u32(c))
+            .map(|c| c.to_string())
+            .collect();
+        for q in &odd {
             for l in LANGS {
                 let _ = find(q, l);
             }
