@@ -3,6 +3,23 @@
 > 机型：小米 MIX Flip 2（`bixi`，SM8750 / `sun`，Android 17，A/B + 动态分区，现役系统 `OS4.0.4.0.XOHCNXM`，出包基线 `OS4.0.4.0.XOHCNXM`）
 > 上游：[kirklin/skyward](https://github.com/kirklin/skyward)；本仓库：[`main`](https://github.com/XQAB/XM-KEEL)
 
+## 1.1.0
+
+1.0.0 之后的第一版，四件事：把传感器栈在真机上跑通、修掉 sns 探针的三个真 bug、补上一个从没跑过的迁移、把截图文件名改回自己的名字。
+
+| 项 | 状态 | 关键点 |
+| --- | --- | --- |
+| 传感器冷启动自拉起（六步） | ✅ 真机验过 | recovery 自己把六步走完：挂 `dsp_a` 到 `/vendor/dsp`、绑定 `/persist`、`insmod frpc-adsprpc.ko`、按 `/proc/misc` 现读 minor 建 `/dev/fastrpc-adsp-secure`、写 545B 的 `[vendor]` ld.config、按 `pd-mapper → adsprpcd → sscrpcd` 顺序起三个 daemon。日志 `15.745 the sensor service answers`，registry 142 个 uid |
+| 首帧不再被传感器挡住 | ✅ 真机验过 | `eddf395` 把 `bring_up()` 挪进独立线程；首帧 `10.278` 画出，比 `10.667` 起的 sensor service 早 0.39 秒。此前同步调用时首页要等六步跑完（十几秒黑屏） |
+| `hinge_angle` 折动跟随 | ✅ 真机验过 | 一次折动 209 个样本 `0°→179°→0°`；`capfold_status` 也随折动在 `0/1` 之间跳，外屏切换主判据仍是它，hinge 只是兜底 |
+| sns 探针读 on-change 传感器 | ✅ 真机验过 | 三处真 bug：①属性表回复消息号是 `128` 不是 `1`；②帧头 transaction 只 1 字节；③属性数值是 `field1/wire1` 的 8 字节 LE u64。修好后 `keelbin sns --name hinge_angle` 出 `attr 16: 1` 和真样本 |
+| `/metadata` 迁移从没跑过 | ✅ 已修 | `metadata()` 原来在挂载闭包外判 `old.exists()`，冷启动时 `/metadata` 未挂，永远早退；改成闭包内判，成功/失败各打一行 kmsg，补 6 个测试 |
+| 截图文件名 | ✅ 已修 | 从 `_Skyward.png` 改成 `_KEEL.png`（`keel-ui/src/fmt.rs`）；真机截图已确认落 `..._KEEL.png` |
+| `adsprpcd` 是否必需 | ✅ 结论 | 不是必需件：不带它起 registry 仍是 142、hinge 仍出样本（`needed: false` 成立） |
+
+已知取舍：`recovery` 里读不到加速度计三轴（adsp 的 accel 私有 config 内层 msg id 不在标准枚举内，六种组合全试过），所以外屏 180° 翻转不用重力，用 `hinge_angle` + `capfold_status`。
+
+
 ## 1.0.10
 
 1.0.0 到 1.0.10 是 Skyward 编号时期的记录：XM KEEL 从 1.0.0 重新起算，下面这一节是那个时期的最后一版，功能都已经并进 1.0.0 了。
