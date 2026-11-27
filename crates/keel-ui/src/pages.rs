@@ -3360,10 +3360,6 @@ fn plugin_value(cx: &Ctx) -> &'static str {
         PluginState::UnderWay => l.pick(PLUGIN_UNDER_WAY),
         PluginState::Installed => l.pick(PLUGIN_INSTALLED),
         PluginState::Absent => l.pick(PLUGIN_ABSENT),
-    } else if s.plugin.there {
-        l.pick(PLUGIN_INSTALLED)
-    } else {
-        l.pick(PLUGIN_ABSENT)
     }
 }
 
