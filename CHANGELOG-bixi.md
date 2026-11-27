@@ -3,6 +3,16 @@
 > 机型：小米 MIX Flip 2（`bixi`，SM8750 / `sun`，Android 17，A/B + 动态分区，现役系统 `OS4.0.4.0.XOHCNXM`，出包基线 `OS4.0.4.0.XOHCNXM`）
 > 上游：[kirklin/skyward](https://github.com/kirklin/skyward)；本仓库：[`main`](https://github.com/XQAB/XM-KEEL)
 
+## 1.1.1
+
+只做一件事：给外屏加一个「翻转 180°」的开关，需要的时候开一次就记住。
+
+- **新增配置项 `display.cover_turned`，默认关，`bixi` 上也是关。** 实测系统里外屏（1208×1392）的 `mDisplayRotation=ROTATION_0`，正常就是正的，不需要转，所以默认不转，免得把本来就正的画面转反。
+- **设置页新增一行「外屏翻转 180°」**，就落在原来的「翻转 180°」下面：只影响合盖后的外屏，内屏不受影响；点一下就写进 `settings.json` 记住，以后按点的那一下来——不用改配置再刷机。适合外屏装反、或想把手机倒过来拿的情况。
+- **设置页原来的「翻转 180°」开关保留**，叠加在外屏那一级之上：内屏照旧受它控制，外屏这一级看「外屏翻转 180°」这一行（没点过时就是 `display.cover_turned`），两级各管一级，互不顶掉。
+- **不做「跟着重力转」**：recovery 里读不到重力方向——`accel`、`gravity`、`device_orient`、`screen_down` 都拿不到可用数据，所以朝向只能按开合判据（`capfold_status`、`hinge_angle`）决定。实测见 [`docs/sensors-in-recovery.md`](docs/sensors-in-recovery.md) §11。
+- **外屏方向的依据**：Android 侧 `dumpsys display` / `dumpsys window displays` 里外屏 `1208x1392`、`mDisplayRotation=ROTATION_0`（内屏同样 0），说明这块副屏正常就是正的，所以默认不转；需要转的在设置页开一次即可。
+
 ## 1.1.0
 
 1.0.0 之后的第一版，四件事：把传感器栈在真机上跑通、修掉 sns 探针的三个真 bug、补上一个从没跑过的迁移、把截图文件名改回自己的名字。
