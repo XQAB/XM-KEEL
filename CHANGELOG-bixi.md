@@ -167,6 +167,26 @@ init: Service 'recovery' (pid 1438) exited with status 1
 | 自更新 | ✅ | 优先裸 `.img`，退回 `.zip`；sha256 校验；写入下一个槽位与另一块装了 XM KEEL 的分区 |
 | 启动指令页 | ✅ 真机验过（0.66） | 读 `misc` 里的 BCB，可单独清除，不动任何分区 |
 | 关于页排版 | ✅ 定案（0.63） | 字标 45.0dp、三行 17.2dp、版本 15.4dp、基线 301.0 |
+| 折叠检测兜底（`hinge_angle`） | ⏳ 代码已进 main，待真机冷启动 | recovery 里直连 QMI/SSC 读铰链角度；外屏切换的主判据仍是 `capfold_status` |
+
+## 传感器：recovery 里直连 QMI 读铰链角度
+
+这一版把 sensor 栈搬进了 recovery，**不经过 Android 的 sensors HAL，也不用 framework**：`AF_QIPCRTR` socket 是内核特性，名字服务由内核的 dispatcher 应答，回复直接给出 SSC 的地址（本机实测 `node 5 / port 0x12`）。
+
+只在**冷启动、没有 Android 帮我们预热**的前提下，靠六步把服务端拉起来：
+
+1. `mount -t ext4 -o ro /dev/block/by-name/dsp_a /vendor/dsp`
+2. `mount --bind /mnt/vendor/persist /persist`
+3. `insmod /vendor/lib/modules/frpc-adsprpc.ko`
+4. 从 `/proc/misc` 读出 `fastrpc-adsp-secure` 的 minor（**每次都会变，281 和 282 都见过**）再 `mknod` + `chmod 666`
+5. 写一份带 `[vendor]` 命名空间的 `ld.config.txt`（545 字节，bootstrap → system → vendor 这个顺序不能反）
+6. 依次起 `pd-mapper` → `adsprpcd rootpd adsp` → `sscrpcd sensorspd adsp`
+
+三次独立冷启动的一致读数：只做前五步、不起 daemon，registry 是 `31 uids`；起齐后 **2 秒 140 条、5 秒 142 条、60 秒仍是 142**。`/sys/kernel/boot_adsp/ssr` 这一行**不需要写**，写不写结果都是 142。
+
+读得出来的：`hinge_angle`（铰链角度，已真机读到 0–178 全程跟随）、`flip_status`、`ambient_light`。**读不出来的：加速度计三轴**——4 个 accel uid × 6 种 config 组合全试过，`sensor_config` 一律 `error 7` 或无答案，`on_change` 一律只有 `ack`；真凶是 `sns_accel.proto` 私有类型的 config 内层消息号，不在标准枚举里。所以「跟随重力自动转 180°」这条不做，外屏翻转改由折叠状态判定。
+
+完整记录见 [`docs/sensors-in-recovery.md`](docs/sensors-in-recovery.md)。**当前状态：代码与镜像都在 main 上，CI 全绿；但还没有在真机上做过一次冷启动验收**（要验的是首屏亮起时间、dmesg 里两行 `sensors:` 日志、折叠时角度是否跟随）。
 
 ## 版本时间线
 
@@ -187,6 +207,7 @@ init: Service 'recovery' (pid 1438) exited with status 1
 | **1.0.0** | 汇总以上全部，版本号落定，README 与发行说明重写 |
 | **1.0.1** | 发版只认 sha256、`7za l`、MTP 未解锁提示、`verify-release.py` 进 CI、移植文档入库（About 基线对比留真机验收） |
 | **1.0.4** | `system_ext` 半写根因定死并修好（只坏前 8MB）、装整包写回 recovery 有正向结果、`make_writable` 三态、About 标红不可读属性 |
+| **传感器栈** | recovery 里直连 QMI/SSC 读到 `hinge_angle`（真机 132 事件、0–178 全程跟随）；加速度计三轴不可得，改由折叠状态判定；sensor 服务自带拉起，且挪到首帧之后不挡开屏 |
 
 ## 逐项说明
 
