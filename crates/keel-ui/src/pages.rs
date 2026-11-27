@@ -2453,9 +2453,9 @@ const TURNED_NOTE: Text = [
 ];
 const COVER_TURNED: Text = ["外屏翻转 180°", "外屏翻轉 180°", "Turn the cover half a turn"];
 const COVER_TURNED_NOTE: Text = [
-    "只影响合盖后的外屏：合上盖子、页面切到外屏那一刻，整页连同触摸一起转半圈；内屏不受影响。没动过这一行时跟随设备默认（这台机器出厂就是开的），点一下就是明确选择，会记住，下次进 recovery 还是这个状态。",
-    "只影響合蓋後的外屏：合上蓋子、頁面切到外屏那一刻，整頁連同觸控一起轉半圈；內屏不受影響。沒動過這一列時跟隨裝置預設（這台機器出廠就是開的），點一下就是明確選擇，會記住，下次進 recovery 還是這個狀態。",
-    "The cover's pages alone turn half a turn, with the touches on them, from the moment the phone shuts and the pages go to the cover; the inner screen is left as it is. Untouched, the row follows what the phone itself says — on this one, on out of the box. A tap makes the choice explicit, and it is kept for the next start in recovery.",
+    "只影响合盖后的外屏：合上盖子、页面切到外屏那一刻，整页连同触摸一起转半圈；内屏不受影响。没动过这一行时跟随设备默认（这台机器默认不转），点一下就是明确选择，会记住，下次进 recovery 还是这个状态。",
+    "只影響合蓋後的外屏：合上蓋子、頁面切到外屏那一刻，整頁連同觸控一起轉半圈；內屏不受影響。沒動過這一列時跟隨裝置預設（這台機器預設不轉），點一下就是明確選擇，會記住，下次進 recovery 還是這個狀態。",
+    "The cover's pages alone turn half a turn, with the touches on them, from the moment the phone shuts and the pages go to the cover; the inner screen is left as it is. Untouched, the row follows what the phone itself says — on this one, not turned. A tap makes the choice explicit, and it is kept for the next start in recovery.",
 ];const WAKE_BY_TAP_NOTE: Text = [
     "开启后，熄屏状态下在同一处连点两下就把屏幕叫回来，不用按电源键。代价是熄屏时面板只是亮度为 0、并不真的关掉，触摸控制器因此一直在工作，整机也不再休眠：这一版就是拿这点换双击。默认关闭。",
     "開啟後，熄屏狀態下在同一處連點兩下就把螢幕叫回來，不必按電源鍵。代價是熄屏時面板只是亮度為 0、並不真的關掉，觸控控制器因此一直在工作，整機也不再休眠：這一版就是拿這點換雙擊。預設關閉。",
