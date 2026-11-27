@@ -1497,11 +1497,11 @@ pub fn screenshots_not_kept(l: Lang, why: &str) -> String {
 /// The name a screenshot taken `unix_ms` milliseconds into Unix time is saved
 /// under, in the zone at `zone` in [`TIME_ZONES`]: as the system names its
 /// own, the time to the millisecond and then where it was taken,
-/// `Screenshot_2026-10-26-01-45-00-123_Skyward.png`.
+/// `Screenshot_2026-10-26-01-45-00-123_KEEL.png`.
 pub fn screenshot_name(unix_ms: i64, zone: usize) -> String {
     let t = local(unix_ms.div_euclid(1000), zone);
     format!(
-        "Screenshot_{:04}-{:02}-{:02}-{:02}-{:02}-{:02}-{:03}_Skyward.png",
+        "Screenshot_{:04}-{:02}-{:02}-{:02}-{:02}-{:02}-{:03}_KEEL.png",
         t.year(),
         t.month(),
         t.day(),
@@ -1634,8 +1634,8 @@ mod tests {
 
     #[test]
     fn a_screenshot_is_named_as_the_system_names_its_own() {
-        assert_eq!(screenshot_name(1_792_348_265_007, 0), "Screenshot_2026-10-19-02-31-05-007_Skyward.png");
-        assert_eq!(screenshot_name(1_792_348_265_999, zone("UTC")), "Screenshot_2026-10-18-18-31-05-999_Skyward.png", "in the zone chosen");
+        assert_eq!(screenshot_name(1_792_348_265_007, 0), "Screenshot_2026-10-19-02-31-05-007_KEEL.png");
+        assert_eq!(screenshot_name(1_792_348_265_999, zone("UTC")), "Screenshot_2026-10-18-18-31-05-999_KEEL.png", "in the zone chosen");
     }
 
     /// Where a zone named in the tz database is in [`TIME_ZONES`].
