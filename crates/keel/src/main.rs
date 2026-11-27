@@ -34,6 +34,9 @@ mod readings;
 mod relabel;
 #[cfg(target_os = "android")]
 mod secure;
+#[cfg(any(target_os = "android", test))]
+#[cfg_attr(not(target_os = "android"), allow(dead_code))]
+mod sensors;
 #[cfg(target_os = "android")]
 mod services;
 #[cfg(target_os = "android")]

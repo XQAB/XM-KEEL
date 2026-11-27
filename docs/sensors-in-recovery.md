@@ -1,32 +1,37 @@
 # recovery 里直接用 QMI 读传感器：需要什么，缺什么
 
-> 机型 bixi（MIX Flip 2，SM8750）。目标：**不进 Android、不依赖 sensors HAL 与
-> `sscrpcd`／framework service**，用内核的 QRTR socket 直连 ADSP 上的传感器服务（SSC，
-> service 400），拿到样本。本文是「让 SSC 在 recovery 里可用」的条件清单，配套实现在
-> [`crates/keel-sensors`](../crates/keel-sensors)。
+> 机型 bixi（MIX Flip 2，SM8750）。目标：**不进 Android、不依赖 sensors HAL 与 framework
+> service**，用内核的 QRTR socket 直连 ADSP 上的传感器服务（SSC，service 400），拿到样本。
+> `sscrpcd`／`pd-mapper` 这条 daemon 链由 recovery 自己拉起（见 §5.1），不需要 init 的
+> `vendor.sensors` service。本文是「让 SSC 在 recovery 里可用」的条件清单，配套实现在
+> [`crates/keel-sensors`](../crates/keel-sensors) 与 [`crates/keel/src/sensors.rs`](../crates/keel/src/sensors.rs)。
 
 ## 0. 结论（三句）
 
 1. **不需要 framework。** QRTR socket 是内核特性，name service 由内核的 dispatcher 应答，
    回复直接给出 SSC 的地址（本机实测 `node 5 / port 0x12`）。本仓库的 `keel-sensors`
    已经用这套链路在真机上读到 `hinge_angle`／`flip_status`／`ambient_light` 的真实样本。
-2. **registry 只跟着冷启动来。** ADSP 首次起来时带完整注册表；**此后任何一次 SSR 都会把它清空，
-   AP 侧没有任何进程能补回来**（`persist` 里的 json 片段只是缓存／输出，`sscrpcd`、HAL、
-   `qsap_sensors` 都只是消费者）。实测：停掉 HAL 与 `sscrpcd` 再 SSR，注册表仍空；
-   清空 `/mnt/vendor/persist/sensors/registry/registry` 再冷启动，注册表仍在——两边都不是来源。
-3. **所以 recovery 里第一件要查的事，是 ADSP 有没有被重启过。** `init.recovery.qcom.rc`
-   的 `on fs` 段（小米 `Recovery_StabilityEnhance`）每次开机都写一次
-   `/sys/kernel/boot_adsp/ssr`，**这一发就等于把 registry 打空**，这是 recovery 里
-   `registry` 列表只剩它自己、accel 属性为空的唯一根因。
+2. **registry 的大小跟三个 daemon 是否就位有关，跟 SSR 无关。** 实测（三次独立冷启动）：
+   只挂分区、insmod、写 ld.config 而不起 daemon，registry `31 uids`；
+   `pd-mapper`／`sscrpcd` 起齐后 **2 秒 140 条、5 秒 142 条、60 秒仍是 142**；
+   这时写不写 `/sys/kernel/boot_adsp/ssr` 都是 142。ADSP 重启会清空 registry 这一条依然成立，
+   但 recovery 的冷启动路径并不需要靠写 `ssr` 去"换回"它。
+3. **所以 recovery 里第一件要查的事，是 daemon 有没有挂上 ADSP**（`sscrpcd` 的
+   `apps_dev_init` 是否 EBUSY），而不是 shutdown 开关。`init.recovery.qcom.rc` 的
+   `on fs` 段（小米 `Recovery_StabilityEnhance`）那一发 `write /sys/kernel/boot_adsp/ssr`
+   是音频子系统的重启开关，写它**不带来 registry，也不带走 registry**；何况
+   `vendor.sensors` 这个 service 在 rc 里是 `disabled`，冷启动本来就没有人起它。
 
 ## 1. 判定顺序（按这个顺序查，别跳）
 
 1. `cat /sys/class/remoteproc/remoteproc1/state` —— `running` 才继续。
-2. `cat /sys/kernel/boot_adsp/ssr` 有没有被写过、以及本机 init 里有没有那两行
-   （`wait /sys/kernel/boot_adsp/ssr` + `write /sys/kernel/boot_adsp/ssr 1`）。
-3. 用 `keel-sensors` 的 `Client::list()` 查 `registry`：**有几十上百条 → registry 在；
-   只有 `registry` 一条 → 已被 SSR 清空，往下走也没意义。**
+2. `ps -A | grep -E 'pd-mapper|sscrpcd'` —— **两个都在**才有 registry。只有 `pd-mapper`、
+   或 `sscrpcd` 日志里每 30 秒 `Error 0x200: apps_dev_init failed ... EBUSY`，都等于没挂上。
+3. 用 `keel-sensors` 的 `Client::list()` 查 `registry`：**140 上下 → registry 在；
+   31 条左右 → daemon 没挂上或环境没铺好；只有 `registry` 一条 → ADSP 被重启过。**
 4. 列表正常后，再按名字取 sensor uid，再使能、读样本。
+
+`/sys/kernel/boot_adsp/ssr` 不必看、也不必写：它不是 registry 的来源，也不是缺失的原因。
 
 ## 2. 必须挂上的分区
 
@@ -41,34 +46,80 @@
 ## 3. linker 命名空间
 
 recovery 默认系统分区挂在 **`/mnt/system`**（不是 `/system_mnt`，这个坑踩过）。
-`ld.config.*` 的 `[vendor]` 段 `search.paths` 必须是：
+这份 545 字节的 `ld.config.txt` 已经固化进仓库：`crates/keel/src/sensors/ld.config.txt`，
+启动时由 `sensors::bring_up()` 原样写到 `/linkerconfig/ld.config.txt`（内容相同就跳过），
+**不在运行时拼字符串**。全文：
 
 ```
-/mnt/system/system/lib64/bootstrap:/mnt/system/system/lib64:/vendor/${LIB}:/vendor/${LIB}/hw:/odm/${LIB}
+dir.recovery = /system/bin
+dir.vendor = /vendor/bin
+dir.sysbin = /mnt/system/system/bin
+[recovery]
+namespace.default.isolated = false
+namespace.default.search.paths = /system/${LIB}
+namespace.default.permitted.paths = /system
+[vendor]
+namespace.default.isolated = false
+namespace.default.search.paths = /mnt/system/system/lib64/bootstrap:/mnt/system/system/lib64:/system/${LIB}:/vendor/${LIB}:/vendor/${LIB}/hw:/odm/${LIB}
+namespace.default.permitted.paths = /vendor:/odm:/product:/system_ext:/mnt/system:/system:/data:/tmp:/persist:/mnt/vendor
 ```
 
 少了 `bootstrap` 那一段，`pd-mapper`／`sscrpcd` 会在 `libc++`／`libutils` 上起不来；
-少了 `/mnt/system/system/lib64`，`libc.so` 找不到。
+少了 `/mnt/system/system/lib64`，`libc.so` 找不到。文件末尾没有换行，与手机上那份逐字节相同
+（sha256 `48bf1027bf48119bce36cdc1637364a06eb9136a2458218bc8c1b04c016faddf`）。
 
 ## 4. fastrpc 设备
 
 ```sh
-insmod /vendor/lib/modules/frpc-adsprpc.ko     # 模块名不是 fastrpc
-grep fastrpc-adsp-secure /proc/misc            # 本机是 281
-mknod /dev/fastrpc-adsp-secure c 10 281
+insmod /vendor/lib/modules/frpc-adsprpc.ko            # 模块名不是 fastrpc
+grep fastrpc-adsp-secure /proc/misc                   # 本次启动是 282
+[ -e /dev/fastrpc-adsp-secure ] || mknod /dev/fastrpc-adsp-secure c 10 "$(grep fastrpc-adsp-secure /proc/misc | cut -d' ' -f1)"
+chmod 666 /dev/fastrpc-adsp-secure
 ```
 
-`sscrpcd` 起 listener 需要这个节点；没有它，`adsp_default_listener_start` 直接失败。
+**minor 每次启动都会变**（见过 281、282），节点也可能由内核自己建好——所以代码里既不写死
+minor，也不无条件 `mknod`：先看 `/dev/fastrpc-adsp-secure` 在不在，不在才从 `/proc/misc`
+读 minor 补建。`sscrpcd` 起 listener 需要这个节点；没有它，`adsp_default_listener_start` 直接失败。
 
-## 5. 进程顺序（全部 `system` 身份）
+## 5. 进程顺序
 
 ```
 pd-mapper  →  adsrpcd rootpd adsp  →  sscrpcd sensorspd adsp
 ```
 
 - `pd-mapper` 先把 ADSP 上的 protection domain 映射做完，`sscrpcd` 才能打开 listener；
-- **少了 `adsrpcd rootpd adsp`，`sscrpcd` 的 ioctl 会 `EINVAL`**（实测）；
-- `sscrpcd` 只是 fastrpc listener 的宿主，**它不提供注册表**：停掉它再读，样本照旧。
+- **bixi 的 recovery 里根本没有 `adsrpcd`**（`/vendor/bin` 只有 `pd-mapper`、`sscrpcd`），
+  这一环是可选的：本机不起它，registry 照样 142；
+- `sscrpcd` 只是 fastrpc listener 的宿主，**它不提供注册表**：停掉它再读，样本照旧；
+- 三个都以 `setsid` 起在自己会话里，recovery 退出或 adb 断线都不带走它们。
+
+## 5.1 冷启动六步（实测，一步不多）
+
+```sh
+mount -t ext4 -o ro /dev/block/by-name/dsp_a /vendor/dsp
+mkdir -p /persist && mount --bind /mnt/vendor/persist /persist
+insmod /vendor/lib/modules/frpc-adsprpc.ko
+# 节点：没有才建，minor 从 /proc/misc 读（见 §4）
+cp ld.config.txt /linkerconfig/ld.config.txt
+setsid /vendor/bin/pd-mapper              >/dev/null 2>&1 &   sleep 1
+setsid /vendor/bin/adsrpcd rootpd adsp    >/dev/null 2>&1 &   sleep 2   # 没有这个二进制就跳过
+setsid /vendor/bin/sscrpcd sensorspd adsp >/dev/null 2>&1 &
+```
+
+三次独立冷启动（uptime 15 s / 31 s / 41 s 起跑）的 A/B：
+
+| 做法 | registry | hinge |
+| --- | --- | --- |
+| 什么都不做 | 空（`/proc/misc` 里都没有 fastrpc 项） | `found hinge_angle: 0` |
+| 只挂 dsp/persist + insmod + ld.config，不起 daemon | 31 条 | `found hinge_angle: 0` |
+| **六步全做（不写 ssr）** | **2 s 140 条，5 s 142 条，60 s 仍 142** | **`found hinge_angle: 1`，样本 `[0.0, -0.00339, -0.00095, 2.0, 0.0]`** |
+| 六步 + 写 ssr | 142 条 | 正常（ssr 不是必要条件） |
+
+**结论**：31 → 142 取决于三个 daemon 是否就位，与 `/sys/kernel/boot_adsp/ssr` 无关。
+那节点是音频子系统的重启开关，**recovery 里一行都不要写**；等 5 秒就够。
+
+这套顺序编成了 `crates/keel/src/sensors.rs` 的 `bring_up()`：起屏之后、`FlipController::start()`
+之前调用一次，每一步 best-effort（失败只写 kmsg），服务已经在答就直接返回。
 
 ## 6. 协议（客户端部分，`crates/keel-sensors/src/frame.rs`）
 
@@ -177,14 +228,14 @@ registry 在 recovery 里重建出来"便宜得多。
 
 - `remoteproc-adsp` 在 `1.42 s` 就已经被内核上电（`powering up`），init 的
   `wait /sys/kernel/boot_adsp/ssr` 在 `3.33 s` 才等到节点，紧接着又是一次
-  `powering up` —— **那一发 `write ssr 1` 是一次多余的重启**，不是上电；
-- `sscrpcd` 现在起不来：`logcat` 里每 30 秒一次
-  `Error 0x200: apps_dev_init failed for domain 0, errno Device or resource busy`。
-  `/dev/fastrpc-adsp-secure` 由 `adsrpcd` 与 `sscrpcd` 同时持有，`attachguestos` 只有一个，
-  先开的赢。registry 只有 10 条更像是**注册表根本没下载进 ADSP**（sscrpcd 没挂上），
-  而不是"SSR 把 150 条清掉了"。
+  `powering up`。但后来的 A/B 表明：**这一发写不写，registry 都一样**（§5.1）；
+- 当时那块机器上 `sscrpcd` 起不来：`logcat` 里每 30 秒一次
+  `Error 0x200: apps_dev_init failed for domain 0, errno Device or resource busy`，
+  `/dev/fastrpc-adsp-secure` 由 `adsrpcd` 与 `sscrpcd` 同时持有，`attachguestos` 只有一个。
+  **10 条就是"sscrpcd 没挂上"的样子**：把环境铺好、只起 daemon 能到 31 条，daemon 挂上 ADSP
+  才到 140 上下，142 是这台机器的满值。
 
-## 8. 还没定的一条
+## 8. `ssr` 那一行怎么处理
 
 `init.recovery.qcom.rc` 的 `on fs` 里有这两行（第 54、55 行，MIUI `Recovery_StabilityEnhance`）：
 
@@ -193,19 +244,15 @@ registry 在 recovery 里重建出来"便宜得多。
     write /sys/kernel/boot_adsp/ssr 1
 ```
 
-`remoteproc1/state` 是 `running`，dmesg 也显示内核在 `1.42 s` 已经把 ADSP 拉起来了，所以这一发
-是**多余的重启**：只删 `write … ssr 1`，保留 `wait` 就够。
+`/sys/kernel/boot_adsp/ssr` 是**音频子系统挂了之后重启 ADSP** 的开关，不是 sensor registry 的闸门。
+A/B 已经把这层因果关系定死：写它不带来 registry，也不带走 registry（§5.1）。
 
-```sh
-exec root root -- /system/bin/sh -c '[ "$(cat /sys/class/remoteproc/remoteproc1/state 2>/dev/null)" = "running" ] || echo 1 > /sys/kernel/boot_adsp/ssr'
-```
+因此：
 
-副作用评估：recovery 不跑 audio HAL（那唯一的运行时写者 `audiohalservice_qti.rc`
-的 `vendor.audio.ssr.trigger` 不生效），充电走 `charger_fstab` + 内核 `power_supply`，
-温度走内核 thermal，**删这一发对它们没有依赖**；唯一的耦合就是 ADSP 自己的固件加载。
-
-但**删了也不等于 registry 会变成 150**：现在 `sscrpcd` 是 `EBUSY` 挂不上 ADSP，
-注册表压根没下载。两步要分开验：先让 `sscrpcd` 挂上，再看 `ssr` 那一发是否还挡着。
+- recovery 自己的启动路径（`crates/keel/src/sensors.rs`）**不写这个节点**，一行都不写；
+- 客户端的语序也改成"daemon 起齐就算完"，不再有"最后写 ssr"这一步；
+- `init.recovery.qcom.rc` 里那两行**暂时不动**，它属于产品侧取舍（删掉对 audio、充电、thermal
+  都没有依赖，但那是另一件事），等外屏翻转接入验收完再定。
 
 ## 9. 已知的失败路径（别重试）
 

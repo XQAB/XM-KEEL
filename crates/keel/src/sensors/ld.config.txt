@@ -1,0 +1,11 @@
+dir.recovery = /system/bin
+dir.vendor = /vendor/bin
+dir.sysbin = /mnt/system/system/bin
+[recovery]
+namespace.default.isolated = false
+namespace.default.search.paths = /system/${LIB}
+namespace.default.permitted.paths = /system
+[vendor]
+namespace.default.isolated = false
+namespace.default.search.paths = /mnt/system/system/lib64/bootstrap:/mnt/system/system/lib64:/system/${LIB}:/vendor/${LIB}:/vendor/${LIB}/hw:/odm/${LIB}
+namespace.default.permitted.paths = /vendor:/odm:/product:/system_ext:/mnt/system:/system:/data:/tmp:/persist:/mnt/vendor

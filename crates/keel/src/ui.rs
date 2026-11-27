@@ -1644,6 +1644,11 @@ pub fn run(cfg: &DeviceConfig, font: &Path, mono: &Path, request: bcb::Request, 
     // before them are out of date.
     let readings = Readings::start(cfg)?;
     let mut read_at = Instant::now();
+    // The sensor service on the ADSP is brought up before anything follows
+    // the hinge: the pages need the hinge, and the hinge needs that service.
+    // Every step is best effort, and a phone where init already did the work
+    // finds it standing and moves on.
+    sensors::bring_up();
     // The hinge follows the phone being shut, for the cover screen to go to
     // when the inner panel's driver has nothing to say. Its own thread does
     // the reading: a service that is down leaves the answer absent and the
