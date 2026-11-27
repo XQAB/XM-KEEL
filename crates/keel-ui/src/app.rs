@@ -6367,6 +6367,11 @@ impl App {
                 vec![Effect::CheckSkyward]
             }
             Screen::Wlan if self.state.wlan.as_ref().is_some_and(|w| w.power == Power::On) => vec![Effect::ScanWlan],
+            // The plugin's own page asks where the plugin stands as it opens:
+            // the look at boot came before the data partition was open, so a
+            // plugin that is on the phone read as absent, and nothing else
+            // asks again on the way to this page.
+            Screen::Plugin => vec![Effect::ReadPlugin],
             _ => Vec::new(),
         }
     }
@@ -13725,6 +13730,16 @@ mod tests {
         let fr = app.frame(&f, &i);
         assert!(fr.hits.iter().any(|h| h.action == Action::DropPlugin), "and the way to take it away once it is on the phone");
         assert!(!fr.hits.iter().any(|h| h.action == Action::GetPlugin), "the download it already has is not offered again");
+    }
+
+    /// The plugin's page is the one that says where the plugin stands, and
+    /// the look at boot is made while the data partition is still shut: the
+    /// page asks again every time it opens, or it would say absent for good.
+    #[test]
+    fn the_plugin_page_asks_for_the_plugin_as_it_opens() {
+        let (f, i) = (fonts(), info());
+        let mut app = App::new(Screen::Settings, W, H, PPD);
+        assert_eq!(tap(&mut app, &f, &i, Action::Open(Screen::Plugin)), vec![Effect::ReadPlugin], "the page asks again, and nothing else");
     }
 
     #[test]
