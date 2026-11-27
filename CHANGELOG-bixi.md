@@ -167,7 +167,7 @@ init: Service 'recovery' (pid 1438) exited with status 1
 | 自更新 | ✅ | 优先裸 `.img`，退回 `.zip`；sha256 校验；写入下一个槽位与另一块装了 XM KEEL 的分区 |
 | 启动指令页 | ✅ 真机验过（0.66） | 读 `misc` 里的 BCB，可单独清除，不动任何分区 |
 | 关于页排版 | ✅ 定案（0.63） | 字标 45.0dp、三行 17.2dp、版本 15.4dp、基线 301.0 |
-| 折叠检测兜底（`hinge_angle`） | ⏳ 代码已进 main，待真机冷启动 | recovery 里直连 QMI/SSC 读铰链角度；外屏切换的主判据仍是 `capfold_status` |
+| 折叠检测兜底（`hinge_angle`） | ✅ 真机冷启动验过（1.1.0） | recovery 里直连 QMI/SSC 读铰链角度，一次折动 209 个样本、178°→0°→178° 全程跟随；外屏切换的主判据仍是 `capfold_status`，它拿不到时才问铰链 |
 
 ## 传感器：recovery 里直连 QMI 读铰链角度
 
@@ -186,7 +186,16 @@ init: Service 'recovery' (pid 1438) exited with status 1
 
 读得出来的：`hinge_angle`（铰链角度，已真机读到 0–178 全程跟随）、`flip_status`、`ambient_light`。**读不出来的：加速度计三轴**——4 个 accel uid × 6 种 config 组合全试过，`sensor_config` 一律 `error 7` 或无答案，`on_change` 一律只有 `ack`；真凶是 `sns_accel.proto` 私有类型的 config 内层消息号，不在标准枚举里。所以「跟随重力自动转 180°」这条不做，外屏翻转改由折叠状态判定。
 
-完整记录见 [`docs/sensors-in-recovery.md`](docs/sensors-in-recovery.md)。**当前状态：代码与镜像都在 main 上，CI 全绿；但还没有在真机上做过一次冷启动验收**（要验的是首屏亮起时间、dmesg 里两行 `sensors:` 日志、折叠时角度是否跟随）。
+完整记录见 [`docs/sensors-in-recovery.md`](docs/sensors-in-recovery.md)。
+
+**真机冷启动验收：通过（2026-11-27，镜像 `skyward-5bcd20d`，sha256 `3dce0cf9…`，A 槽）**
+
+- **首帧不被挡**：`[10.278] backlight 200`（首帧画出），`[10.667] sensors: bringing the sensor service up` —— 服务拉起比首帧晚 0.39 秒。同步调用时代首帧要等六步跑完（15.7 秒），线程化之后回到三秒级。
+- **六步全程无人干预**：`persist is mounted on /mnt/vendor/persist`（3.46 秒，`main.rs` 的 `[partitions] mounted` 循环）→ `dsp_a mounted as ext4` → `frpc-adsprpc is loaded` → `fastrpc-adsp-secure made, minor 281`（现读，不硬编码）→ `the linker namespace is written` → `pd-mapper started as 757` → `adsprpcd started as 823` → `sscrpcd started as 836` → `[15.745] the sensor service answers`。
+- **registry 142 uids**，与手测一致。
+- **一次折动的完整序列**：209 个样本，`35.58s 178°` 单调下行 → `37.21s 0°`（7.35 秒 83 个样本），停 2.4 秒，`39.57s 2°` 上行 → `62.88s 178°`（6.66 秒 118 个样本）。滞回阈值 20°/150° 判得干净。
+- **外屏切换实测工作**：`capfold_status` 合盖时变 `0`、外屏亮（`p0=0 p1=819`），展开时变 `1`、内屏亮（`p0=819 p1=0`）；折动时 `xiaomi_touch` / `synaptics_tcm2` / `goodix_core` 被重新加载，与 `load_cover_touch()` 一一对应。
+- **加速度计精确拒绝码**（比手测更细）：`accel` → status 130 code 3、`gravity` → code 2、`gyro` → code 3、`ori` → code 6、`tilt` → 514 acked 但永不回应。三轴不可得这条结论坐实。
 
 ## 版本时间线
 
@@ -207,7 +216,7 @@ init: Service 'recovery' (pid 1438) exited with status 1
 | **1.0.0** | 汇总以上全部，版本号落定，README 与发行说明重写 |
 | **1.0.1** | 发版只认 sha256、`7za l`、MTP 未解锁提示、`verify-release.py` 进 CI、移植文档入库（About 基线对比留真机验收） |
 | **1.0.4** | `system_ext` 半写根因定死并修好（只坏前 8MB）、装整包写回 recovery 有正向结果、`make_writable` 三态、About 标红不可读属性 |
-| **传感器栈** | recovery 里直连 QMI/SSC 读到 `hinge_angle`（真机 132 事件、0–178 全程跟随）；加速度计三轴不可得，改由折叠状态判定；sensor 服务自带拉起，且挪到首帧之后不挡开屏 |
+| **传感器栈** | recovery 里直连 QMI/SSC 读到 `hinge_angle`（真机 209 样本、178°→0°→178° 全程跟随）；加速度计三轴不可得，改由折叠状态判定；sensor 服务自带拉起、六步无人干预，且挪到首帧之后不挡开屏 |
 
 ## 逐项说明
 
