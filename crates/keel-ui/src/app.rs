@@ -470,6 +470,32 @@ pub struct Plugin {
     pub job: Option<PluginJob>,
 }
 
+/// The three states the plugin page tells apart, and the only three there are.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PluginState {
+    /// Not on the phone: pages read the plain way.
+    Absent,
+    /// The download of it is under way.
+    UnderWay,
+    /// It is on the phone.
+    Installed,
+}
+
+impl Plugin {
+    /// Which of the three states the plugin is in. A download that ended did
+    /// so as an installation, a stop, or a failure, and none of those is still
+    /// under way; only one still running is.
+    pub fn state(&self) -> PluginState {
+        if self.job.as_ref().is_some_and(|j| j.outcome.is_none()) {
+            PluginState::UnderWay
+        } else if self.there {
+            PluginState::Installed
+        } else {
+            PluginState::Absent
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PluginJob {
     /// None until the download has begun.
@@ -13865,5 +13891,45 @@ mod tests {
         assert!(app.may_rest_in_the_dark(false), "one tap is no way back, so the panel rests");
         app.state.wake_by_tap = true;
         assert!(!app.may_rest_in_the_dark(false), "two taps come through the controller resting would stop");
+    }
+}
+
+
+// The plugin page tells three states apart and acts on each; these pin the
+// decision table so a change in the download's bookkeeping cannot quietly
+// move a phone from "installed" to "absent".
+#[cfg(test)]
+mod plugin_state_tests {
+    use super::*;
+
+    fn job(outcome: Option<PluginEnd>) -> PluginJob {
+        PluginJob { stage: None, rate: 0, outcome, stopping: false }
+    }
+
+    #[test]
+    fn a_phone_without_the_plugin_is_absent() {
+        assert_eq!(Plugin::default().state(), PluginState::Absent);
+    }
+
+    #[test]
+    fn a_phone_with_the_plugin_is_installed() {
+        let p = Plugin { there: true, size: Some(7), job: None };
+        assert_eq!(p.state(), PluginState::Installed);
+    }
+
+    #[test]
+    fn a_download_still_running_is_under_way() {
+        let p = Plugin { there: false, size: None, job: Some(job(None)) };
+        assert_eq!(p.state(), PluginState::UnderWay);
+    }
+
+    #[test]
+    fn a_download_that_ended_is_not_under_way_any_more() {
+        let stopped = Plugin { there: false, size: None, job: Some(job(Some(PluginEnd::Stopped))) };
+        assert_eq!(stopped.state(), PluginState::Absent);
+        let installed = Plugin { there: true, size: Some(9), job: Some(job(Some(PluginEnd::Installed(9)))) };
+        assert_eq!(installed.state(), PluginState::Installed);
+        let failed = Plugin { there: false, size: None, job: Some(job(Some(PluginEnd::Failed(String::new())))) };
+        assert_eq!(failed.state(), PluginState::Absent);
     }
 }
