@@ -65,8 +65,8 @@ namespace.default.permitted.paths = /vendor:/odm:/product:/system_ext:/mnt/syste
 ```
 
 少了 `bootstrap` 那一段，`pd-mapper`／`sscrpcd` 会在 `libc++`／`libutils` 上起不来；
-少了 `/mnt/system/system/lib64`，`libc.so` 找不到。文件末尾没有换行，与手机上那份逐字节相同
-（sha256 `48bf1027bf48119bce36cdc1637364a06eb9136a2458218bc8c1b04c016faddf`）。
+少了 `/mnt/system/system/lib64`，`libc.so` 找不到。全文 545 字节、末尾一个换行，与手机上那份
+逐字节相同（sha256 `48bf1027bf48119bce36cdc1637364a06eb9136a2458218bc8c1b04c016faddf`）。
 
 ## 4. fastrpc 设备
 

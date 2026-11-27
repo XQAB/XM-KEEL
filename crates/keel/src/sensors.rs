@@ -346,12 +346,13 @@ mod tests {
 
     #[test]
     fn the_linker_namespace_is_the_measured_one() {
-        // 545 bytes, the one the daemons were started under on the phone.
+        // 545 bytes, the one the daemons were started under on the phone, and
+        // the one `/linkerconfig/ld.config.txt` holds there now.
         assert_eq!(LINKER_CONFIG.len(), 545);
         assert!(LINKER_CONFIG.starts_with("dir.recovery = /system/bin"));
         assert!(LINKER_CONFIG.contains("[vendor]"));
         assert!(LINKER_CONFIG.contains("/mnt/system/system/lib64/bootstrap"));
         assert!(LINKER_CONFIG.contains("/odm/${LIB}"));
-        assert!(!LINKER_CONFIG.ends_with('\n'), "the file keeps no trailing newline, as the phone's does");
+        assert!(LINKER_CONFIG.ends_with('\n'), "the file ends with a newline, as the phone's does");
     }
 }
