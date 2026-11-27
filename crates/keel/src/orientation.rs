@@ -126,7 +126,7 @@ impl Connection {
         self.transaction = self.transaction.wrapping_add(1);
         self.send(
             self.server.context("SSC has no address")?,
-            &request_full(self.transaction, uid, message, payload, extra, with_tail),
+            &request_full(self.transaction as u8, uid, message, payload, extra, with_tail),
         )
     }
 
@@ -470,22 +470,39 @@ fn attribute_int(data: &[u8], wanted: u32) -> Option<u64> {
         if id != u64::from(wanted) {
             continue;
         }
+        // The value of an attribute is wrapped twice: the reply writes
+        // `0a <len> 08 <id> 12 <len> 0a <len> 21 <value>`, so the number sits
+        // one level below the field that carries it.
         return inner
             .iter()
             .find(|&&(tag, _, _)| tag == 2)
-            .and_then(|&(_, wire, raw)| {
-                if wire == 0 {
-                    let mut rest = raw;
-                    varint(&mut rest).ok()
-                } else if wire == 5 {
-                    raw.get(..4)
-                        .map(|head| u32::from_le_bytes(head.try_into().unwrap()) as u64)
-                } else {
-                    None
-                }
-            });
+            .and_then(|&(_, wire, raw)| number(raw, wire));
     }
     None
+}
+
+/// A number an attribute carries, however many wrappers it sits behind.
+///
+/// The reply nests a count as `0a <len> 08 <id> 12 <len> 0a <len> 21 <n>`,
+/// so each layer is unwrapped until a number is reached.
+fn number(raw: &[u8], wire: u8) -> Option<u64> {
+    match wire {
+        0 => {
+            let mut rest = raw;
+            varint(&mut rest).ok()
+        }
+        1 => raw
+            .get(..8)
+            .map(|bytes| u64::from_le_bytes(bytes.try_into().unwrap())),
+        2 => fields(raw)
+            .ok()?
+            .first()
+            .and_then(|&(_, wire, value)| number(value, wire)),
+        5 => raw
+            .get(..4)
+            .map(|head| u32::from_le_bytes(head.try_into().unwrap()) as u64),
+        _ => None,
+    }
 }
 
 /// The first integer a payload holds, which a refusal's code is.
@@ -561,7 +578,7 @@ fn request(transaction: u16, uid: [u64; 2], message: u32, payload: &[u8]) -> Vec
 /// body, and the client id only where the message takes one. The lookup
 /// path above predates this; the service answers it anyway, so it stays.
 fn request_full(
-    transaction: u16,
+    transaction: u8,
     uid: [u64; 2],
     message: u32,
     payload: &[u8],
@@ -585,7 +602,7 @@ fn request_full(
     let tail = if with_tail { 4 } else { 0 };
     let length = 1 + 4 + body.len() + tail;
     let mut qmi = vec![0];
-    qmi.extend_from_slice(&transaction.to_le_bytes());
+    qmi.push(transaction);
     qmi.extend_from_slice(&0x20u16.to_be_bytes());
     qmi.extend_from_slice(&(length as u16).to_be_bytes());
     qmi.extend_from_slice(&[0, 1]);
@@ -750,7 +767,15 @@ pub fn probe(names: &[String], rate: f32, seconds: u64, raw: bool) -> Result<()>
         let Ok(messages) = events(&data) else { continue };
         let mut heard = false;
         for (uid, message, payload) in messages {
-            if uid != wanted || message != 1 {
+            if uid != wanted {
+                continue;
+            }
+            if message == 130 {
+                println!("status: refused, code {}", first_int(payload).unwrap_or_default());
+                heard = true;
+                continue;
+            }
+            if message != 128 {
                 continue;
             }
             match attribute_int(payload, 16) {
