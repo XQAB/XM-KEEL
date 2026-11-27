@@ -1321,6 +1321,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "jpeg-decoder"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "00810f1d8b74be64b13dbf3db89ac67740615d6c891f0e7b6179326533011a07"
+
+[[package]]
 name = "js-sys"
 version = "0.3.106"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1328,6 +1334,334 @@ checksum = "7883d941dae510fb2d978fc3fe018c71c9e2892fd38854de3e8b92c2e5ad9cc5"
 dependencies = [
  "cfg-if",
  "wasm-bindgen",
+]
+
+[[package]]
+name = "keel"
+version = "1.0.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "evdev",
+ "keel-backup",
+ "keel-binder",
+ "keel-block",
+ "keel-config",
+ "keel-crypto",
+ "keel-files",
+ "keel-info",
+ "keel-install",
+ "keel-lp",
+ "keel-modules",
+ "keel-mtp",
+ "keel-net",
+ "keel-sensors",
+ "keel-sys",
+ "keel-systems",
+ "keel-ui",
+ "keel-vab",
+ "libc",
+ "procfs",
+ "tempfile",
+ "ureq",
+ "zip 8.6.0",
+ "zstd",
+]
+
+[[package]]
+name = "keel-backup"
+version = "1.0.0"
+dependencies = [
+ "anyhow",
+ "keel-block",
+ "keel-files",
+ "libc",
+ "lz4_flex",
+ "serde",
+ "sha2 0.10.9",
+ "tar",
+ "toml",
+]
+
+[[package]]
+name = "keel-binder"
+version = "1.0.0"
+dependencies = [
+ "anyhow",
+ "keel-sys",
+ "libc",
+]
+
+[[package]]
+name = "keel-block"
+version = "1.0.0"
+dependencies = [
+ "anyhow",
+ "libc",
+ "procfs",
+ "serde",
+ "zerocopy",
+]
+
+[[package]]
+name = "keel-bootimg"
+version = "1.0.0"
+dependencies = [
+ "abootimg-oxide",
+ "anyhow",
+ "cpio",
+ "libc",
+ "lz4_flex",
+ "tempfile",
+]
+
+[[package]]
+name = "keel-config"
+version = "1.0.0"
+dependencies = [
+ "anyhow",
+ "serde",
+ "toml",
+]
+
+[[package]]
+name = "keel-crypto"
+version = "1.0.0"
+dependencies = [
+ "aes-gcm",
+ "anyhow",
+ "hmac",
+ "keel-binder",
+ "keel-block",
+ "libc",
+ "rusqlite",
+ "scrypt",
+ "sha2 0.10.9",
+]
+
+[[package]]
+name = "keel-files"
+version = "1.0.0"
+dependencies = [
+ "anyhow",
+ "libc",
+]
+
+[[package]]
+name = "keel-info"
+version = "1.0.0"
+dependencies = [
+ "anyhow",
+ "keel-block",
+ "keel-config",
+ "keel-sys",
+ "keel-vab",
+ "libc",
+ "rsproperties",
+ "tempfile",
+]
+
+[[package]]
+name = "keel-install"
+version = "1.0.0"
+dependencies = [
+ "abootimg-oxide",
+ "anyhow",
+ "cms",
+ "cpio",
+ "flate2",
+ "keel-block",
+ "keel-bootimg",
+ "keel-config",
+ "keel-info",
+ "keel-sys",
+ "keel-systems",
+ "keel-vab",
+ "libc",
+ "lz4_flex",
+ "p256",
+ "polyfuse-kernel",
+ "rsa",
+ "sha1 0.10.7",
+ "sha2 0.10.9",
+ "tempfile",
+ "x509-cert",
+ "zerocopy",
+ "zip 8.6.0",
+ "zstd",
+]
+
+[[package]]
+name = "keel-lp"
+version = "1.0.0"
+dependencies = [
+ "anyhow",
+ "sha2 0.10.9",
+ "zerocopy",
+]
+
+[[package]]
+name = "keel-modules"
+version = "1.0.0"
+dependencies = [
+ "anyhow",
+ "libc",
+ "tempfile",
+]
+
+[[package]]
+name = "keel-mtp"
+version = "1.0.0"
+dependencies = [
+ "anyhow",
+ "jiff",
+ "keel-files",
+ "keel-sys",
+ "libc",
+ "zerocopy",
+]
+
+[[package]]
+name = "keel-net"
+version = "1.0.0"
+dependencies = [
+ "aes",
+ "anyhow",
+ "base64 0.22.1",
+ "cbc",
+ "dhcproto",
+ "hickory-proto",
+ "httparse",
+ "libc",
+ "md-5",
+ "semver",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "ureq",
+]
+
+[[package]]
+name = "keel-pack"
+version = "1.0.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "keel-bootimg",
+ "keel-config",
+ "serde_json",
+ "sha2 0.10.9",
+ "tempfile",
+ "unpayload",
+]
+
+[[package]]
+name = "keel-preview"
+version = "1.0.0"
+dependencies = [
+ "anyhow",
+ "keel-config",
+ "keel-info",
+ "keel-install",
+ "keel-net",
+ "keel-systems",
+ "keel-ui",
+ "keel-vab",
+ "png",
+ "serde",
+ "toml",
+]
+
+[[package]]
+name = "keel-sensors"
+version = "1.0.0"
+dependencies = [
+ "anyhow",
+ "libc",
+]
+
+[[package]]
+name = "keel-sys"
+version = "1.0.0"
+dependencies = [
+ "anyhow",
+ "keel-block",
+ "libc",
+]
+
+[[package]]
+name = "keel-system-init"
+version = "1.0.0"
+dependencies = [
+ "anyhow",
+ "keel-block",
+ "keel-bootimg",
+ "keel-modules",
+ "keel-sys",
+ "keel-systems",
+ "libc",
+]
+
+[[package]]
+name = "keel-systems"
+version = "1.0.0"
+dependencies = [
+ "abootimg-oxide",
+ "anyhow",
+ "keel-binder",
+ "keel-block",
+ "keel-bootimg",
+ "keel-config",
+ "keel-sys",
+ "keel-vab",
+ "libc",
+ "serde",
+ "sha2 0.10.9",
+ "tempfile",
+ "toml",
+ "zip 8.6.0",
+]
+
+[[package]]
+name = "keel-ui"
+version = "1.0.0"
+dependencies = [
+ "ab_glyph",
+ "ab_glyph_rasterizer",
+ "anyhow",
+ "drm",
+ "drm-ffi",
+ "icu_locale_core",
+ "jiff",
+ "jpeg-decoder",
+ "keel-info",
+ "keel-install",
+ "keel-net",
+ "keel-systems",
+ "keel-vab",
+ "libc",
+ "png",
+ "proc-macro2",
+ "serde",
+ "serde_json",
+ "svgtypes",
+ "syn 2.0.119",
+ "tiny-skia",
+ "ttf-parser",
+ "unicode-width",
+ "vt100",
+]
+
+[[package]]
+name = "keel-vab"
+version = "1.0.0"
+dependencies = [
+ "anyhow",
+ "keel-binder",
+ "keel-block",
+ "keel-lp",
+ "libc",
+ "prost",
 ]
 
 [[package]]
@@ -1350,12 +1684,6 @@ checksum = "20870f649af7073d53e38067b2a84312175d56ea15217e1b15bc83506ec50afb"
 dependencies = [
  "spin",
 ]
-
-[[package]]
-name = "jpeg-decoder"
-version = "0.3.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "00810f1d8b74be64b13dbf3db89ac67740615d6c891f0e7b6179326533011a07"
 
 [[package]]
 name = "libbz2-rs-sys"
@@ -2241,325 +2569,6 @@ name = "siphasher"
 version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "33f4fe9184a62d842c9ef383018f3306d8ba224fd9d836f56d7288308847c256"
-
-[[package]]
-name = "keel"
-version = "1.0.0"
-dependencies = [
- "anyhow",
- "clap",
- "evdev",
- "libc",
- "procfs",
- "keel-backup",
- "keel-binder",
- "keel-block",
- "keel-config",
- "keel-crypto",
- "keel-files",
- "keel-info",
- "keel-install",
- "keel-lp",
- "keel-modules",
- "keel-mtp",
- "keel-net",
- "keel-sys",
- "keel-systems",
- "keel-ui",
- "keel-vab",
- "tempfile",
- "ureq",
- "zip 8.6.0",
- "zstd",
-]
-
-[[package]]
-name = "keel-backup"
-version = "1.0.0"
-dependencies = [
- "anyhow",
- "libc",
- "lz4_flex",
- "serde",
- "sha2 0.10.9",
- "keel-block",
- "keel-files",
- "tar",
- "toml",
-]
-
-[[package]]
-name = "keel-binder"
-version = "1.0.0"
-dependencies = [
- "anyhow",
- "libc",
- "keel-sys",
-]
-
-[[package]]
-name = "keel-block"
-version = "1.0.0"
-dependencies = [
- "anyhow",
- "libc",
- "procfs",
- "serde",
- "zerocopy",
-]
-
-[[package]]
-name = "keel-bootimg"
-version = "1.0.0"
-dependencies = [
- "abootimg-oxide",
- "anyhow",
- "cpio",
- "libc",
- "lz4_flex",
- "tempfile",
-]
-
-[[package]]
-name = "keel-config"
-version = "1.0.0"
-dependencies = [
- "anyhow",
- "serde",
- "toml",
-]
-
-[[package]]
-name = "keel-crypto"
-version = "1.0.0"
-dependencies = [
- "aes-gcm",
- "anyhow",
- "hmac",
- "libc",
- "rusqlite",
- "scrypt",
- "sha2 0.10.9",
- "keel-binder",
- "keel-block",
-]
-
-[[package]]
-name = "keel-files"
-version = "1.0.0"
-dependencies = [
- "anyhow",
- "libc",
-]
-
-[[package]]
-name = "keel-info"
-version = "1.0.0"
-dependencies = [
- "anyhow",
- "libc",
- "rsproperties",
- "keel-block",
- "keel-config",
- "keel-sys",
- "keel-vab",
- "tempfile",
-]
-
-[[package]]
-name = "keel-install"
-version = "1.0.0"
-dependencies = [
- "abootimg-oxide",
- "anyhow",
- "cms",
- "cpio",
- "flate2",
- "libc",
- "lz4_flex",
- "p256",
- "polyfuse-kernel",
- "rsa",
- "sha1 0.10.7",
- "sha2 0.10.9",
- "keel-block",
- "keel-bootimg",
- "keel-config",
- "keel-info",
- "keel-sys",
- "keel-systems",
- "keel-vab",
- "tempfile",
- "x509-cert",
- "zerocopy",
- "zip 8.6.0",
- "zstd",
-]
-
-[[package]]
-name = "keel-lp"
-version = "1.0.0"
-dependencies = [
- "anyhow",
- "sha2 0.10.9",
- "zerocopy",
-]
-
-[[package]]
-name = "keel-modules"
-version = "1.0.0"
-dependencies = [
- "anyhow",
- "libc",
- "tempfile",
-]
-
-[[package]]
-name = "keel-mtp"
-version = "1.0.0"
-dependencies = [
- "anyhow",
- "jiff",
- "libc",
- "keel-files",
- "keel-sys",
- "zerocopy",
-]
-
-[[package]]
-name = "keel-net"
-version = "1.0.0"
-dependencies = [
- "aes",
- "anyhow",
- "base64 0.22.1",
- "cbc",
- "dhcproto",
- "hickory-proto",
- "httparse",
- "libc",
- "md-5",
- "semver",
- "serde",
- "serde_json",
- "sha2 0.10.9",
- "ureq",
-]
-
-[[package]]
-name = "keel-pack"
-version = "1.0.0"
-dependencies = [
- "anyhow",
- "clap",
- "serde_json",
- "sha2 0.10.9",
- "keel-bootimg",
- "keel-config",
- "tempfile",
- "unpayload",
-]
-
-[[package]]
-name = "keel-preview"
-version = "1.0.0"
-dependencies = [
- "anyhow",
- "png",
- "serde",
- "keel-config",
- "keel-info",
- "keel-install",
- "keel-net",
- "keel-systems",
- "keel-ui",
- "keel-vab",
- "toml",
-]
-
-[[package]]
-name = "keel-sys"
-version = "1.0.0"
-dependencies = [
- "anyhow",
- "libc",
- "keel-block",
-]
-
-[[package]]
-name = "keel-system-init"
-version = "1.0.0"
-dependencies = [
- "anyhow",
- "libc",
- "keel-block",
- "keel-bootimg",
- "keel-modules",
- "keel-sys",
- "keel-systems",
-]
-
-[[package]]
-name = "keel-systems"
-version = "1.0.0"
-dependencies = [
- "abootimg-oxide",
- "anyhow",
- "libc",
- "serde",
- "sha2 0.10.9",
- "keel-binder",
- "keel-block",
- "keel-bootimg",
- "keel-config",
- "keel-sys",
- "keel-vab",
- "tempfile",
- "toml",
- "zip 8.6.0",
-]
-
-[[package]]
-name = "keel-ui"
-version = "1.0.0"
-dependencies = [
- "ab_glyph",
- "ab_glyph_rasterizer",
- "anyhow",
- "drm",
- "drm-ffi",
- "icu_locale_core",
- "jiff",
- "jpeg-decoder",
- "libc",
- "png",
- "proc-macro2",
- "serde",
- "serde_json",
- "keel-info",
- "keel-install",
- "keel-net",
- "keel-systems",
- "keel-vab",
- "svgtypes",
- "syn 2.0.119",
- "tiny-skia",
- "ttf-parser",
- "unicode-width",
- "vt100",
-]
-
-[[package]]
-name = "keel-vab"
-version = "1.0.0"
-dependencies = [
- "anyhow",
- "libc",
- "prost",
- "keel-binder",
- "keel-block",
- "keel-lp",
-]
 
 [[package]]
 name = "smallvec"

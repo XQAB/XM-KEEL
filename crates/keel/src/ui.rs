@@ -9,6 +9,7 @@ use crate::partwork;
 use crate::pty;
 use crate::readings::{Reading, Readings};
 use crate::secure;
+use crate::sensors;
 use crate::services;
 use crate::settings;
 use crate::systems;
@@ -162,7 +163,7 @@ const NORMAL_MAX: [(&str, &str); 3] = [
 /// Whether the phone is shut, as its inner touch panel's driver reports it
 /// from the fold sensor it follows: "capfold_status: 1" open, "0" shut.
 /// Nothing is reported where the driver is not there.
-fn shut_now() -> Option<bool> {
+fn fold_status() -> Option<bool> {
     let nodes = fs::read_dir("/sys/devices/platform").ok()?;
     for node in nodes.flatten() {
         let name = node.file_name();
@@ -174,6 +175,20 @@ fn shut_now() -> Option<bool> {
         return Some(last.trim_end_matches(',') == "0");
     }
     None
+}
+
+/// Whether the phone is shut, from whichever source can say so.
+///
+/// The touch panel's driver is asked first: it is a place in the device tree,
+/// read for nothing, and it is there on a cold recovery before any sensor
+/// daemon runs. The hinge on the ADSP is the second source, taken when the
+/// driver cannot answer — the page turning does not wait on the sensor
+/// service, and `sensors::bring_up()` is best effort for exactly this: a
+/// second opinion, not a precondition. The hinge only says shut or open once
+/// it has seen the phone move: a phone lying still since the start answers
+/// nothing, and the pages stay on the screen they opened on.
+fn shut_now(flip: &keel_sensors::FlipController) -> Option<bool> {
+    fold_status().or_else(|| flip.folded())
 }
 
 /// Hand the cover screen's digitizer to the kernel once its panel is lit.
@@ -1528,7 +1543,9 @@ pub fn run(cfg: &DeviceConfig, font: &Path, mono: &Path, request: bcb::Request, 
     // bootloader left it with no display the kernel can take down, the
     // panel is set up and taken down again — the one path that sends it the
     // command, and one that only lands with the phone's own panel off first.
-    if cfg.display.covers && shut_now() == Some(false) {
+    // Asked of the touch panel's driver alone: the hinge is not followed yet,
+    // and a phone that starts open has nothing for the hinge to say.
+    if cfg.display.covers && fold_status() == Some(false) {
         let cleared = match inner.darken(1) {
             Ok(true) => true,
             Ok(false) => false,
@@ -1630,6 +1647,18 @@ pub fn run(cfg: &DeviceConfig, font: &Path, mono: &Path, request: bcb::Request, 
     // before them are out of date.
     let readings = Readings::start(cfg)?;
     let mut read_at = Instant::now();
+    // The sensor service on the ADSP is brought up on a thread of its own, so
+    // the first frame does not wait on it: the daemons need seconds to settle
+    // and the registry a few more, and none of that is worth a dark screen on
+    // a page that used to come up in three. The hinge is followed from the
+    // start regardless and retries on its own; the service turning up later
+    // only gives it an answer to give. Every step there is best effort.
+    let _ = std::thread::spawn(sensors::bring_up);
+    // The hinge follows the phone being shut, for the cover screen to go to
+    // when the inner panel's driver has nothing to say. Its own thread does
+    // the reading: a service that is down leaves the answer absent and the
+    // loop running.
+    let flip = keel_sensors::FlipController::start();
     let mut installer: Option<Installer> = None;
     // Whether the panel's frame memory has been blacked out for an off
     // panel; cleared once a real frame is shown again.
@@ -2003,7 +2032,7 @@ pub fn run(cfg: &DeviceConfig, font: &Path, mono: &Path, request: bcb::Request, 
         // other, the screen they leave going dark first, as the display
         // processor is never asked to run both at once.
         if cfg.display.covers {
-            if let Some(shut) = shut_now() {
+            if let Some(shut) = shut_now(&flip) {
                 if shut != shut_state {
                     if shut && !cover_broken {
                         backlight.show(None)?;

@@ -18,7 +18,11 @@ keel-modules = { path = "../keel-modules" }
 keel-info = { path = "../keel-info" }
 keel-install = { path = "../keel-install" }
 keel-sys = { path = "../keel-sys" }
+keel-sensors = { path = "../keel-sensors" }
 keel-lp = { path = "../keel-lp" }
+# The sensor bring-up makes the node with `mknod` itself, and the same code
+# is built for the host so that its numbering is a test.
+libc = { workspace = true }
 
 [dev-dependencies]
 tempfile = "3.27.0"

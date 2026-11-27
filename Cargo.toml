@@ -17,6 +17,7 @@ members = [
     "crates/keel-net",
     "crates/keel-preview",
     "crates/keel-pack",
+    "crates/keel-sensors",
     "crates/keel-sys",
     "crates/keel-lp",
     "crates/keel-bootimg",

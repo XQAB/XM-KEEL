@@ -75,7 +75,7 @@ rec 内装整包真正走通。
 | 3.5 WLAN | `wlan0` 拿到 `192.168.33.127`，dmesg 报 reaches the internet | 通 |
 | 3.6 分区 | `persist` → `/mnt/vendor/persist` ext4 rw；`/mnt/system` erofs ro（dm-2 `system`、dm-4 `system_ext`） | 通 |
 | 3.7 两槽 | installed system release 17、security patch `2026-10-01`、`slot_suffix=_a` | 通 |
-| 3.8 基线 | 包内 `recovery` 的 sha256 仍缺 | 待 |
+| 3.8 基线 | 包内 `recovery` 已取出：`104857600` 字节，`sha256 = ab79a907d9cc0a015f9d8104e7ecf4ce6da90b67b2b346e978c4e472e4bedffa` | 通 |
 
 取证方法上的两点须知：recovery 里**没有 `service` 与 `ip` 命令**（`which` 皆空），所以
 「服务注册上了」只能靠 `/proc/<pid>/wchan` 停在 `binder_thread_read` 判（进了线程池等调用；
@@ -254,7 +254,9 @@ recovery 里 `teepriv0` 是 root 独占的 0600，**root 靠 owner 身份直接�
 
 ### 3.8 打包基线（见 §1 A）
 
-- **看**：包地址与字节数已核（§2.1）；**只剩**从包里取出的 `recovery` 的 sha256。
+- **看**：包地址与字节数已核（§2.1）；从包里取出的 `recovery` 是 `104857600` 字节，
+  `sha256 = ab79a907d9cc0a015f9d8104e7ecf4ce6da90b67b2b346e978c4e472e4bedffa`
+  （payload 16 条 `REPLACE_XZ` 加 49 条 `REPLACE_BZ`，拼起来正好一整个分区，头是 `ANDROID!`、header v4）。
 - **变了会怎样**：不改也能构建（旧包仍在），但资产名/About 页/`verify-release.py` 的名字核对都与机器现状脱节。
 - **对应**：`devices/bixi.toml:239-242`、`.github/stock/bixi.txt` 三行。
 

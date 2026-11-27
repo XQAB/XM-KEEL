@@ -28,7 +28,7 @@ const SSC: u32 = 400;
 /// The UID the sensor service answers lookups under.
 const LOOKUP: [u64; 2] = [0xabab_abab_abab_abab; 2];
 /// How phones name the sensor that reports acceleration.
-const ACCEL_NAMES: [&str; 5] = ["accel", "accelerometer", "gravity", "linear_accel", "device_orientation"];
+pub const ACCEL_NAMES: [&str; 5] = ["accel", "accelerometer", "gravity", "linear_accel", "device_orientation"];
 
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
@@ -71,6 +71,7 @@ impl Direction {
 
 struct Connection {
     socket: OwnedFd,
+    local: Address,
     server: Option<Address>,
     sensor: Option<[u64; 2]>,
     transaction: u16,
@@ -88,7 +89,7 @@ impl Connection {
         let mut size = std::mem::size_of::<Address>() as libc::socklen_t;
         let got = unsafe { libc::getsockname(fd, (&mut local as *mut Address).cast(), &mut size) };
         ensure!(got == 0, "read QRTR address: {}", io::Error::last_os_error());
-        let connection = Self { socket, server: None, sensor: None, transaction: 0, heard: Instant::now(), notes: 0 };
+        let connection = Self { socket, local, server: None, sensor: None, transaction: 0, heard: Instant::now(), notes: 0 };
         let lookup = [10u32, SSC, 0, 0, 0].into_iter().flat_map(u32::to_le_bytes).collect::<Vec<_>>();
         connection.send(Address { family: AF_QRTR as u16, node: local.node, port: CONTROL }, &lookup)?;
         Ok(connection)
@@ -462,4 +463,202 @@ fn request(transaction: u16, uid: [u64; 2], message: u32, payload: &[u8]) -> Vec
     qmi.extend_from_slice(&envelope);
     qmi.extend_from_slice(&[0x10, 1, 0, 1]); // large indications
     qmi
+}
+
+// The probe below is the same client without the UI: it prints what the
+// service says instead of steering the pages, and it is what tells us where
+// a phone's sensor stack actually is.
+
+impl Connection {
+    /// Wait for one frame, up to `wait`.
+    fn receive(&self, wait: Duration) -> Result<Option<(Address, Vec<u8>)>> {
+        let deadline = Instant::now() + wait;
+        loop {
+            let mut buffer = [0u8; 65536];
+            let mut from = Address::default();
+            let mut size = std::mem::size_of::<Address>() as libc::socklen_t;
+            let n = unsafe {
+                libc::recvfrom(
+                    self.socket.as_raw_fd(),
+                    buffer.as_mut_ptr().cast(),
+                    buffer.len(),
+                    0,
+                    (&mut from as *mut Address).cast(),
+                    &mut size,
+                )
+            };
+            if n < 0 {
+                let error = io::Error::last_os_error();
+                match error.kind() {
+                    io::ErrorKind::WouldBlock => {
+                        if Instant::now() >= deadline {
+                            return Ok(None);
+                        }
+                        std::thread::sleep(Duration::from_millis(10));
+                        continue;
+                    }
+                    io::ErrorKind::Interrupted => continue,
+                    _ => return Err(error).context("receive SSC data"),
+                }
+            }
+            return Ok(Some((from, buffer[..n as usize].to_vec())));
+        }
+    }
+}
+
+/// Ask the sensor service what it has under these names, then watch the sensor
+/// that answered report. Everything goes over the kernel's QRTR socket.
+pub fn probe(names: &[String], rate: f32, seconds: u64, raw: bool) -> Result<()> {
+    let mut connection = Connection::open()?;
+    println!("qrtr: local node {}, port {}", connection.local.node, connection.local.port);
+
+    // The name service knows where the sensors' service is; if it says nothing,
+    // the address this phone is known to use is tried before giving up.
+    let deadline = Instant::now() + Duration::from_secs(3);
+    while connection.server.is_none() && Instant::now() < deadline {
+        let Some((from, data)) = connection.receive(Duration::from_millis(100))? else { continue };
+        if from.port == CONTROL {
+            if let Some(words) = control(&data) {
+                println!(
+                    "control: cmd {} service {} instance {} node {} port {}",
+                    words[0], words[1], words[2], words[3], words[4]
+                );
+                if words[1] == SSC && words[3] != 0 && words[4] != 0 {
+                    connection.server = Some(Address { family: AF_QRTR as u16, node: words[3], port: words[4] });
+                }
+            }
+        }
+    }
+    let server = match connection.server {
+        Some(server) => server,
+        None => {
+            let fallback = Address { family: AF_QRTR as u16, node: 5, port: 18 };
+            println!("ssc: the name service said nothing, trying node 5 port 18");
+            connection.server = Some(fallback);
+            fallback
+        }
+    };
+    println!("ssc: node {}, port {}", server.node, server.port);
+
+    // Every name is asked in the same request to the lookup service, whose own
+    // UID is the 0xabab one; the reply carries the UID the sensor really has.
+    for name in names {
+        let mut query = Vec::new();
+        bytes(&mut query, 1, name.as_bytes());
+        query.extend_from_slice(&[0x10, 1, 0x18, 1]);
+        connection.request(LOOKUP, 512, &query)?;
+    }
+    println!("asked: {} names", names.len());
+
+    let mut sensor = None;
+    let deadline = Instant::now() + Duration::from_secs(3);
+    while Instant::now() < deadline {
+        let Some((from, data)) = connection.receive(Duration::from_millis(100))? else { continue };
+        if from.port == CONTROL {
+            if let Some(words) = control(&data) {
+                println!(
+                    "control: cmd {} service {} instance {} node {} port {}",
+                    words[0], words[1], words[2], words[3], words[4]
+                );
+            }
+            continue;
+        }
+        if raw {
+            println!("frame: {}", hex(&data));
+        }
+        let messages = match events(&data) {
+            Ok(messages) => messages,
+            Err(e) => {
+                println!("frame: {} bytes, not parsed: {e:#}", data.len());
+                continue;
+            }
+        };
+        for (uid, message, payload) in messages {
+            if uid == LOOKUP && message == 768 {
+                match lookup_reply(payload) {
+                    Ok((names, uid)) => {
+                        println!("reply: names {names:?} uid {}", uid.map(uid_text).unwrap_or_else(|| "none".into()));
+                        if sensor.is_none() && uid.is_some() {
+                            sensor = uid;
+                        }
+                    }
+                    Err(e) => println!("reply: not parsed: {e:#}"),
+                }
+            } else {
+                println!("message: uid {} message {message}, {} bytes", uid_text(uid), payload.len());
+            }
+        }
+    }
+
+    let Some(wanted) = sensor else {
+        println!("none: no sensor UID came back for those names");
+        return Ok(());
+    };
+    println!("sensor: uid {}, asking for {rate} reports per second", uid_text(wanted));
+
+    let mut config = vec![0x0d]; // sns_std_sensor_config.sample_rate
+    config.extend_from_slice(&rate.to_le_bytes());
+    connection.request(wanted, 513, &config)?;
+
+    let deadline = Instant::now() + Duration::from_secs(seconds + 2);
+    let mut samples = 0u32;
+    while Instant::now() < deadline && samples < 2048 {
+        let Some((from, data)) = connection.receive(Duration::from_millis(100))? else { continue };
+        if from.port == CONTROL {
+            continue;
+        }
+        if raw {
+            println!("frame: {}", hex(&data));
+        }
+        let Ok(messages) = events(&data) else { continue };
+        for (uid, message, payload) in messages {
+            if uid != wanted || message != 1025 {
+                continue;
+            }
+            match acceleration(payload) {
+                Ok(sample) => {
+                    samples += 1;
+                    println!(
+                        "accel: {:>8.2} {:>8.2} {:>8.2} {:?}",
+                        sample[0], sample[1], sample[2], Direction::of(sample)
+                    );
+                }
+                Err(e) => println!("accel: not parsed: {e:#}"),
+            }
+        }
+    }
+    println!("end: {samples} samples");
+    Ok(())
+}
+
+/// The five words of a name service packet, when this frame is one.
+fn control(data: &[u8]) -> Option<[u32; 5]> {
+    if data.len() != 20 {
+        return None;
+    }
+    let words: Vec<_> = data.as_chunks::<4>().0.iter().map(|v| u32::from_le_bytes(*v)).collect();
+    Some([words[0], words[1], words[2], words[3], words[4]])
+}
+
+/// The names and the sensor UID a lookup reply carries.
+fn lookup_reply(data: &[u8]) -> Result<(Vec<String>, Option<[u64; 2]>)> {
+    let fields = fields(data)?;
+    let names = fields
+        .iter()
+        .filter(|&&(tag, wire, _)| tag == 1 && wire == 2)
+        .map(|&(_, _, value)| String::from_utf8_lossy(value).into_owned())
+        .collect();
+    let uid = fields
+        .iter()
+        .find_map(|&(tag, wire, value)| (tag == 2 && wire == 2).then(|| sensor_uid(value).ok()).flatten());
+    Ok((names, uid))
+}
+
+fn uid_text(uid: [u64; 2]) -> String {
+    format!("{:016x}:{:016x}", uid[0], uid[1])
+}
+
+fn hex(data: &[u8]) -> String {
+    let pairs: Vec<_> = data.iter().map(|b| format!("{b:02x}")).collect();
+    pairs.join("")
 }
