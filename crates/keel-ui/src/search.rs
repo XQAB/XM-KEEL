@@ -224,3 +224,66 @@ mod tests {
         assert!(find("zzzz", Lang::Hant).is_empty());
     }
 }
+
+
+// A stress bench for the search bar: the field is typed into by anyone, so
+// the matcher must stay steady under a flood of letters, an absurdly long
+// word, and characters it was never meant to see. None of these assert what
+// is found — only that the answer is quick, repeatable, and never repeats an
+// entry or panics.
+#[cfg(test)]
+mod stress {
+    use super::*;
+    use std::collections::HashSet;
+
+    const LANGS: [Lang; 3] = [Lang::Hans, Lang::Hant, Lang::En];
+
+    #[test]
+    fn a_very_long_word_is_answered_rather_than_hung_on() {
+        let long = "备".repeat(100_000);
+        for l in LANGS {
+            let found = find(&long, l);
+            assert!(found.len() < 500, "a long word matched too much: {}", found.len());
+        }
+    }
+
+    #[test]
+    fn a_flood_of_words_still_answers() {
+        let flood = "b e i f e n 设置 install 安 装 backup wlan ".repeat(3_000);
+        for l in LANGS {
+            let found = find(&flood, l);
+            assert!(found.len() < 500, "a flood matched too much: {}", found.len());
+        }
+    }
+
+    #[test]
+    fn characters_it_never_expected_do_not_panic() {
+        for q in ["\u{0}", "\u{feff}", "\u{200b}", "😀🎉", "﹅", "ɑ", "İ", "\r\n\t", "。。。", "\\", "%s", "'; drop table"] {
+            for l in LANGS {
+                let _ = find(q, l);
+            }
+        }
+    }
+
+    #[test]
+    fn the_same_query_answers_the_same_way_and_never_twice() {
+        for q in ["a", "b", "c", "s", "设", "设置", "install", "backup", "wlan", "key", "加密", "jiami", "备份"] {
+            let first = find(q, Lang::Hans);
+            let second = find(q, Lang::Hans);
+            assert_eq!(first.len(), second.len(), "{q} did not answer the same way twice");
+            let mut seen: HashSet<*const Entry> = HashSet::new();
+            for e in &first {
+                assert!(seen.insert(*e as *const Entry), "{q} found the same entry twice");
+            }
+        }
+    }
+
+    #[test]
+    fn a_thousand_keystrokes_stay_cheap() {
+        let mut typed = String::new();
+        for ch in "beifenanzhuangshezhi".chars().cycle().take(1_000) {
+            typed.push(ch);
+            let _ = find(&typed, Lang::Hans);
+        }
+    }
+}
