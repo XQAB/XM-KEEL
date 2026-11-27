@@ -1587,6 +1587,12 @@ pub fn run(cfg: &DeviceConfig, font: &Path, mono: &Path, request: bcb::Request, 
     };
     let mut app = App::new(first, w, h, cfg.display.density as f32 / 160.0);
     app.set_screen_corners(cfg.display.corner_radius as f32);
+    // What the phone says about its cover: whether it has one, and whether
+    // its pages are mounted the other way up. The settings page's own switch
+    // stands over the second, so a phone that never tapped it keeps following
+    // the config, and a tap on the phone can put a wrong guess right without
+    // another image being written.
+    app.set_cover(cfg.display.covers, cfg.display.cover_turned);
     // The settings kept from the starts before are back before the first
     // frame, and before file transfer starts with its switch and the time
     // zone. The pages speak the language chosen then, or else the one the
@@ -2122,9 +2128,9 @@ pub fn run(cfg: &DeviceConfig, font: &Path, mono: &Path, request: bcb::Request, 
                 let (aw, ah) = surface.size();
                 app.resize(aw, ah, scale);
                 app.compose(canvas, &fonts, &info, &shown_clock, now);
-                let turn = turned ^ if on_cover { cfg.display.cover_turned } else { false };
-                    if turn {
-                        canvas.turn_half();
+                let turn = turned ^ if on_cover { app.state.cover_turned_now() } else { false };
+                if turn {
+                    canvas.turn_half();
                 }
                 surface.present(canvas)?;
                 eprintln!("frame {:?} at {aw}x{ah} in {} ms", app.screen(), t0.elapsed().as_millis());
@@ -3076,8 +3082,11 @@ pub fn run(cfg: &DeviceConfig, font: &Path, mono: &Path, request: bcb::Request, 
                 Incoming::Input(Event::Touch(t, at, which)) => {
                     // The pages may be drawn half a turn round, turned by hand
                     // on the settings page, so a finger's place is turned with
-                    // them before anything is looked for under it.
-                    let turn = turned ^ if which == 1 { cfg.display.cover_turned } else { false };
+                    // them before anything is looked for under it. The cover's
+                    // turn is its own, and the switch on the settings page
+                    // decides it, so it is read here rather than from the
+                    // config by any means that would go stale.
+                    let turn = turned ^ if which == 1 { app.state.cover_turned_now() } else { false };
                     let t = match turn {
                         true => {
                             let (aw, ah) = if which == 1 { (cw, ch) } else { (w, h) };
