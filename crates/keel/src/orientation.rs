@@ -115,6 +115,21 @@ impl Connection {
         self.send(self.server.context("SSC has no address")?, &request(self.transaction, uid, message, payload))
     }
 
+    fn send_full(
+        &mut self,
+        uid: [u64; 2],
+        message: u32,
+        payload: &[u8],
+        extra: Option<&[u8]>,
+        with_tail: bool,
+    ) -> Result<()> {
+        self.transaction = self.transaction.wrapping_add(1);
+        self.send(
+            self.server.context("SSC has no address")?,
+            &request_full(self.transaction, uid, message, payload, extra, with_tail),
+        )
+    }
+
     fn read(&mut self) -> Result<Vec<[f32; 3]>> {
         let mut samples = Vec::new();
         // Bound the work of a frame even if the service floods this socket.
@@ -429,6 +444,82 @@ fn events(data: &[u8]) -> Result<Vec<SensorEvent<'_>>> {
     Ok(result)
 }
 
+/// The integer value of one attribute, read off an attributes reply.
+fn attribute_int(data: &[u8], wanted: u32) -> Option<u64> {
+    let parsed = fields(data).ok()?;
+    for (tag, wire, value) in parsed {
+        if tag != 1 || wire != 2 {
+            continue;
+        }
+        let Ok(inner) = fields(value) else { continue };
+        let Some(id) = inner
+            .iter()
+            .find(|&&(tag, wire, _)| tag == 1 && matches!(wire, 0 | 5))
+            .and_then(|&(_, wire, raw)| {
+                if wire == 0 {
+                    let mut rest = raw;
+                    varint(&mut rest).ok()
+                } else {
+                    raw.get(..4)
+                        .map(|head| u32::from_le_bytes(head.try_into().unwrap()) as u64)
+                }
+            })
+        else {
+            continue;
+        };
+        if id != u64::from(wanted) {
+            continue;
+        }
+        return inner
+            .iter()
+            .find(|&&(tag, _, _)| tag == 2)
+            .and_then(|&(_, wire, raw)| {
+                if wire == 0 {
+                    let mut rest = raw;
+                    varint(&mut rest).ok()
+                } else if wire == 5 {
+                    raw.get(..4)
+                        .map(|head| u32::from_le_bytes(head.try_into().unwrap()) as u64)
+                } else {
+                    None
+                }
+            });
+    }
+    None
+}
+
+/// The first integer a payload holds, which a refusal's code is.
+fn first_int(data: &[u8]) -> Option<u64> {
+    let parsed = fields(data).ok()?;
+    let &(_, wire, value) = parsed.iter().find(|&&(tag, _, _)| tag == 1)?;
+    match wire {
+        0 => {
+            let mut rest = value;
+            varint(&mut rest).ok()
+        }
+        5 => value
+            .get(..4)
+            .map(|head| u32::from_le_bytes(head.try_into().unwrap()) as u64),
+        _ => None,
+    }
+}
+
+/// Every float a sample carries, in order.
+fn floats(data: &[u8]) -> Vec<f32> {
+    let Ok(parsed) = fields(data) else { return Vec::new() };
+    parsed
+        .iter()
+        .filter(|&&(tag, wire, value)| tag == 1 && matches!(wire, 2 | 5) && value.len() % 4 == 0)
+        .flat_map(|&(_, _, value)| {
+            value
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .map(|v| f32::from_le_bytes(*v))
+        })
+        .collect()
+}
+
 fn bytes(out: &mut Vec<u8>, tag: u8, value: &[u8]) {
     out.push(tag * 8 + 2);
     let mut size = value.len();
@@ -462,6 +553,48 @@ fn request(transaction: u16, uid: [u64; 2], message: u32, payload: &[u8]) -> Vec
     qmi.extend_from_slice(&(envelope.len() as u16).to_le_bytes());
     qmi.extend_from_slice(&envelope);
     qmi.extend_from_slice(&[0x10, 1, 0, 1]); // large indications
+    qmi
+}
+
+/// Build a request the way the service expects its configuration and
+/// attribute messages: the payload in its own field, an optional second
+/// body, and the client id only where the message takes one. The lookup
+/// path above predates this; the service answers it anyway, so it stays.
+fn request_full(
+    transaction: u16,
+    uid: [u64; 2],
+    message: u32,
+    payload: &[u8],
+    extra: Option<&[u8]>,
+    with_tail: bool,
+) -> Vec<u8> {
+    let mut id = vec![9];
+    id.extend_from_slice(&uid[0].to_le_bytes());
+    id.push(17);
+    id.extend_from_slice(&uid[1].to_le_bytes());
+    let mut body = Vec::new();
+    bytes(&mut body, 1, &id);
+    body.push(0x15);
+    body.extend_from_slice(&message.to_le_bytes());
+    if !payload.is_empty() {
+        bytes(&mut body, 3, payload);
+    }
+    if let Some(extra) = extra {
+        bytes(&mut body, 4, extra);
+    }
+    let tail = if with_tail { 4 } else { 0 };
+    let length = 1 + 4 + body.len() + tail;
+    let mut qmi = vec![0];
+    qmi.extend_from_slice(&transaction.to_le_bytes());
+    qmi.extend_from_slice(&0x20u16.to_be_bytes());
+    qmi.extend_from_slice(&(length as u16).to_be_bytes());
+    qmi.extend_from_slice(&[0, 1]);
+    qmi.extend_from_slice(&((body.len() + 2) as u16).to_le_bytes());
+    qmi.extend_from_slice(&(body.len() as u16).to_le_bytes());
+    qmi.extend_from_slice(&body);
+    if with_tail {
+        qmi.extend_from_slice(&[0x10, 0x01, 0x00, 0x01]); // a client id of one
+    }
     qmi
 }
 
@@ -508,6 +641,9 @@ impl Connection {
 
 /// Ask the sensor service what it has under these names, then watch the sensor
 /// that answered report. Everything goes over the kernel's QRTR socket.
+///
+/// A sensor that only reports on change (attribute 16 set) refuses the
+/// periodic configuration, so it is asked with the on-change one instead.
 pub fn probe(names: &[String], rate: f32, seconds: u64, raw: bool) -> Result<()> {
     let mut connection = Connection::open()?;
     println!("qrtr: local node {}, port {}", connection.local.node, connection.local.port);
@@ -596,9 +732,49 @@ pub fn probe(names: &[String], rate: f32, seconds: u64, raw: bool) -> Result<()>
     };
     println!("sensor: uid {}, asking for {rate} reports per second", uid_text(wanted));
 
-    let mut config = vec![0x0d]; // sns_std_sensor_config.sample_rate
-    config.extend_from_slice(&rate.to_le_bytes());
-    connection.request(wanted, 513, &config)?;
+    // Attribute 16 says whether the sensor only reports on change. Those
+    // refuse the periodic configuration and are asked with the on-change
+    // one, whose rate is a 32-bit integer rather than the float 513 takes.
+    const BATCH: [u8; 5] = [0x0a, 0x03, 0x08, 0xe8, 0x07];
+    connection.send_full(wanted, 1, &[0x08, 0x01, 0x10, 0x00], Some(&[]), false)?;
+    let mut on_change = false;
+    let asking = Instant::now() + Duration::from_secs(2);
+    while Instant::now() < asking {
+        let Some((from, data)) = connection.receive(Duration::from_millis(100))? else { continue };
+        if from.port == CONTROL {
+            continue;
+        }
+        if raw {
+            println!("frame: {}", hex(&data));
+        }
+        let Ok(messages) = events(&data) else { continue };
+        let mut heard = false;
+        for (uid, message, payload) in messages {
+            if uid != wanted || message != 1 {
+                continue;
+            }
+            match attribute_int(payload, 16) {
+                Some(value) => {
+                    on_change = value == 1;
+                    println!("attr 16: {value}");
+                }
+                None => println!("attr 16: not reported"),
+            }
+            heard = true;
+        }
+        if heard {
+            break;
+        }
+    }
+    if on_change {
+        let mut payload = vec![0x08, 0x01, 0x10, 0x01, 0x1d];
+        payload.extend_from_slice(&(rate as u32).to_le_bytes());
+        connection.send_full(wanted, 514, &payload, Some(&BATCH), true)?;
+    } else {
+        let mut extra = vec![0x0a, 0x05, 0x0d];
+        extra.extend_from_slice(&rate.to_le_bytes());
+        connection.send_full(wanted, 513, &[0x08, 0x01, 0x10, 0x01], Some(&extra), true)?;
+    }
 
     let deadline = Instant::now() + Duration::from_secs(seconds + 2);
     let mut samples = 0u32;
@@ -612,19 +788,27 @@ pub fn probe(names: &[String], rate: f32, seconds: u64, raw: bool) -> Result<()>
         }
         let Ok(messages) = events(&data) else { continue };
         for (uid, message, payload) in messages {
-            if uid != wanted || message != 1025 {
-                continue;
-            }
-            match acceleration(payload) {
-                Ok(sample) => {
-                    samples += 1;
-                    println!(
-                        "accel: {:>8.2} {:>8.2} {:>8.2} {:?}",
-                        sample[0], sample[1], sample[2], Direction::of(sample)
-                    );
-                }
-                Err(e) => println!("accel: not parsed: {e:#}"),
-            }
+        if uid != wanted {
+            continue;
+        }
+        if message == 130 {
+            println!("status: refused, code {}", first_int(payload).unwrap_or_default());
+            continue;
+        }
+        if message != 1025 {
+            continue;
+        }
+        let values = floats(payload);
+        samples += 1;
+        if values.len() == 3 {
+            let sample = [values[0], values[1], values[2]];
+            println!(
+                "accel: {:>8.2} {:>8.2} {:>8.2} {:?}",
+                sample[0], sample[1], sample[2], Direction::of(sample)
+            );
+        } else {
+            println!("sample: {values:?}");
+        }
         }
     }
     println!("end: {samples} samples");
