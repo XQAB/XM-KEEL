@@ -1338,7 +1338,7 @@ dependencies = [
 
 [[package]]
 name = "keel"
-version = "1.1.0"
+version = "1.1.1"
 dependencies = [
  "anyhow",
  "clap",
@@ -1370,7 +1370,7 @@ dependencies = [
 
 [[package]]
 name = "keel-backup"
-version = "1.1.0"
+version = "1.1.1"
 dependencies = [
  "anyhow",
  "keel-block",
@@ -1385,7 +1385,7 @@ dependencies = [
 
 [[package]]
 name = "keel-binder"
-version = "1.1.0"
+version = "1.1.1"
 dependencies = [
  "anyhow",
  "keel-sys",
@@ -1394,7 +1394,7 @@ dependencies = [
 
 [[package]]
 name = "keel-block"
-version = "1.1.0"
+version = "1.1.1"
 dependencies = [
  "anyhow",
  "libc",
@@ -1405,7 +1405,7 @@ dependencies = [
 
 [[package]]
 name = "keel-bootimg"
-version = "1.1.0"
+version = "1.1.1"
 dependencies = [
  "abootimg-oxide",
  "anyhow",
@@ -1417,7 +1417,7 @@ dependencies = [
 
 [[package]]
 name = "keel-config"
-version = "1.1.0"
+version = "1.1.1"
 dependencies = [
  "anyhow",
  "serde",
@@ -1426,7 +1426,7 @@ dependencies = [
 
 [[package]]
 name = "keel-crypto"
-version = "1.1.0"
+version = "1.1.1"
 dependencies = [
  "aes-gcm",
  "anyhow",
@@ -1441,7 +1441,7 @@ dependencies = [
 
 [[package]]
 name = "keel-files"
-version = "1.1.0"
+version = "1.1.1"
 dependencies = [
  "anyhow",
  "libc",
@@ -1449,7 +1449,7 @@ dependencies = [
 
 [[package]]
 name = "keel-info"
-version = "1.1.0"
+version = "1.1.1"
 dependencies = [
  "anyhow",
  "keel-block",
@@ -1463,7 +1463,7 @@ dependencies = [
 
 [[package]]
 name = "keel-install"
-version = "1.1.0"
+version = "1.1.1"
 dependencies = [
  "abootimg-oxide",
  "anyhow",
@@ -1493,7 +1493,7 @@ dependencies = [
 
 [[package]]
 name = "keel-lp"
-version = "1.1.0"
+version = "1.1.1"
 dependencies = [
  "anyhow",
  "sha2 0.10.9",
@@ -1502,7 +1502,7 @@ dependencies = [
 
 [[package]]
 name = "keel-modules"
-version = "1.1.0"
+version = "1.1.1"
 dependencies = [
  "anyhow",
  "libc",
@@ -1511,7 +1511,7 @@ dependencies = [
 
 [[package]]
 name = "keel-mtp"
-version = "1.1.0"
+version = "1.1.1"
 dependencies = [
  "anyhow",
  "jiff",
@@ -1523,7 +1523,7 @@ dependencies = [
 
 [[package]]
 name = "keel-net"
-version = "1.1.0"
+version = "1.1.1"
 dependencies = [
  "aes",
  "anyhow",
@@ -1543,7 +1543,7 @@ dependencies = [
 
 [[package]]
 name = "keel-pack"
-version = "1.1.0"
+version = "1.1.1"
 dependencies = [
  "anyhow",
  "clap",
@@ -1557,7 +1557,7 @@ dependencies = [
 
 [[package]]
 name = "keel-preview"
-version = "1.1.0"
+version = "1.1.1"
 dependencies = [
  "anyhow",
  "keel-config",
@@ -1574,7 +1574,7 @@ dependencies = [
 
 [[package]]
 name = "keel-sensors"
-version = "1.1.0"
+version = "1.1.1"
 dependencies = [
  "anyhow",
  "libc",
@@ -1582,7 +1582,7 @@ dependencies = [
 
 [[package]]
 name = "keel-sys"
-version = "1.1.0"
+version = "1.1.1"
 dependencies = [
  "anyhow",
  "keel-block",
@@ -1591,7 +1591,7 @@ dependencies = [
 
 [[package]]
 name = "keel-system-init"
-version = "1.1.0"
+version = "1.1.1"
 dependencies = [
  "anyhow",
  "keel-block",
@@ -1604,7 +1604,7 @@ dependencies = [
 
 [[package]]
 name = "keel-systems"
-version = "1.1.0"
+version = "1.1.1"
 dependencies = [
  "abootimg-oxide",
  "anyhow",
@@ -1624,7 +1624,7 @@ dependencies = [
 
 [[package]]
 name = "keel-ui"
-version = "1.1.0"
+version = "1.1.1"
 dependencies = [
  "ab_glyph",
  "ab_glyph_rasterizer",
@@ -1654,7 +1654,7 @@ dependencies = [
 
 [[package]]
 name = "keel-vab"
-version = "1.1.0"
+version = "1.1.1"
 dependencies = [
  "anyhow",
  "keel-binder",
