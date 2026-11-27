@@ -263,6 +263,11 @@ camera_face_detect / camera_hand_detect / camera_qrcode_detect / camera_frame / 
 有关的传感器，一次折动就能定性（`1.0` 到底是开还是合，得靠折一次才知道）。这条比"把 150 条
 registry 在 recovery 里重建出来"便宜得多。
 
+**但这只是"六步没做"时的备选，不是常规路径。** 2026-11-27 的真机冷启动（§10）里六步由
+`bring_up()` 自己走完、registry 到 **142 条**，`hinge_angle` / `flip_status` / `ambient_light`
+全在灯下，`tp_hall` 也就不必再当主判据了——它只在 daemon 没挂上、registry 退回 10~31 条那种
+残局里有意义。
+
 同时量到两件与老结论冲突的事：
 
 - `remoteproc-adsp` 在 `1.42 s` 就已经被内核上电（`powering up`），init 的
@@ -301,3 +306,121 @@ A/B 已经把这层因果关系定死：写它不带来 registry，也不带走 
   只有 `boot` 与 `ssr` 两个写节点，没有 bootmode 入口；
 - 内核 IIO 直读：recovery 里没有 `i2c-dev.ko`／`spidev.ko`，`i2c-7` 的 `0x6a/0x6c` 是充电泵
   `sc8541`，`spi0/1/2` 没有 spidev。
+## 10. 真机冷启动验收（2026-11-27，镜像 `skyward-5bcd20d`，sha256 `3dce0cf9…`，A 槽）
+
+这一台机器、这一次冷启动，从开机到服务应答，**全程没有敲过一条命令**：六步由
+`bring_up()` 在 `ui.rs:1656` 的线程里自己走完。
+
+### 10.1 首帧不被挡
+
+```
+[10.278] set 51 backlight 200          ← 首帧画出
+[10.300] set 51 backlight 0            ← 允许熄屏等按键（设计行为）
+[10.667] sensors: bringing the sensor service up
+```
+
+服务拉起比首帧晚 **0.39 秒**。如果还是 `1c561fd` 那样同步调用，首帧必须等六步跑完
+（这一次是 `15.745`），首页就是十几秒黑屏。`eddf395` 的 `std::thread::spawn` 确实把
+这件事挪出了启动路径。
+
+### 10.2 六步全程无人干预
+
+```
+[ 3.460] skyward: persist is mounted on /mnt/vendor/persist
+[10.672] skyward: sensors: bringing the sensor service up
+[10.674] skyward: sensors: /dev/block/by-name/dsp_a mounted as ext4
+[10.684] skyward: sensors: frpc-adsprpc is loaded
+[10.684] skyward: sensors: /dev/fastrpc-adsp-secure made, minor 281
+[10.684] skyward: sensors: the linker namespace is written
+[10.690] skyward: sensors: pd-mapper started as 757
+[11.701] skyward: sensors: adsprpcd started as 823
+[13.724] skyward: sensors: sscrpcd started as 836
+[15.745] skyward: sensors: the sensor service answers
+```
+
+- **`persist` 那一行是 `main.rs` 的 `[partitions] mounted` 循环打的**（`bixi.toml` 里
+  `mounted = ["persist"]`），不是 `bind_persist()` 挂的；`bind_persist()` 只是把它 bind 到
+  `/persist`，所以源永远在。曾经怀疑过"recovery 里没人挂 persist"，这条日志把它否掉。
+- **`minor 281` 是现读的**：`secure_node()` 从 `/proc/misc` 取 `fastrpc-adsp-secure` 的
+  编号再 `mknod`，281 与 282 都见过，硬编码会错。
+- 每一次 settle（`pd-mapper` 1 s、`adsprpcd` 2 s、`sscrpcd` 0 s）都落在预期位置。
+
+### 10.3 一次折动的完整角度序列
+
+`crates/keel-sensors/examples/hingewatch.rs` 抓到的 **209 个样本**（`0.02s → 62.88s`，
+角度 min 0 / max 179）：
+
+| 时刻 | 角度 | 说明 |
+| --- | --- | --- |
+| `35.58s` | `178°` | 开始合 |
+| `36.08s` | `154°` | |
+| `36.22s` | `124°` | |
+| `36.31s` | `106°` | |
+| `36.42s` | `89°` | 半折 |
+| `36.50s` | `74°` | |
+| `36.57s` | `61°` | |
+| `36.73s` | `37°` | |
+| `36.93s` | `16°` | |
+| `37.21s` | `0°` | 完全合上（7.35 秒内 83 个样本） |
+| `37.21→39.57s` | — | 静止 2.4 秒，无样本（on-change 语义） |
+| `39.57s` | `2°` | 开始展开 |
+| `41.68s` | `5°` | |
+| `49.31s` | `167°` | |
+| `62.88s` | `178°` | 完全展开（6.66 秒内 118 个样本） |
+
+滞回阈值 `FOLDED_BELOW = 20.0` / `OPEN_ABOVE = 150.0` 在这批数据上判得干净：
+0–20 段判「合」、150–179 段判「开」，中间段保持上一次判定。
+
+### 10.4 外屏切换确实在工作，而且 `capfold_status` 会跟着折动变
+
+同步采 `capfold_status` 与两块面板的背光（每 200 ms，变化才记）：
+
+```
+[33s] capfold=[capfold_status: 1] p0=819 p1=0      ← 按电源键亮内屏
+[38s] capfold=[capfold_status: 0] p0=819 p1=0      ← 开始合盖，驱动先报 0
+[38s] capfold=[capfold_status: 0] p0=0   p1=0      ← 内屏灭
+[38s] capfold=[capfold_status: 0] p0=0   p1=819    ← 外屏亮
+[43s] capfold=[capfold_status: 1] p0=0   p1=819    ← 开始展开，驱动回 1
+[43s] capfold=[capfold_status: 1] p0=0   p1=0      ← 外屏灭
+[43s] capfold=[capfold_status: 1] p0=819 p1=0      ← 内屏亮
+```
+
+**这一条更正了本文早先的一个判断**：`capfold_status` 在 recovery 里**是**会随折动变化的，
+`shut_now()` 的第一来源（`fold_status()`）在合盖时真的拿到 `Some(true)`。先前看到「折了之后
+仍是 1」，是因为那一次并没有真折（只是按键亮灭屏），不是驱动不更新。
+
+`capfold_status` 真正的局限在别处：**它只有在触摸模块加载之后才存在**（`synaptics_tcm2` /
+`xiaomi_touch`），冷启动最初几秒没有这个文件 → `fold_status()` 返回 `None`。`hinge_angle`
+当兜底的意义就在这里，而不是「驱动永远不更新」。
+
+折动时 `recovery.log` 还多了四行，正好对应 `ui.rs` 的 `load_cover_touch()`：
+
+```
+[4586.749761] loaded /vendor_dlkm/lib/modules/panel_event_notifier.ko
+[4586.749959] loaded /vendor_dlkm/lib/modules/xiaomi_touch.ko
+[4586.750148] loaded /vendor_dlkm/lib/modules/synaptics_tcm2.ko
+[4586.750337] loaded /vendor_dlkm/lib/modules/goodix_core.ko
+```
+
+### 10.5 加速度计的精确拒绝码（比手测更细）
+
+同一次冷启动里用 `enable(suid, 10)`（514）对每个候选逐个大写，回到的是：
+
+| 传感器 | 结果 |
+| --- | --- |
+| `accel`（两个 uid） | `status 130, code 3` |
+| `gravity`（两个 uid） | `status 130, code 2` |
+| `gyro`（两个 uid） | `status 130, code 3` |
+| `ori` | `status 130, code 6` |
+| `tilt`（三个 uid） | `514 was acknowledged but never answered` |
+
+**三轴不可得这条结论坐实**，并且现在有精确的 code 可查：不是"没消息号"这么笼统，
+而是 ADSP 明确按传感器类别拒绝。`tilt` 更特殊：`ack` 之后永不回应，连错误码都不给。
+
+### 10.6 还没做的一件事
+
+`keelbin sns` 这个命令行工具**读不到 on-change 传感器**，因为
+`crates/keel/src/orientation.rs:601` 对每个名字都发 **513（periodic）**，而 `hinge_angle`
+的属性表写着 `attr 16 = 1`（on-change），只收 514。库本身没错（`client.rs:245 enable`
+走的就是 514），是那条诊断命令的参数选错了。修法：按 `attr 16` 决定发 513 还是 514。
+本文这套链路不受影响——`hinge.rs` 用的是 `client.read_sensor()`。
