@@ -35,6 +35,8 @@
    `/vendor/dsp` 没挂、`/persist` 没 bind——`fold=0`、内屏灭（`p0=0`）、外屏亮
    （`p1=819`）、外屏触摸驱动已加载（`goodix=1`）全部成立。所以 §5.1 那六步解决的是
    「触摸驱动不给答案时没有第二个判断来源」，不是「外屏才能切」。
+5. **不做按重力的自动翻转：recovery 里没有重力数据源**，这是六个传感器逐一试出来的，
+   不是没试到位。数据与代码落点见 §11。
 
 ## 0.1 这次改动在换屏路径里的位置
 
@@ -423,3 +425,36 @@ A/B 已经把这层因果关系定死：写它不带来 registry，也不带走 
 `attr 16 = 1`（on-change），只收 514，所以那条命令读不到它。`84dc247` 已改成按 `attr 16`
 决定发 513 还是 514，真机验到 `attr 16: 1` 与 `sample: [179.0, …]`。本文这套链路一直不受
 影响：`hinge.rs` 用的是 `client.read_sensor()`。
+
+## 11. 重力翻转在 recovery 里不可行（实测结论）
+
+**结论一句话：recovery 里读不到重力，所以不做按重力的自动 180° 翻转。** 页面朝向只有两个
+来源——触摸驱动的 `capfold_status` 与 ADSP 上的 `hinge_angle`（§0.1），180° 翻转维持在设置页
+的手动开关上。
+
+六个候选逐个用 `enable(suid, 10)`（514，on-change）打，回的是：
+
+| 传感器 | 结果 | 还有没有别的路 |
+| --- | --- | --- |
+| `accel`（lsm6dsv `3846c24e`、lsm6dso `3c4b340b`） | `ack` 之后 `status 130, code 5`；512 三条 `error 7`、无答案（§10.5 那次读到 code 3，两次都是拒绝） | 属性表完整（`sns_accel.proto`、rates 30/60/120/240/480、continuous、量程 960 g），但 config 内层 msg id 不在 `snsapi` 的标准枚举里，6 种组合 × 4 个 uid 零真样本 |
+| `gravity` | `status 130, code 2`（两个 uid） | 同上，只是被拒得更早 |
+| `gyro` | `status 130, code 3`（两个 uid） | — |
+| `orientation`（`ori`） | `status 130, code 6` | — |
+| `tilt` | `514 acked but never answered`（三个 uid），**0 样本** | 连错误码都不给，等于不存在的传感器 |
+| `device_orient` | 能读，但只吐一条固定的 `[4, 4, 0 …]`：10 分钟里主动旋转，样本数 **1**，后续 payload 全 0 | 分不出 0°/90°/180°/270° |
+
+另外两条也否掉了：
+
+- **`screen_down`**：只认「屏幕朝下放桌上」这一种姿态，物理旋转（横过来、竖起来）完全不响应，
+  拿它当翻转判据会把正常的握持也判进去；
+- **内核直读**：recovery 里没有 `i2c-dev.ko` 也没有 `spidev.ko`，`/sys/class/sensors` 不存在，
+  i2c-7 上的 `0x6a/0x6c` 是充电泵 `sc8541`，spi0/1/2 没有 spidev。绕 ADSP 这条路不存在。
+
+所以代码侧把这件事定死：`crates/keel/src/orientation.rs` 里原来那套线程化的方向监听
+（`start()` / `Sensor` / `Direction`）已经删掉——它们自 hinge 接手换屏后就没有调用者了，留着
+只会让人以为还有重力自动翻转。现在这个文件只剩 `probe()`，只服务 `keelbin sns`，模块注释里
+写着上面这张表的结论。
+
+冷启动（首帧时间、六步日志、一次折动的 209 个样本、registry 142）的完整读数见
+[`hinge-cold-boot.md`](hinge-cold-boot.md)。
+
