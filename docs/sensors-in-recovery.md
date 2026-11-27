@@ -43,7 +43,9 @@
 - 第一来源是触摸驱动，`fold_status()` 直接读 sysfs，**今天就能用，不依赖本文任何一步**；
 - 第二来源才是 `hinge_angle`，只有驱动文件读不到（或内容不认识）时才被问到；
 - `sensors::bring_up()` 因此是 best-effort 的**兜底**，失败只写 kmsg、不影响启动，
-  更不能被写成「外屏切换的前置条件」——不然以后读代码的人会以为换屏依赖 ADSP。
+  更不能被写成「外屏切换的前置条件」——不然以后读代码的人会以为换屏依赖 ADSP；
+- 它跑在**独立线程**里（`ui.rs` 里 `std::thread::spawn(sensors::bring_up)`），首帧先画先上屏，
+  服务晚几秒到只让 hinge 晚几秒有答案，不会把首页拖黑。
 
 ## 1. 判定顺序（按这个顺序查，别跳）
 
@@ -132,6 +134,10 @@ setsid /vendor/bin/adsprpcd rootpd adsp   >/dev/null 2>&1 &   sleep 2   # 没有
 setsid /vendor/bin/sscrpcd sensorspd adsp >/dev/null 2>&1 &
 ```
 
+`dsp_a` 是这台机器的 sensor 固件分区；`dsp_b` 在 bixi 上是**另一个槽整块独立的 dsp 分区**，
+不跟 slot 后缀走，挂上去会拿到旧槽的 skel 库，所以只是兜底顺序的第二位——代码里取到哪个会
+以完整路径写进 kmsg（`sensors: {device} mounted as {fs}`）。
+
 三次独立冷启动（uptime 15 s / 31 s / 41 s 起跑）的 A/B：
 
 | 做法 | registry | hinge |
@@ -144,10 +150,15 @@ setsid /vendor/bin/sscrpcd sensorspd adsp >/dev/null 2>&1 &
 **结论**：31 → 142 取决于三个 daemon 是否就位，与 `/sys/kernel/boot_adsp/ssr` 无关。
 那节点是音频子系统的重启开关，**recovery 里一行都不要写**；等 5 秒就够。
 
-这套顺序编成了 `crates/keel/src/sensors.rs` 的 `bring_up()`：起屏之后、`FlipController::start()`
-之前调用一次，每一步 best-effort（失败只写 kmsg），服务已经在答就直接返回。它的定位是
-**给换屏一个第二判据**（见 §0.1）：触摸驱动在的时候用驱动，驱动不在或答不上来时才有它，
-它不决定外屏能不能亮。
+这套顺序编成了 `crates/keel/src/sensors.rs` 的 `bring_up()`，在 `ui.rs` 里用
+`std::thread::spawn` 起在**工作线程**上、紧跟 `FlipController::start()`：**首帧不等它**，
+每一步 best-effort（失败只写 kmsg），服务已经在答就直接返回。它不阻塞首帧的原因很实在：
+三个 daemon 的 settle 合计 3 秒，`wait_until_answering()` 再等最多 10 秒，摆在首帧前面就是
+最坏 13 秒黑屏，而这个 recovery 首页原来是三秒左右亮的；放到线程里，菜单照旧先亮，hinge 的
+1→8 秒退避重连会自己等来服务。
+
+它的定位是**给换屏一个第二判据**（见 §0.1）：触摸驱动在的时候用驱动，驱动不在或答不上来时
+才有它，它不决定外屏能不能亮。
 
 ## 6. 协议（客户端部分，`crates/keel-sensors/src/frame.rs`）
 

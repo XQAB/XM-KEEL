@@ -35,7 +35,12 @@ use std::time::{Duration, Instant};
 
 /// Where a phone names its partitions, in the order they are looked for.
 const BY_NAME: [&str; 2] = ["/dev/block/by-name", "/dev/block/bootdevice/by-name"];
-/// The partition holding the sensor firmware, the running slot's first.
+/// The partition holding the sensor firmware, tried in this order. On bixi
+/// these are two whole partitions of their own, not slot-suffixed halves of
+/// one, so `dsp_b` is the other slot's firmware: mounting it would hand the
+/// daemons an older set of skel libraries. It is tried only because a phone
+/// that really does name its slots this way needs the fallback, and the
+/// kernel log records which partition was taken.
 const DSP: [&str; 2] = ["dsp_a", "dsp_b"];
 /// Where that partition is mounted for the daemons to read.
 const DSP_MOUNT: &str = "/vendor/dsp";
@@ -82,9 +87,11 @@ const PROBE: Duration = Duration::from_secs(2);
 
 /// Bring the sensor service up, for the hinge to follow.
 ///
-/// Called once, after the panel is up and before the hinge is followed. It
-/// does nothing when the service already answers, which is the ordinary case
-/// of a phone whose init started it.
+/// Called once, from a thread of its own once the pages are drawing: the
+/// daemons need seconds to settle and the registry a few more, and a page
+/// that used to come up in three should not wait on that. It does nothing
+/// when the service already answers, which is the ordinary case of a phone
+/// whose init started it.
 pub fn bring_up() {
     let _ = attempt();
 }
