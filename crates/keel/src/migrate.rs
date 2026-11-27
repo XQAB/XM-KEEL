@@ -24,23 +24,57 @@ use std::path::{Path, PathBuf};
 /// to `credential` and `settings`.
 pub const OLD: &str = "/metadata/skyward";
 pub const NEW: &str = "/metadata/keel";
+/// The mount the two live under, and their names inside it: kept apart so that
+/// the work done there can be run on a folder of the computer's own.
+const METADATA: &str = "/metadata";
+const OLD_NAME: &str = "skyward";
+const NEW_NAME: &str = "keel";
 
 /// Move the old folder to the new name. /metadata is writable only while the
 /// files are moved, as everywhere else it is written; it is mounted for the
 /// moment where it is not mounted yet, as in fastboot.
+///
+/// The old folder is looked for **inside** that mount. On a cold start into
+/// recovery /metadata is not mounted yet, so asking for `/metadata/skyward`
+/// before the closure runs always answers "not there": the move never ran, no
+/// line was ever written about it, and a phone upgraded to this build went on
+/// carrying its settings and credential in a folder nothing reads. Where there
+/// is nothing to move nothing is said; where the move ran, or failed, the
+/// kernel log says which.
 #[cfg(target_os = "android")]
 pub fn metadata() -> Result<()> {
-    let (old, new) = (Path::new(OLD), Path::new(NEW));
-    if !old.exists() {
-        return Ok(());
-    }
-    crate::settings::with_metadata(|| {
+    let moved = crate::settings::with_metadata(|| -> Result<bool> {
+        if !Path::new(OLD).exists() {
+            return Ok(false);
+        }
         keel_vab::metadata_writable(true)?;
-        let moved = move_over(old, new);
+        let moved = take_over(Path::new(METADATA));
         let back = keel_vab::metadata_writable(false);
-        moved?;
-        back
-    })
+        let moved = moved?;
+        back?;
+        Ok(moved)
+    });
+    match &moved {
+        Ok(true) => {
+            let _ = keel_sys::kmsg(&format!("migrate: {OLD} moved to {NEW}"));
+        }
+        Ok(false) => {}
+        Err(e) => {
+            let _ = keel_sys::kmsg(&format!("migrate: {OLD} not moved: {e:#}"));
+        }
+    }
+    moved.map(|_| ())
+}
+
+/// What the entry point does once /metadata is mounted: whether there was an
+/// old folder to take over, and, where there was, that it has been taken over.
+fn take_over(metadata: &Path) -> Result<bool> {
+    let (old, new) = (metadata.join(OLD_NAME), metadata.join(NEW_NAME));
+    if !old.exists() {
+        return Ok(false);
+    }
+    move_over(&old, &new)?;
+    Ok(true)
 }
 
 /// Move `old` to `new`; where `new` is already there, take the entries of
@@ -134,5 +168,43 @@ mod tests {
         move_over(&old, &new).unwrap();
 
         assert!(!new.exists(), "no folder is made where there was nothing to move");
+    }
+
+    #[test]
+    fn looking_before_the_partition_is_mounted_finds_nothing_to_move() {
+        // The shape of the bug that hid for two months: on a cold start
+        // /metadata is not mounted yet, so its child does not exist and
+        // `move_over` answers "nothing to move" without a word. The question
+        // is asked inside the mount for exactly this reason.
+        let root = folder("unmounted");
+        let (old, new) = (root.join("unmounted-metadata").join("skyward"), root.join("keel"));
+
+        move_over(&old, &new).unwrap();
+
+        assert!(!old.exists());
+        assert!(!new.exists());
+        assert!(!root.join("unmounted-metadata").exists(), "nothing is made on the way there");
+    }
+
+    #[test]
+    fn a_metadata_with_the_old_folder_has_it_taken_over_once() {
+        let root = folder("taken");
+        // A mounted /metadata that never carried the old name: nothing to do,
+        // and no failure to report.
+        assert!(!take_over(&root).unwrap());
+
+        fs::create_dir_all(root.join(OLD_NAME)).unwrap();
+        fs::write(root.join(OLD_NAME).join("credential"), b"sealed").unwrap();
+
+        assert!(take_over(&root).unwrap(), "there was something to take over");
+        assert_eq!(fs::read(root.join(NEW_NAME).join("credential")).unwrap(), b"sealed");
+        assert!(!root.join(OLD_NAME).exists(), "the old folder is gone");
+        assert!(!take_over(&root).unwrap(), "a second start finds nothing left to take over");
+    }
+
+    #[test]
+    fn the_folders_are_the_ones_the_mount_holds() {
+        assert_eq!(OLD, format!("{METADATA}/{OLD_NAME}"));
+        assert_eq!(NEW, format!("{METADATA}/{NEW_NAME}"));
     }
 }
