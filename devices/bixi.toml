@@ -20,6 +20,10 @@ diagonal = 6.86
 # 同一份配置里 status_bar_height = 146px；另一份基础配置是 130px。
 corner_radius = 134
 covers = true
+# The cover panel is mounted the other way up: turn its pages and the
+# fingers on it half a turn while the phone is shut, and leave the inner
+# screen alone.
+cover_turned = true
 
 [modules]
 sources = ["vendor_boot", "vendor_dlkm", "vendor", "system_dlkm"]
