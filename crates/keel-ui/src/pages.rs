@@ -2,7 +2,7 @@ use crate::app::{
     Action, BackupAt, BackupEnd, BackupJob, Browser, Check, ClashChoice, Confirm, Damage, Data, Dock, DownloadEnd, EraseStop, Field, FileKind,
     FileOp, FileRow, FileTask, Fold, Folder, Frame, FsAction, FsChoice, FsRow, Have, HeroArt, Hit, Install, JobEnd, Keys, Pick, Place, Rows,
     Screen, SkywardCheck, SkywardEnd, SkywardJob, SkywardStage, Slider, SortKey, Source, State, Switch, SystemsWork, Target, UsbDrive,
-    UsbLink, Weighing, Wipe, ADDABLE, PluginEnd,
+    UsbLink, Weighing, Wipe, ADDABLE, PluginEnd, PluginState,
     BACKUP_PARTS, DATA_ERASED, DATA_PARTITION, DOWNLOADS, FASTBOOT_CHOICES, SCREEN_OFF, TARGETS, TIME_ZONES, USB_DRIVE_UNREADABLE,
     USB_DRIVE_WANTED, WIPES, installs, starting, UrlKey,
 };
@@ -3372,12 +3372,10 @@ const PLUGIN_DROP_NOTE: Text = [
 /// phone, or none.
 fn plugin_value(cx: &Ctx) -> &'static str {
     let (s, l) = (cx.state, cx.state.lang);
-    if s.plugin.job.as_ref().is_some_and(|j| j.outcome.is_none()) {
-        l.pick(PLUGIN_UNDER_WAY)
-    } else if s.plugin.there {
-        l.pick(PLUGIN_INSTALLED)
-    } else {
-        l.pick(PLUGIN_ABSENT)
+    match s.plugin.state() {
+        PluginState::UnderWay => l.pick(PLUGIN_UNDER_WAY),
+        PluginState::Installed => l.pick(PLUGIN_INSTALLED),
+        PluginState::Absent => l.pick(PLUGIN_ABSENT),
     }
 }
 
