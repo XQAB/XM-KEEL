@@ -58,6 +58,12 @@ pub struct Settings {
     /// The pages are shown half a turn round, for a phone held the other way
     /// up: turned by hand on the settings page, and kept between starts.
     pub turned: bool,
+    /// The cover's pages are turned half a turn while the phone is shut, as
+    /// the settings page has it: none while the phone's own config decides
+    /// (`display.cover_turned`), which is what a phone that never tapped the
+    /// switch keeps; a choice made stands over the config.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cover_turned: Option<bool>,
     /// Which mirror an address is taken through, as its place in
     /// [`crate::app::MIRRORS`]; 0 leaves every address alone.
     pub mirror: usize,
@@ -159,6 +165,7 @@ impl Settings {
             remember_credential: state.remember_credential,
             wake_by_tap: state.wake_by_tap,
             turned: state.turned,
+            cover_turned: state.cover_turned,
             mirror: state.mirror,
             install: Install { check_signature: state.check_signature, keep_recovery: state.keep_recovery },
             backup: Backup {
@@ -229,6 +236,7 @@ impl Settings {
         state.remember_credential = self.remember_credential;
         state.wake_by_tap = self.wake_by_tap;
         state.turned = self.turned;
+        state.cover_turned = self.cover_turned;
         if self.mirror < crate::app::MIRRORS.len() {
             state.mirror = self.mirror;
         }
@@ -372,6 +380,29 @@ mod tests {
         let mut back = State::default();
         old.apply(&mut back);
         assert!(!back.turned, "a file without the line leaves the pages upright");
+    }
+
+    #[test]
+    fn the_covers_half_turn_is_kept_only_once_it_is_chosen() {
+        // A phone that never tapped the switch keeps no line of its own, and
+        // follows what its config says.
+        let state = State { covers: true, cover_turned_default: true, ..State::default() };
+        let text = Settings::of(&state).text();
+        assert!(!text.contains("cover_turned"), "nothing is kept until the switch is tapped: {text}");
+        assert!(state.cover_turned_now(), "and the config decides meanwhile");
+        // A tap is kept, and stands over the config after a start.
+        let chosen = State { covers: true, cover_turned_default: true, cover_turned: Some(false), ..State::default() };
+        let kept = Settings::read(&Settings::of(&chosen).text()).unwrap();
+        assert_eq!(kept.cover_turned, Some(false));
+        let mut back = State { cover_turned_default: true, ..State::default() };
+        kept.apply(&mut back);
+        assert!(!back.cover_turned_now(), "a choice made stands over the config");
+        // A file from before the switch follows the config again.
+        let old = Settings::read("{}").unwrap();
+        let mut back = State { cover_turned_default: true, ..State::default() };
+        old.apply(&mut back);
+        assert_eq!(back.cover_turned, None);
+        assert!(back.cover_turned_now());
     }
 
     #[test]

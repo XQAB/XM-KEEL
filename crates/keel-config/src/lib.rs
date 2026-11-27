@@ -333,6 +333,11 @@ pub struct Display {
     /// screen laid out to its own size.
     #[serde(default)]
     pub covers: bool,
+    /// Whether the cover panel is mounted the other way up, so the pages
+    /// (and the fingers on them) must be turned half a turn while the
+    /// phone is shut. The inner screen is never turned by this.
+    #[serde(default)]
+    pub cover_turned: bool,
 }
 
 #[derive(Debug, Clone, Deserialize)]

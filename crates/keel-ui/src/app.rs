@@ -914,6 +914,9 @@ pub enum Switch {
     WakeByTap,
     /// Show the pages half a turn round, for a phone held the other way up.
     Turned,
+    /// Show the cover's pages half a turn round while the phone is shut,
+    /// overruling the answer the phone's own config gives.
+    CoverTurned,
     Wlan,
     /// Show the password typed rather than a dot for each character.
     ShowPassword,
@@ -2322,6 +2325,17 @@ pub struct State {
     /// The pages are shown half a turn round, for a phone held the other way
     /// up: the frame is turned and a finger's place with it.
     pub turned: bool,
+    /// Whether this phone folds, so there is a cover to turn: what the
+    /// device's config says, told to the pages at the start and never kept.
+    pub covers: bool,
+    /// The phone's own answer for the cover's half turn, from the device's
+    /// `display.cover_turned`: what the row shows and what a cover nobody has
+    /// touched follows. Not kept.
+    pub cover_turned_default: bool,
+    /// The cover's half turn as the settings page has it: none until the
+    /// switch is tapped, which follows the phone's own answer; a choice made
+    /// is kept between starts.
+    pub cover_turned: Option<bool>,
     /// Whether a password is kept now, as the file on /metadata says.
     pub credential_kept: bool,
     /// When what was kept was sealed, in whole seconds since 1970, so the
@@ -2538,6 +2552,9 @@ impl Default for State {
             remember_credential: false,
             wake_by_tap: false,
             turned: false,
+            covers: false,
+            cover_turned_default: false,
+            cover_turned: None,
             credential_kept: false,
             credential_at: None,
             starter: None,
@@ -2620,6 +2637,13 @@ impl Default for State {
 }
 
 impl State {
+    /// Whether the cover's pages are turned half a turn: the choice kept on
+    /// the settings page where it was made, else the answer the phone's own
+    /// config gives.
+    pub fn cover_turned_now(&self) -> bool {
+        self.cover_turned.unwrap_or(self.cover_turned_default)
+    }
+
     /// The key of the on-screen keyboard a finger holds down.
     pub fn key_held(&self) -> Option<Cap> {
         match self.held {
@@ -3677,6 +3701,16 @@ impl App {
     /// leading corners of a page sliding over another.
     pub fn set_screen_corners(&mut self, radius: f32) {
         self.corners = radius;
+    }
+
+    /// What the phone says about its cover: whether it folds at all, and
+    /// whether the cover's pages are mounted the other way up. The settings
+    /// page shows the second as the switch's place until it is tapped, and a
+    /// tap overrules it for good.
+    pub fn set_cover(&mut self, covers: bool, turned: bool) {
+        self.state.covers = covers;
+        self.state.cover_turned_default = turned;
+        self.refresh();
     }
 
     /// Lay the pages out again for a screen of another size, so that the
@@ -6411,6 +6445,14 @@ impl App {
                 self.refresh();
                 return vec![Effect::Wlan(on)];
             }
+            // The cover's switch starts out wherever the phone's own config
+            // puts it, and a tap makes that explicit: the choice is kept, so
+            // from then on the config no longer decides.
+            Action::Toggle(Switch::CoverTurned) => {
+                self.state.cover_turned = Some(!self.state.cover_turned_now());
+                self.refresh();
+                return Vec::new();
+            }
             Action::Toggle(switch) => {
                 let on = match switch {
                     Switch::Vibrate => &mut self.state.vibrate,
@@ -6422,6 +6464,9 @@ impl App {
                     Switch::RememberCredential => &mut self.state.remember_credential,
                     Switch::WakeByTap => &mut self.state.wake_by_tap,
                     Switch::Turned => &mut self.state.turned,
+                    // The cover's switch holds a choice over the phone's own
+                    // answer, not a plain on or off: it is turned above.
+                    Switch::CoverTurned => unreachable!("the cover's switch is turned above"),
                     Switch::ShowPassword => &mut self.state.show_password,
                     Switch::Wlan => unreachable!("the WLAN switch is turned above"),
                 };
@@ -13748,6 +13793,39 @@ mod tests {
         assert!(!app.state.turned);
         let _ = tap_at(&mut app, &f, &i, Action::Toggle(Switch::Turned), 1300);
         assert!(app.state.turned, "a tap 300 ms after the key lit it turns the switch");
+    }
+
+    #[test]
+    fn the_covers_switch_follows_the_phone_until_it_is_tapped_and_then_it_stands() {
+        let (f, i) = (fonts(), info());
+        let mut app = App::new(Screen::Settings, W, H, PPD);
+        // A phone whose cover panel is mounted the other way up, as bixi's is.
+        app.set_cover(true, true);
+        let offered = |app: &mut App| app.frame(&f, &i).hits.iter().any(|h| h.action == Action::Toggle(Switch::CoverTurned));
+        assert!(offered(&mut app), "a phone that folds offers the cover's own switch");
+        assert_eq!(app.state.cover_turned, None, "nothing is chosen until the switch is tapped");
+        assert!(app.state.cover_turned_now(), "and the phone's own answer stands meanwhile");
+        let fx = tap(&mut app, &f, &i, Action::Toggle(Switch::CoverTurned));
+        assert!(fx.is_empty(), "the settings file is all a tap changes");
+        assert_eq!(app.state.cover_turned, Some(false), "a tap makes the choice explicit");
+        tap(&mut app, &f, &i, Action::Toggle(Switch::CoverTurned));
+        assert_eq!(app.state.cover_turned, Some(true), "and it stands over the config both ways");
+        // A phone with one screen has no cover to turn, so no row for it.
+        let mut plain = App::new(Screen::Settings, W, H, PPD);
+        plain.set_cover(false, false);
+        assert!(!plain.frame(&f, &i).hits.iter().any(|h| h.action == Action::Toggle(Switch::CoverTurned)));
+    }
+
+    #[test]
+    fn the_covers_switch_sits_under_the_manual_turn() {
+        let (f, i) = (fonts(), info());
+        let mut app = App::new(Screen::Settings, W, H, PPD);
+        app.set_cover(true, false);
+        let fr = app.frame(&f, &i);
+        let turned = fr.hits.iter().find(|h| h.action == Action::Toggle(Switch::Turned)).expect("the manual turn").rect;
+        let cover =
+            fr.hits.iter().find(|h| h.action == Action::Toggle(Switch::CoverTurned)).expect("the cover's own").rect;
+        assert!(cover.y > turned.y, "the cover's row comes under the manual turn's: {cover:?} against {turned:?}");
     }
 
     #[test]

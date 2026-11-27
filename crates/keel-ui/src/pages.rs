@@ -433,13 +433,23 @@ pub fn settings(cx: &Ctx) -> Frame {
         out.push(Hit { rect: r, action: Action::Toggle(Switch::Vibrate) });
     }
     y = widgets::section(&mut c, t, f, vibration.bottom, l.pick(["屏幕", "螢幕", "Screen"]));
-    let screen = widgets::list(&mut c, t, f, y, &[
+    // The manual turn comes first; a phone that folds adds the cover's own
+    // switch under it, for the cover alone, and the row stands where the
+    // phone's config puts it until it is tapped.
+    let mut rows = vec![
         Row::new(l.pick(WAKE_BY_TAP)).icon(SLATE, Icon::Power).trail(Trail::Switch(s.wake_by_tap)),
         Row::new(l.pick(TURNED)).icon(BLUE, Icon::Restore).trail(Trail::Switch(s.turned)),
-    ]);
-    out.extend(hits(&screen.rows, &[Action::Toggle(Switch::WakeByTap), Action::Toggle(Switch::Turned)]));
+    ];
+    let mut actions = vec![Action::Toggle(Switch::WakeByTap), Action::Toggle(Switch::Turned)];
+    if s.covers {
+        rows.push(Row::new(l.pick(COVER_TURNED)).icon(BLUE, Icon::Restore).trail(Trail::Switch(s.cover_turned_now())));
+        actions.push(Action::Toggle(Switch::CoverTurned));
+    }
+    let screen = widgets::list(&mut c, t, f, y, &rows);
+    out.extend(hits(&screen.rows, &actions));
     let slept = widgets::footnote(&mut c, t, f, screen.bottom, l.pick(WAKE_BY_TAP_NOTE));
     let turned = widgets::footnote(&mut c, t, f, slept, l.pick(TURNED_NOTE));
+    let turned = if s.covers { widgets::footnote(&mut c, t, f, turned, l.pick(COVER_TURNED_NOTE)) } else { turned };
     y = widgets::section(&mut c, t, f, turned, l.pick(["通用", "一般", "General"]));
     let general = widgets::list(&mut c, t, f, y, &[
         Row::new(l.pick(LANGUAGE)).icon(BLUE, Icon::Globe).trail(Trail::Value(l.name())),
@@ -2440,6 +2450,12 @@ const TURNED_NOTE: Text = [
     "打开后整页连同触摸一起转半圈，适合把手机倒过来拿、或者外屏装反了的情况。关掉就恢复。设置会记住，下次进 recovery 还是这个状态。",
     "打開後整頁連同觸控一起轉半圈，適合把手機倒過來拿、或者外屏裝反了的情況。關掉就恢復。設定會記住，下次進 recovery 還是這個狀態。",
     "When on, the pages and the touches with them turn half a turn, for a phone held the other way up or a cover panel fitted upside down. Off puts it back. The choice is kept, and the next start in recovery still has it.",
+];
+const COVER_TURNED: Text = ["外屏翻转 180°", "外屏翻轉 180°", "Turn the cover half a turn"];
+const COVER_TURNED_NOTE: Text = [
+    "只影响合盖后的外屏：合上盖子、页面切到外屏那一刻，整页连同触摸一起转半圈；内屏不受影响。没动过这一行时跟随设备默认（这台机器出厂就是开的），点一下就是明确选择，会记住，下次进 recovery 还是这个状态。",
+    "只影響合蓋後的外屏：合上蓋子、頁面切到外屏那一刻，整頁連同觸控一起轉半圈；內屏不受影響。沒動過這一列時跟隨裝置預設（這台機器出廠就是開的），點一下就是明確選擇，會記住，下次進 recovery 還是這個狀態。",
+    "The cover's pages alone turn half a turn, with the touches on them, from the moment the phone shuts and the pages go to the cover; the inner screen is left as it is. Untouched, the row follows what the phone itself says — on this one, on out of the box. A tap makes the choice explicit, and it is kept for the next start in recovery.",
 ];const WAKE_BY_TAP_NOTE: Text = [
     "开启后，熄屏状态下在同一处连点两下就把屏幕叫回来，不用按电源键。代价是熄屏时面板只是亮度为 0、并不真的关掉，触摸控制器因此一直在工作，整机也不再休眠：这一版就是拿这点换双击。默认关闭。",
     "開啟後，熄屏狀態下在同一處連點兩下就把螢幕叫回來，不必按電源鍵。代價是熄屏時面板只是亮度為 0、並不真的關掉，觸控控制器因此一直在工作，整機也不再休眠：這一版就是拿這點換雙擊。預設關閉。",
