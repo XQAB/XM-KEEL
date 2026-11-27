@@ -417,10 +417,9 @@ A/B 已经把这层因果关系定死：写它不带来 registry，也不带走 
 **三轴不可得这条结论坐实**，并且现在有精确的 code 可查：不是"没消息号"这么笼统，
 而是 ADSP 明确按传感器类别拒绝。`tilt` 更特殊：`ack` 之后永不回应，连错误码都不给。
 
-### 10.6 还没做的一件事
+### 10.6 诊断探针对 on-change 传感器的读取（已修，`84dc247`）
 
-`keelbin sns` 这个命令行工具**读不到 on-change 传感器**，因为
-`crates/keel/src/orientation.rs:601` 对每个名字都发 **513（periodic）**，而 `hinge_angle`
-的属性表写着 `attr 16 = 1`（on-change），只收 514。库本身没错（`client.rs:245 enable`
-走的就是 514），是那条诊断命令的参数选错了。修法：按 `attr 16` 决定发 513 还是 514。
-本文这套链路不受影响——`hinge.rs` 用的是 `client.read_sensor()`。
+`keelbin sns` 当初对每个名字都发 **513（periodic）**，而 `hinge_angle` 的属性表写着
+`attr 16 = 1`（on-change），只收 514，所以那条命令读不到它。`84dc247` 已改成按 `attr 16`
+决定发 513 还是 514，真机验到 `attr 16: 1` 与 `sample: [179.0, …]`。本文这套链路一直不受
+影响：`hinge.rs` 用的是 `client.read_sensor()`。
