@@ -5,12 +5,13 @@
 
 ## 1.1.1
 
-只做一件事：给外屏加一个「翻转 180°」的开关，需要的时候开一次就记住。
+两件事：给外屏加一个「翻转 180°」的开关（需要时开一次就记住），外加修好插件页把已装的插件显示成「未安装」的老毛病。
 
 - **新增配置项 `display.cover_turned`，默认关，`bixi` 上也是关。** 实测系统里外屏（1208×1392）的 `mDisplayRotation=ROTATION_0`，正常就是正的，不需要转，所以默认不转，免得把本来就正的画面转反。
 - **设置页新增一行「外屏翻转 180°」**，就落在原来的「翻转 180°」下面：只影响合盖后的外屏，内屏不受影响；点一下就写进 `settings.json` 记住，以后按点的那一下来——不用改配置再刷机。适合外屏装反、或想把手机倒过来拿的情况。
 - **设置页原来的「翻转 180°」开关保留**，叠加在外屏那一级之上：内屏照旧受它控制，外屏这一级看「外屏翻转 180°」这一行（没点过时就是 `display.cover_turned`），两级各管一级，互不顶掉。
 - **不做「跟着重力转」**：recovery 里读不到重力方向——`accel`、`gravity`、`device_orient`、`screen_down` 都拿不到可用数据，所以朝向只能按开合判据（`capfold_status`、`hinge_angle`）决定。实测见 [`docs/sensors-in-recovery.md`](docs/sensors-in-recovery.md) §11。
+- **修好插件页的状态**：插件页原来只在「系统更新」那条路径上重新查一次，从设置「关于」点进去时不查；开机那次 `/data` 还没解开，于是装了插件也显示「未安装」。现在插件页每次打开都会问一次（`crates/keel-ui/src/app.rs` 的 `arrive_at` 里给 `Screen::Plugin` 补了 `Effect::ReadPlugin`），并补了一条单测钉住这个返回。
 - **外屏方向的依据**：Android 侧 `dumpsys display` / `dumpsys window displays` 里外屏 `1208x1392`、`mDisplayRotation=ROTATION_0`（内屏同样 0），说明这块副屏正常就是正的，所以默认不转；需要转的在设置页开一次即可。
 
 ## 1.1.0
