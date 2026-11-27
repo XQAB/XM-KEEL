@@ -3,6 +3,15 @@
 > 机型：小米 MIX Flip 2（`bixi`，SM8750 / `sun`，Android 17，A/B + 动态分区，现役系统 `OS4.0.4.0.XOHCNXM`，出包基线 `OS4.0.4.0.XOHCNXM`）
 > 上游：[kirklin/skyward](https://github.com/kirklin/skyward)；本仓库：[`main`](https://github.com/XQAB/XM-KEEL)
 
+## 1.1.1
+
+只做一件事：合盖之后外屏的页面自己转正。
+
+- **外屏合盖时自动转 180°。** 新增配置项 `display.cover_turned`，默认关；`bixi` 上打开。合上盖子、页面切到外屏那一刻，内容按外屏的朝向转半圈，不用再手动找方向。
+- **设置页原来的「翻转 180°」开关保留**，叠加在外屏那一级之上：内屏照旧受它控制，外屏这一级由 `display.cover_turned` 决定，两级各管一级，互不顶掉。
+- **不做「跟着重力转」**：recovery 里读不到重力方向——`accel`、`gravity`、`device_orient`、`screen_down` 都拿不到可用数据，所以朝向只能按开合判据（`capfold_status`、`hinge_angle`）决定。实测见 [`docs/sensors-in-recovery.md`](docs/sensors-in-recovery.md) §11。
+- **外屏实际方向待真机合盖确认。** 目前只有代码侧的判据；合上盖之后外屏朝哪边、页面是不是正的，得真机合一次盖才算验过，这一条不写成已验。
+
 ## 1.1.0
 
 1.0.0 之后的第一版，四件事：把传感器栈在真机上跑通、修掉 sns 探针的三个真 bug、补上一个从没跑过的迁移、把截图文件名改回自己的名字。
