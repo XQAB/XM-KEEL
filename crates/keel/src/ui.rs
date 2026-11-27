@@ -2122,7 +2122,7 @@ pub fn run(cfg: &DeviceConfig, font: &Path, mono: &Path, request: bcb::Request, 
                 let (aw, ah) = surface.size();
                 app.resize(aw, ah, scale);
                 app.compose(canvas, &fonts, &info, &shown_clock, now);
-                let turn = if on_cover { cfg.display.cover_turned } else { turned };
+                let turn = turned ^ if on_cover { cfg.display.cover_turned } else { false };
                     if turn {
                         canvas.turn_half();
                 }
@@ -3077,7 +3077,7 @@ pub fn run(cfg: &DeviceConfig, font: &Path, mono: &Path, request: bcb::Request, 
                     // The pages may be drawn half a turn round, turned by hand
                     // on the settings page, so a finger's place is turned with
                     // them before anything is looked for under it.
-                    let turn = if which == 1 { cfg.display.cover_turned } else { turned };
+                    let turn = turned ^ if which == 1 { cfg.display.cover_turned } else { false };
                     let t = match turn {
                         true => {
                             let (aw, ah) = if which == 1 { (cw, ch) } else { (w, h) };
